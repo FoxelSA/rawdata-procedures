@@ -154,7 +154,7 @@ if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
 else
 
     # Exit script #
-    echo "Error : cannot continue exectution without --mac-address/--master-timestamp parameters"
+    echo "Error : cannot continue execution without --mac-address/--master-timestamp parameters"
     exit 1
 
 fi
