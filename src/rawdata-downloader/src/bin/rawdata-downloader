@@ -29,7 +29,7 @@ if [ -z "$TIMESTAMP" ] ; then
 fi
 
 # move files
-rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ || exit 1
+rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ >&2 || exit 1
 
 echo $(dirname $DEST) $TIMESTAMP
 
