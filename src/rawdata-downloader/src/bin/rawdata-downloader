@@ -1,0 +1,36 @@
+#!/bin/bash
+
+DESTINATION=$1
+
+[ -z "$DESTINATION" ] && exit 1
+
+# download rawdata from camera modules
+DEST=$(rawdata-download $1)
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && exit $EXIT_CODE
+
+
+firsttimestamp() {
+  find $1 |
+  grep -E -e '[0-9_]{17}' |
+  while read f ; do
+    b=$(basename $f)
+    echo ${b:0:17} $f
+  done |
+  sort -u |
+  head -n 1
+}
+
+# get first timestamp in rsync folder
+TIMESTAMP=$(firsttimestamp $DEST/rsync)
+
+if [ -z "$TIMESTAMP" ] ; then
+  exit 1
+fi
+
+# move files
+rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ || exit 1
+
+echo $(dirname $DEST) $TIMESTAMP
+
+
