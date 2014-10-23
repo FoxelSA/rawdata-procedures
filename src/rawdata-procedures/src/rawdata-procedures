@@ -98,14 +98,10 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
 
         # Run procedure #
         echo "rawdata-procedures : downloading raw data ..."
-        echo "rawdata-???"
-
-        # Run procedure #
-        echo "rawdata-procedures : moving downloaded raw data ..."
-        echo "rawdata-???"
+        #RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
 
         # Temporary #
-        RETURN="AA:BB:CC:DD:EE:FF 123768762"
+        #RETURN="AA:BB:CC:DD:EE:FF 123768762"
 
         # Extract returned value - MAC address and master timestamp #
         ARRAY=($RETURN)
@@ -127,29 +123,29 @@ if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
 
     # Run procedure #
     echo "rawdata-procedures : auto-segmentation ..."
-    echo "rawdata-autoseg $PARAM_MOUNT $PARAM_MAC $PARAM_MASTER"
+    rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
     # Run procedure #
     echo "rawdata-procedures : creating table of jp4 files ..."
-    echo "rawdata-???"
+    #rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
     # Run procedure #
     echo "rawdata-procedures : hard-linking of mov files ..."
-    echo "rawdata-???"
+    #rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
     # Check execution switch #
     if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
 
     # Run procedure #
     echo "rawdata-procedures : splitting of mov files ..."
-    echo "rawdata-???"
+    #rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
     # Check execution switch #
     if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 
     # Run procedure #
     echo "rawdata-procedures : generating image previews ..."
-    echo "rawdata-???"
+    #rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
 else
 

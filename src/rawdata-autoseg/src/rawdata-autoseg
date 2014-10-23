@@ -35,14 +35,44 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
-# Define variables #
-MNT=$1
-MAC=$2
-TMS=$3
+# Script parameters #
+AS_MOUNT=""
+AS_MACAD=""
+AS_TIMES=""
 
-# Define sync/segment path #
-PATH_SYNC=$MNT/camera/$MAC/raw/sync/$TMS
-PATH_SEGM=$MNT/camera/$MAC/raw/segment/$TMS
+# Script working directories #
+AS_SYNC=""
+AS_SEGM=""
+
+# Script stream redirection #
+AS_OUT="> /dev/null"
+
+# Arguments and parameters parser #
+arguments() {
+
+    # Search in arguments #
+    while [[ $# > 0 ]]; do
+
+        args="$1"
+        shift
+        case $args in
+            --mount-point)
+                AS_MOUNT="$1"
+                shift
+            ;;
+            --mac-address)
+                AS_MACAD="$1"
+                shift
+            ;;
+            --master-timestamp)
+                AS_TIMES="$1"
+                shift
+            ;;
+        esac
+
+    done
+
+}
 
 # Camera device detection #
 device_detect() {
@@ -76,9 +106,10 @@ model_detect() {
 
 }
 
-# Create CSPS processing topology file #
+# CSPS topology generation #
 topology() {
 
+    # Export CSPS topology #
     echo "device cam" > $1
     echo "    model EYESIS4PI" >> $1
     echo "    tag eyesis4pi" >> $1
@@ -140,93 +171,85 @@ topology() {
 process() {
 
     # Creates CSPS/csps-suite sync-specific directories #
-    mkdir -p $PATH_SYNC/csps
-    mkdir -p $PATH_SYNC/csps/decomposed
-    mkdir -p $PATH_SYNC/csps/recomposed
-    mkdir -p $PATH_SYNC/csps/validated
+    mkdir -p $AS_SYNC/csps
+    mkdir -p $AS_SYNC/csps/decomposed
+    mkdir -p $AS_SYNC/csps/recomposed
+    mkdir -p $AS_SYNC/csps/validated
 
     # Perform audit on raw logs-files #
-    echo "  auditing raw logs-files ..."
-    csps-$(device_detect $MAC)-audit \
-        -p $PATH_SYNC/mov/1/ \
-         > $PATH_SYNC/csps/audit-raw.log
+    csps-$(device_detect $AS_MACAD)-audit \
+        -p $AS_SYNC/mov/1/ \
+         > $AS_SYNC/csps/audit-raw.log
 
     # Perform logs-files decomposition #
-    echo "  decomposing raw logs-files ..."
-    csps-$(device_detect $MAC)-decompose \
-        -r $PATH_SYNC/mov/1/ -d $PATH_SYNC/csps/decomposed -i 1.0 \
-         > $PATH_SYNC/csps/logs-decompose.log
+    csps-$(device_detect $AS_MACAD)-decompose \
+        -r $AS_SYNC/mov/1/ -d $AS_SYNC/csps/decomposed -i 1.0 \
+         > $AS_SYNC/csps/logs-decompose.log
 
     # Perform audit on decomposed logs-files #
-    echo "  auditing decomposed logs-files ..."
-    csps-$(device_detect $MAC)-audit \
-        -p $PATH_SYNC/csps/decomposed \
-         > $PATH_SYNC/csps/audit-decompose.log
+    csps-$(device_detect $AS_MACAD)-audit \
+        -p $AS_SYNC/csps/decomposed \
+         > $AS_SYNC/csps/audit-decompose.log
 
     # Perform logs-files recomposition #
-    echo "  recomposing decomposed logs-files ..."
-    csps-$(device_detect $MAC)-recompose \
-        -d $PATH_SYNC/csps/decomposed -r $PATH_SYNC/csps/recomposed -i 1.0 \
-         > $PATH_SYNC/csps/logs-recompose.log
+    csps-$(device_detect $AS_MACAD)-recompose \
+        -d $AS_SYNC/csps/decomposed -r $AS_SYNC/csps/recomposed -i 1.0 \
+         > $AS_SYNC/csps/logs-recompose.log
 
     # Perform audit on recomposed logs-files #
-    echo "  auditing recomposed logs-files ..."
-    csps-$(device_detect $MAC)-audit \
-        -p $PATH_SYNC/csps/recomposed \
-         > $PATH_SYNC/csps/audit-recompose.log
+    csps-$(device_detect $AS_MACAD)-audit \
+        -p $AS_SYNC/csps/recomposed \
+         > $AS_SYNC/csps/audit-recompose.log
 
     # Perform logs-files validation #
-    echo "  validating recomposed logs-files ..."
-    csps-$(device_detect $MAC)-validate \
-        -r $PATH_SYNC/csps/recomposed -v $PATH_SYNC/csps/validated -i 5.0 \
-         > $PATH_SYNC/csps/logs-validate.log
+    csps-$(device_detect $AS_MACAD)-validate \
+        -r $AS_SYNC/csps/recomposed -v $AS_SYNC/csps/validated -i 5.0 \
+         > $AS_SYNC/csps/logs-validate.log
 
     # Perform audit on validated logs-files #
-    echo "  auditing validated logs-files ..."
-    csps-$(device_detect $MAC)-audit \
-        -p $PATH_SYNC/csps/validated \
-         > $PATH_SYNC/csps/audit-validate.log
+    csps-$(device_detect $AS_MACAD)-audit \
+        -p $AS_SYNC/csps/validated \
+         > $AS_SYNC/csps/audit-validate.log
 
     # Create CSPS/csps-suite segments-specific directories #
-    echo "  creating and CSPS-processing segments ..."
-    echo "Segments broadcasting : $MAC:$TMS :" \
-         > $PATH_SYNC/csps/logs-broadcast.log
-    mkdir $PATH_SEGM
+    echo "Segments broadcasting : $AS_MACAD:$AS_TIMES :" \
+         > $AS_SYNC/csps/logs-broadcast.log
+    mkdir -p $AS_SEGM
 
     # Create segments directories #
-    for SEGS in $(ls $PATH_SYNC/csps/validated); do
+    for AS_ENUM in $(ls $AS_SYNC/csps/validated); do
 
         # Retrieve initial master timestamp #
-        MTS=$(csps-$(device_detect $MAC)-cat -l $PATH_SYNC/csps/validated/$SEGS -m)
+        MTS=$(csps-$(device_detect $AS_MACAD)-cat -l $AS_SYNC/csps/validated/$AS_ENUM -m)
 
         # Create segment main directory #
-        mkdir -p $PATH_SEGM/$MTS
+        mkdir -p $AS_SEGM/$MTS
 
         # Create segment CSPS/csps-suite sub-directories #
-        mkdir -p $PATH_SEGM/$MTS/csps
-        mkdir -p $PATH_SEGM/$MTS/csps/devices
-        mkdir -p $PATH_SEGM/$MTS/csps/devices/$(model_detect $MAC)
-        mkdir -p $PATH_SEGM/$MTS/csps/streams
-        mkdir -p $PATH_SEGM/$MTS/csps/exports
+        mkdir -p $AS_SEGM/$MTS/csps
+        mkdir -p $AS_SEGM/$MTS/csps/devices
+        mkdir -p $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)
+        mkdir -p $AS_SEGM/$MTS/csps/streams
+        mkdir -p $AS_SEGM/$MTS/csps/exports
 
         # Create hard-link to logs-file in sync #
-        ln \
-        $PATH_SYNC/csps/validated/$SEGS \
-        $PATH_SEGM/$MTS/csps/devices/$(model_detect $MAC)/fpga-log.bin
+        ln -f \
+        $AS_SYNC/csps/validated/$AS_ENUM \
+        $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)/fpga-log.bin
 
         # Create CSPS processing topology file #
-        topology $PATH_SEGM/$MTS/csps/topology
+        topology $AS_SEGM/$MTS/csps/topology
 
         # Processing CSPS #
         csps-process \
-            -p $PATH_SEGM/$MTS/csps \
-            -t $PATH_SEGM/$MTS/csps/topology \
+            -p $AS_SEGM/$MTS/csps \
+            -t $AS_SEGM/$MTS/csps/topology \
              > /dev/null
 
         # Json-file generation #
         csps-export \
-            -p $PATH_SEGM/$MTS/csps \
-            -e $PATH_SEGM/$MTS/csps/exports/rawdata-navigator.json \
+            -p $AS_SEGM/$MTS/csps \
+            -e $AS_SEGM/$MTS/csps/exports/rawdata-navigator.json \
             -c eyesis4pi \
             -m mod-DSIDE \
             -g ls20031 \
@@ -234,13 +257,13 @@ process() {
              > /dev/null
 
         # Logging segments broadcasting #
-        echo "  Broadcast $SEGS segment in $(basename $PATH_SEGM/$MTS)" \
-             >> $PATH_SYNC/csps/logs-broadcast.log
+        echo "  Broadcast $AS_ENUM segment in $(basename $AS_SEGM/$MTS)" \
+             >> $AS_SYNC/csps/logs-broadcast.log
 
     done
 
     # Create processed data marker #
-    touch $PATH_SYNC/csps/logs-processed.log
+    touch $AS_SYNC/csps/logs-processed.log
 
 }
 
@@ -248,64 +271,52 @@ process() {
 unprocess() {
 
     # Safe-remove sync csps-specific directory #
-    echo "  removing CSPS-data in sync ..."
-    rm    --force                    $PATH_SYNC/csps/validated/*
-    rmdir --ignore-fail-on-non-empty $PATH_SYNC/csps/validated
-    rm    --force                    $PATH_SYNC/csps/recomposed/*
-    rmdir --ignore-fail-on-non-empty $PATH_SYNC/csps/recomposed
-    rm    --force                    $PATH_SYNC/csps/decomposed/*
-    rmdir --ignore-fail-on-non-empty $PATH_SYNC/csps/decomposed
-    rm    --force                    $PATH_SYNC/csps/*
-    rmdir --ignore-fail-on-non-empty $PATH_SYNC/csps
+    rm    --force                    $AS_SYNC/csps/validated/*
+    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/validated
+    rm    --force                    $AS_SYNC/csps/recomposed/*
+    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
+    rm    --force                    $AS_SYNC/csps/decomposed/*
+    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
+    rm    --force                    $AS_SYNC/csps/*
+    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps
 
     # Safe-remove segment csps-specific directory #
-    echo "  removing CSPS-data in segments ..."
-    for SEGS in $(ls $PATH_SEGM); do
+    for AS_ENUM in $(ls $AS_SEGM); do
 
-        # Safe-remove directory and contents #
-        rm    --force                    $PATH_SEGM/$SEGS/csps/devices/$(model_detect $MAC)/*
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS/csps/devices/$(model_detect $MAC)
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS/csps/devices
-        rm    --force                    $PATH_SEGM/$SEGS/csps/streams/*
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS/csps/streams
-        rm    --force                    $PATH_SEGM/$SEGS/csps/exports/*
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS/csps/exports
-        rm    --force                    $PATH_SEGM/$SEGS/csps/*
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS/csps
-        rmdir --ignore-fail-on-non-empty $PATH_SEGM/$SEGS
+        rm    --force                    $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)/*
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices
+        rm    --force                    $AS_SEGM/$AS_ENUM/csps/streams/*
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/streams
+        rm    --force                    $AS_SEGM/$AS_ENUM/csps/exports/*
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/exports
+        rm    --force                    $AS_SEGM/$AS_ENUM/csps/*
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps
+        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM
 
     done
 
     # Safe-remove segment master directory #
-    rmdir --ignore-fail-on-non-empty $PATH_SEGM
+    rmdir --ignore-fail-on-non-empty $AS_SEGM
 
 }
 
-# Detect state of the sync-allocation #
-if [ -d $PATH_SYNC/csps ]; then
+# Argument and parameters #
+arguments $@
 
-    # Verify processed data marker #
-    if [ -e $PATH_SYNC/csps/logs-processed.log ]; then
+# Define working directories #
+AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/sync/$AS_TIMES
+AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/segment/$AS_TIMES
 
-        # Processing already terminated #
-        echo "auto-segment ($TMS|$MAC) : Already processed"
+# Check previous processing #
+if [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
-    else 
-
-        # Remove unterminated processing #
-        echo "auto-segment ($TMS|$MAC) : Removing unterminated processing"
-        unprocess
-
-        # Processing #
-        echo "auto-segment ($TMS|$MAC) : Reprocessing"
-        process
-
-    fi
+    # Unprocess and re-process #
+    unprocess && process
 
 else
 
-    # Processing #
-    echo "auto-segment ($TMS|$MAC) : Processing"
+    # Process #
     process
 
 fi
