@@ -1,8 +1,8 @@
 #!/bin/bash
 
-SPOOL=/var/spool/rawdata-downloader
+SPOOL=__PREFIX__/var/spool/rawdata-downloader
 
-[ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
+[ -f __PREFIX__/etc/defaults/rawdata-downloader ] && . __PREFIX__/etc/defaults/rawdata-downloader
 
 case "$ACTION" in
 add)
