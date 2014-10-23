@@ -15,7 +15,7 @@ firsttimestamp() {
   grep -E -e '[0-9_]{17}' |
   while read f ; do
     b=$(basename $f)
-    echo ${b:0:17} $f
+    echo ${b:0:17}
   done |
   sort -u |
   head -n 1
