@@ -110,8 +110,12 @@ if [ "$SWITCH_DOWNLOAD" == "TRUE" ] && [ -z "$PARAM_MAC" ] && [ -z "$PARAM_MASTE
     echo "rawdata-???"
 
     # Temporary #
-    PARAM_MAC="AA:BB:CC:DD:EE:FF"
-    PARAM_MASTER="123768762"
+    RETURN="AA:BB:CC:DD:EE:FF 123768762"
+
+    # Extract returned value - MAC address and master timestamp #
+    PARAM_MAC=`echo $RETURN| cut -d'_' -f 1`
+    PARAM_MASTER=`echo $RETURN| cut -d'_' -f 2`
+
 
 else
 
@@ -119,6 +123,9 @@ else
     echo "Error : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
 
 fi
+
+echo $PARAM_MAC
+echo $PARAM_MASTER
 
 # Check execution consistency #
 if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
