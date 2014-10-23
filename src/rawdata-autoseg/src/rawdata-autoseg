@@ -295,7 +295,7 @@ unprocess() {
         for AS_ENUM in $(ls $AS_SEGM); do
 
             # Check directory #
-            if [ -d $AS_SEGM/$AS_ENUM ]; then
+            if [ -d $AS_SEGM/$AS_ENUM/csps ]; then
 
                 rm    --force                    $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)/*
                 rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)
@@ -335,7 +335,7 @@ if [ -n $AS_DOWN ]; then
     # Process raw data #
     process
 
-if [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
     # Remove previous processing #
     unprocess
@@ -344,7 +344,7 @@ if [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
     process
 
 
-else
+elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
     # Process raw data #
     process
