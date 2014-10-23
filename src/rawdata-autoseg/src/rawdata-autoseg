@@ -35,6 +35,9 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
+# Script switch #
+AS_DOWN=""
+
 # Script parameters #
 AS_MOUNT=""
 AS_MACAD=""
@@ -43,9 +46,6 @@ AS_TIMES=""
 # Script working directories #
 AS_SYNC=""
 AS_SEGM=""
-
-# Script stream redirection #
-AS_OUT="> /dev/null"
 
 # Arguments and parameters parser #
 arguments() {
@@ -56,6 +56,9 @@ arguments() {
         args="$1"
         shift
         case $args in
+            --download)
+                AS_DOWN="TRUE"
+            ;;
             --mount-point)
                 AS_MOUNT="$1"
                 shift
@@ -270,34 +273,49 @@ process() {
 # Unprocessing function #
 unprocess() {
 
-    # Safe-remove sync csps-specific directory #
-    rm    --force                    $AS_SYNC/csps/validated/*
-    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/validated
-    rm    --force                    $AS_SYNC/csps/recomposed/*
-    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
-    rm    --force                    $AS_SYNC/csps/decomposed/*
-    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
-    rm    --force                    $AS_SYNC/csps/*
-    rmdir --ignore-fail-on-non-empty $AS_SYNC/csps
+    # Check directory #
+    if [ -d $AS_SYNC/csps ]; then
 
-    # Safe-remove segment csps-specific directory #
-    for AS_ENUM in $(ls $AS_SEGM); do
+        # Safe-remove #
+        rm    --force                    $AS_SYNC/csps/validated/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/validated
+        rm    --force                    $AS_SYNC/csps/recomposed/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
+        rm    --force                    $AS_SYNC/csps/decomposed/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
+        rm    --force                    $AS_SYNC/csps/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps
 
-        rm    --force                    $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)/*
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices
-        rm    --force                    $AS_SEGM/$AS_ENUM/csps/streams/*
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/streams
-        rm    --force                    $AS_SEGM/$AS_ENUM/csps/exports/*
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/exports
-        rm    --force                    $AS_SEGM/$AS_ENUM/csps/*
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps
-        rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM
+    fi
 
-    done
+    # Check directory #
+    if [ -d $AS_SEGM ]; then
 
-    # Safe-remove segment master directory #
-    rmdir --ignore-fail-on-non-empty $AS_SEGM
+        # Safe-remove #
+        for AS_ENUM in $(ls $AS_SEGM); do
+
+            # Check directory #
+            if [ -d $AS_SEGM/$AS_ENUM ]; then
+
+                rm    --force                    $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)/*
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices
+                rm    --force                    $AS_SEGM/$AS_ENUM/csps/streams/*
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/streams
+                rm    --force                    $AS_SEGM/$AS_ENUM/csps/exports/*
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/exports
+                rm    --force                    $AS_SEGM/$AS_ENUM/csps/*
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps
+                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM
+
+            fi
+
+        done
+
+        # Safe-remove #
+        rmdir --ignore-fail-on-non-empty $AS_SEGM
+
+    fi
 
 }
 
@@ -308,15 +326,27 @@ arguments $@
 AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/sync/$AS_TIMES
 AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/segment/$AS_TIMES
 
-# Check previous processing #
+# Check state #
+if [ -n $AS_DOWN ]; then
+
+    # Remove previous processing #
+    unprocess
+
+    # Process raw data #
+    process
+
 if [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
-    # Unprocess and re-process #
-    unprocess && process
+    # Remove previous processing #
+    unprocess
+
+    # Process raw data #
+    process
+
 
 else
 
-    # Process #
+    # Process raw data #
     process
 
 fi
