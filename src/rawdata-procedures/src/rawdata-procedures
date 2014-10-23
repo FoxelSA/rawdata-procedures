@@ -38,9 +38,8 @@
 
 # Script execution switch #
 SWITCH_DOWNLOAD=""
-SWITCH_NOSPLIT="FALSE"
-SWITCH_NOPREVIEW="FALSE"
-SWITCH_NODEBAYER="FALSE"
+SWITCH_NOSPLIT=""
+SWITCH_NOPREVIEW=""
 
 # Script parameters #
 PARAM_MOUNT="/data/"
@@ -52,39 +51,34 @@ PARAM_SEGMENT=""
 arguments() {
 
     # Search in arguments #
-    for args in "$@"; do
+    while [[ $# > 0 ]]; do
 
+        args="$1"
+        shift
         case $args in
-            --download*)
+            --download)
                 SWITCH_DOWNLOAD="TRUE"
             ;;
-            --no-split*)
+            --no-split)
                 SWITCH_NOSPLIT="TRUE"
             ;;
-            --no-preview*)
+            --no-preview)
                 SWITCH_NOPREVIEW="TRUE"
             ;;
-            --no-debayer*)
-                SWITCH_NODEBAYER="TRUE"
-            ;;
-            --mount-point*)
-                PARAM_MOUNT="${args#*=}"
+            --mount-point)
+                PARAM_MOUNT="$1"
                 shift
             ;;
-            --mount-point*)
-                PARAM_MOUNT="${args#*=}"
+            --mac-address)
+                PARAM_MAC="$1"
                 shift
             ;;
-            --mac-address*)
-                PARAM_MAC="${args#*=}"
+            --master-timestamp)
+                PARAM_MASTER="$1"
                 shift
             ;;
-            --master-timestamp*)
-                PARAM_MASTER="${args#*=}"
-                shift
-            ;;
-            --segment-timestamp*)
-                PARAM_SEGMENT="${args#*=}"
+            --segment-timestamp)
+                PARAM_SEGMENT="$1"
                 shift
             ;;
         esac
@@ -96,36 +90,37 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
-echo "$SWITCH_DOWNLOAD"
-
 # Check execution consitency #
-if [ "$SWITCH_DOWNLOAD" == "TRUE" ] && [ -z "$PARAM_MAC" ] && [ -z "$PARAM_MASTER" ] && [ -z "$PARAM_SEGMENT" ]; then
+if [ -n "$SWITCH_DOWNLOAD" ]; then
 
-    # Run procedure #
-    echo "rawdata-procedures : downloading raw data ..."
-    echo "rawdata-???"
+    # Check execution consitency #
+    if [ -z "$PARAM_MAC" ] && [ -z "$PARAM_MASTER" ]; then
 
-    # Run procedure #
-    echo "rawdata-procedures : moving downloaded raw data ..."
-    echo "rawdata-???"
+        # Run procedure #
+        echo "rawdata-procedures : downloading raw data ..."
+        echo "rawdata-???"
 
-    # Temporary #
-    RETURN="AA:BB:CC:DD:EE:FF 123768762"
+        # Run procedure #
+        echo "rawdata-procedures : moving downloaded raw data ..."
+        echo "rawdata-???"
 
-    # Extract returned value - MAC address and master timestamp #
-    ARRAY=($RETURN)
-    PARAM_MAC=${ARRAY[0]}
-    PARAM_MASTER=${ARRAY[1]}
+        # Temporary #
+        RETURN="AA:BB:CC:DD:EE:FF 123768762"
 
-else
+        # Extract returned value - MAC address and master timestamp #
+        ARRAY=($RETURN)
+        PARAM_MAC=${ARRAY[0]}
+        PARAM_MASTER=${ARRAY[1]}
 
-    # Display wrong usage #
-    echo "Error : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
+    else 
+
+        # Exit script #
+        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp parameters"
+        exit 1
+
+    fi
 
 fi
-
-echo $PARAM_MAC
-echo $PARAM_MASTER
 
 # Check execution consistency #
 if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
@@ -135,7 +130,7 @@ if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
     echo "rawdata-autoseg $PARAM_MOUNT $PARAM_MAC $PARAM_MASTER"
 
     # Run procedure #
-    echo "rawdata-procedures : splitting table of mov files ..."
+    echo "rawdata-procedures : creating table of jp4 files ..."
     echo "rawdata-???"
 
     # Run procedure #
@@ -153,13 +148,14 @@ if [ -n "$PARAM_MAC" ] && [ -n "$PARAM_MASTER" ]; then
     if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 
     # Run procedure #
-    echo "rawdata-procedures : image previews ..."
+    echo "rawdata-procedures : generating image previews ..."
     echo "rawdata-???"
 
 else
 
-    # Display wrong usage #
+    # Exit script #
     echo "Error : cannot continue exectution without --mac-address/--master-timestamp parameters"
+    exit 1
 
 fi
 

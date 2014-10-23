@@ -35,8 +35,6 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
-#./csps-process [mount-point] [mac-address] [timestamp]
-
 # Define variables #
 MNT=$1
 MAC=$2
