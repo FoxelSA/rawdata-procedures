@@ -5,7 +5,7 @@ DESTINATION=$1
 [ -z "$DESTINATION" ] && exit 1
 
 # download rawdata from camera modules
-DEST=$(rawdata-download $1)
+DEST=$(rawdata-download $DESTINATION)
 EXIT_CODE=$?
 [ $EXIT_CODE -ne 0 ] && exit $EXIT_CODE
 
