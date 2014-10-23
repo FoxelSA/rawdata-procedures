@@ -1,0 +1,481 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import getopt
+import glob
+import os
+import struct
+import sys
+import Queue
+import time
+import threading
+import calendar
+from cStringIO import StringIO
+from datetime import datetime
+from operator import itemgetter
+from xml.dom.minidom import parse
+
+import exifread
+
+# Global config variables
+Threads_Sleep_Delay = 0.1
+
+# Global variables
+QUEUE_Done     = 0
+QUEUE_Count    = 0
+QUEUE_Slots    = []
+
+# Main binary file structure parameters
+MAIN_STRUCT = 'i i i i h'
+MAIN_SIZE   = struct.calcsize(MAIN_STRUCT)
+MAIN_DATA   = struct.Struct(MAIN_STRUCT)
+
+# MOV file container class
+class MovFile:
+    def __init__(self, path, modulename):
+        self.path = path
+        self.filename = os.path.basename(path)
+        self.timestamp = int(self.filename.split('_')[0])
+        self.microtimestamp = int(self.filename.split('_')[1][:-4])
+        self.module = int(modulename)
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
+
+    # Disable output
+    return
+
+    NO_COLORS = 0
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Display proper message
+    Prepend = ""
+
+    if ThreadID != -1:
+        Prepend = "[Thread %d]" % (ThreadID+1)
+
+    if Type == 0:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# Function to find all occurences of a given input
+def find_all(a_str, sub):
+    start = 0
+    while True:
+        # Find first element
+        start = a_str.find(sub, start)
+
+        # If no match found exit function
+        if start == -1: return
+
+        # If there is a match return it and process the next element
+        yield start
+
+        # Move pointer to next occurence
+        start += len(sub)
+
+# Function to get camera modules count by reading correction XML
+def GetCameraModules(CorrectionXMLPath):
+
+    # Load XML file
+    dom = parse(CorrectionXMLPath)
+
+    # Iterate over XML entries
+    for i in dom.getElementsByTagName('entry'):
+
+        # Check if key is 'CAMERAS.cameraIPs.length'
+        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
+
+            # Return value
+            return int(i.childNodes[0].data)
+
+# Function to get first available slot
+def GetSlot(Slots):
+
+    # Iterate over slots
+    for i in range(0, len(Slots)):
+
+        # If slot is not used return it
+        if Slots[i] == 0:
+            return i
+
+# Function to count used slots
+def UsedSlots(Slots):
+
+    # Local result variable
+    ret = 0
+
+    # Iterate over slots
+    for i in range(0, len(Slots)):
+
+        # If slot is used increment result
+        if Slots[i] == 1:
+            ret += 1
+
+    # Return result
+    return ret
+
+def indexMOV(InputFile, tid=0):
+
+    # Local variables
+    JPEGHeader    = b'\xff\xd8\xff\xe1'
+
+    # Read input MOV file
+    mov = open(InputFile.path, 'rb')
+    mov_data = mov.read()
+    mov.close()
+
+    # Search all JPEG files inside the MOV file
+    JPEG_Offsets     = list(find_all(mov_data, JPEGHeader))
+
+    # Variable to store results
+    Result = [[], tid]
+
+    # Iterate over all images
+    for _Index, _Offset in enumerate(JPEG_Offsets):
+
+        # Calculate the filesize for extraction
+        if (_Index >= len(JPEG_Offsets) - 1):
+            Size = len(mov_data) - _Offset
+        else:
+            Size = (JPEG_Offsets[_Index+1] - _Offset)
+
+        # Extract JPEG from MOV file
+        ImageData = mov_data[_Offset:(Size + _Offset if Size is not None else None)]
+
+        # Extract EXIF data from JPEG file
+        ImageData_File = StringIO(ImageData)
+        EXIF_Tags = exifread.process_file(ImageData_File)
+        ImageData_File.close()
+
+        # Check EXIF integrity
+        if not EXIF_Tags:
+            ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
+        else:
+
+            # Get date object
+            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
+
+            # Get timestamp
+            Timestamp    = calendar.timegm(date_object.utctimetuple())
+
+            # Get microseconds timestamp
+            Microseconds = str(EXIF_Tags["EXIF SubSecTimeOriginal"])
+
+            # Convert microseconds timestamp to int
+            Microseconds = int(Microseconds)
+
+            # Append results to array
+            Result[0].append([
+                Timestamp,
+                Microseconds,
+                InputFile.timestamp,
+                InputFile.microtimestamp,
+                InputFile.module
+            ])
+
+    # Return results
+    return Result
+
+# Thread function to index MOV files
+def indexMOV_Thread(Threads, InputFile, tid):
+
+    # Add action to queue
+    Threads.put(
+        indexMOV(InputFile, tid)
+    )
+
+# MOV counting data collector
+# pylint: disable=W0602
+def WorkerThread_indexCollector(Source, Dest):
+
+    # Global variables
+    global QUEUE_Done, QUEUE_Slots
+
+    # Infinite while
+    while QUEUE_Done != -1:
+
+        # Check if results queue is not empty
+        if not Source.empty():
+
+            # Retrieve the result
+            Ret = Source.get()
+
+            # Unlock thread slot
+            QUEUE_Slots[Ret[1]] = 0
+
+            # Merge results
+            for i in Ret[0]:
+                Dest.append(i)
+
+            # Increment processed MOVs index
+            QUEUE_Done  += 1
+
+        # Wait 200ms
+        time.sleep(Threads_Sleep_Delay)
+
+# Main thread
+# pylint: disable=W0602
+def WorkerThread(__Jobs__, __MOV_List__, __Total_Files__, __Results__):
+
+    # Global variables
+    global QUEUE_Done, QUEUE_Slots
+
+    # Local variables
+    __Processed_Files__ = 1
+    Threads = Queue.Queue()
+    Threads_Results = []
+
+    # Initialize default threads results containers
+    for _ in range(0, __Jobs__):
+        Threads_Results.append([[], 0])
+        QUEUE_Slots.append(0)
+
+    # Create collector thread
+    CollectorThread = threading.Thread(
+        target = WorkerThread_indexCollector,
+        args = (Threads, __Results__)
+    )
+
+    # Start collector thread
+    CollectorThread.setDaemon(True)
+    CollectorThread.start()
+
+    # Loop until all MOVS are extracted
+    while QUEUE_Done < __Total_Files__:
+
+        # Insert a new item to the queue if not full
+        if (UsedSlots(QUEUE_Slots) < __Jobs__) and (len(__MOV_List__) > 0):
+
+            # Get an available thread slot
+            Index = GetSlot(QUEUE_Slots)
+
+            # Pick one MOV file
+            MOV = __MOV_List__[0]
+
+            # Debug output
+            ShowMessage("Processing (%d/%d): %s..." % (__Processed_Files__, __Total_Files__, MOV.path))
+
+            # Issue 7980 fix
+            datetime.strptime('', '')
+
+            # Assign thread id
+            Threads_Results[Index][1] = Index
+
+            # Lock thread slot
+            QUEUE_Slots[Index] = 1
+
+            # Create thread
+            ThreadJob = threading.Thread(
+                target = indexMOV_Thread,
+                args = (Threads, MOV, Index)
+            )
+
+            # Start thread
+            ThreadJob.setDaemon(True)
+            ThreadJob.start()
+
+            # Increment index
+            __Processed_Files__ += 1
+
+            # Remove processed MOV file from list
+            __MOV_List__.pop(0)
+
+        else:
+
+            # Wait 200ms
+            time.sleep(Threads_Sleep_Delay)
+
+    # Exit threads
+    QUEUE_Done = -1
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -j --threads            Jobs count (Threads)
+    -h --help               Show this message
+
+    """ % sys.argv[0]
+
+# Program entry point function
+# pylint: disable=W0142
+def main(argv):
+
+    # Arguments variables
+    __MountPoint__      = ""
+    __CameraMAC__       = ""
+    __MasterTimestamp__ = ""
+    __Jobs__            = 1
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hd:m:t:j:", ["help", "mount-point=", "mac-address=", "master-timestamp=", "threads="])
+        args = args
+    except getopt.GetoptError, err:
+        pass
+
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+        elif o in ("-j", "--threads"):
+            __Jobs__ = int(a)
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Compute paths
+    InputFolder  = "%s/camera/%s/raw/sync/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFolder = "%s/camera/%s/raw/sync/%s/info" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFile = "%s/jp4-mov-timestamps.bin" % (OutputFolder)
+    CorrectionXML = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+
+    # Get camera modules count
+    ModuleCount = GetCameraModules(CorrectionXML)
+
+    # Verifiy presence of input folder
+    if not os.path.isdir(InputFolder):
+        ShowMessage("Input folder '%s' does not exist" % InputFolder, 2, 1)
+
+    # Create output dir if not exists
+    if not os.path.isdir(OutputFolder):
+        os.makedirs(OutputFolder)
+
+    # Verifiy presence of output state file
+    if os.path.isfile(OutputFile):
+        ShowMessage("State file '%s' already exists, halting..." % OutputFile, 2, 1)
+
+    # Verifiy presence of prefs.xml
+    if not os.path.isfile(CorrectionXML):
+        ShowMessage("Preferences file '%s' does not exist" % CorrectionXML, 2, 1)
+
+    # Debug output
+    ShowMessage("Imput MOV path: %s" % InputFolder)
+    ShowMessage("Output state file: %s" % OutputFile)
+
+    # List camera modules
+    CameraModules = [i for i in range(1, ModuleCount + 1)]
+
+    # Insert all MOV files into list
+    __MOV_List__  = []
+
+    for mn in CameraModules:
+        for MOV in sorted(glob.glob("%s/%s/*.mov" % (InputFolder, mn))):
+            __MOV_List__.append( MovFile(MOV, mn) )
+
+    # Results container variable
+    Results = []
+
+    #Create main thread
+    MainThread = threading.Thread(
+        target = WorkerThread,
+        args = (__Jobs__, __MOV_List__, len(__MOV_List__), Results)
+    )
+
+    # Start main thread
+    MainThread.setDaemon(True)
+    MainThread.start()
+
+    # Wait until main thread finishes
+    while MainThread.is_alive():
+        time.sleep(0.5)
+
+    # Sort indexes
+    Results = sorted(Results, key=itemgetter(0))
+
+    # Debug output
+    ShowMessage("Writing state file...")
+
+    # Write indexes to file
+    with open(OutputFile, "wb") as f:
+        for i in Results:
+            f.write(MAIN_DATA.pack(*i))
+
+    ShowMessage("Done")
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
