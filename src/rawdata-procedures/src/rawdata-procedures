@@ -98,7 +98,9 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
 
         # Run procedure #
         echo "rawdata-procedures : downloading raw data ..."
-        #RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/)
+        RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
+        EXIT_CODE=$?
+        [ $EXIT_CODE -ne 0 ] && exit 1
 
         # Temporary #
         #RETURN="AA:BB:CC:DD:EE:FF 123768762"

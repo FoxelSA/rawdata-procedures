@@ -1,0 +1,12 @@
+#!/bin/bash
+
+SPOOL=__PREFIX__/var/spool/rawdata-downloader
+
+[ -f __PREFIX__/etc/defaults/rawdata-downloader ] && . __PREFIX__/etc/defaults/rawdata-downloader
+
+case "$ACTION" in
+add)
+  [ "$DEVTYPE" = "disk" ] && /usr/bin/env | grep  -E -v -e '^PATH=' -e '^_=' -e '^PWD=' -e '^SEQNUM=' -e '^SHLVL=' > $SPOOL/$ID_SERIAL_SHORT
+  ;;
+esac
+  

@@ -1,0 +1,319 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import getopt
+import glob
+import json
+import os
+import struct
+import sys
+from datetime import datetime
+
+# Main binary file structure parameters
+MAIN_TYPE   = 'i i i i h'
+MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
+MAIN_STRUCT = struct.Struct(MAIN_TYPE)
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
+
+    # Disable output
+    return
+
+    NO_COLORS = 0
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Display proper message
+    Prepend = ""
+
+    if ThreadID != -1:
+        Prepend = "[Thread %d]" % (ThreadID+1)
+
+    if Type == 0:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# Function to compare a specified timestamp
+def GreaterOrEqual(timestamp_a, timestamp_a_usc, timestamp_b, timestamp_b_usc):
+
+    # Check if first is greater than second
+    if timestamp_a > timestamp_b:
+
+        # Return result
+        return True
+    else:
+
+        # Check if first is equal to second
+        if timestamp_a == timestamp_b:
+
+            # Check if first is greater or equal than second
+            if timestamp_a_usc >= timestamp_b_usc:
+
+                # Return result
+                return True
+            else:
+
+                # Return result
+                return False
+        else:
+
+            # Return result
+            return False
+
+# Function to find MOV files containing specified JP4 timestamps ranges
+def SearchRange(start_ts, start_micro, end_ts, end_micro, List):
+
+    # Local results variable
+    Results = []
+
+    # Iterate over list
+    for i in List:
+
+        # Check if timestamp is in range
+        if GreaterOrEqual(i[0], i[1], start_ts, start_micro) and GreaterOrEqual(end_ts, end_micro, i[0], i[1]):
+
+            # Build result value
+            MOV = [i[2], i[3], i[4]]
+
+            # Insert result if not present
+            if not MOV in Results:
+                Results.append(MOV)
+
+    # Return results
+    return Results
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -h --help               Show this message
+
+    """ % sys.argv[0]
+
+# Program entry point function
+def main(argv):
+
+    # Arguments variables
+    __MountPoint__      = ""
+    __CameraMAC__       = ""
+    __MasterTimestamp__ = ""
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hd:m:t:", ["help", "mount-point=", "mac-address=", "master-timestamp="])
+        args = args
+    except getopt.GetoptError, err:
+        pass
+
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Compute state file path
+    BaseSyncFolder    = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    BaseSegmentFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    InputFile         = "%s/info/jp4-mov-timestamps.bin" % (BaseSyncFolder)
+    SourceMOVDir      = "%s/mov" % (BaseSyncFolder)
+
+    # Debug output
+    ShowMessage("Parsing rawdata-navigator.json files...")
+
+    # Build CSPS range list
+    RANGES = []
+
+    # Find all JSON files
+    JSON_Files = glob.glob("%s/camera/%s/raw/segment/%s/*/csps/exports/rawdata-navigator.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
+
+    # Iterate over JSON files
+    for i in JSON_Files:
+
+        # Open file
+        with open(i) as f:
+
+            # Load JSON file
+            json_data = json.load(f)
+
+            # Get pose sections
+            poses = json_data['pose']
+
+            # Apprend values to list
+            RANGES.append([
+                    json_data['pose'][0]['sec'],
+                    json_data['pose'][0]['usc'],
+                    json_data['pose'][len(poses) - 1]['sec'],
+                    json_data['pose'][len(poses) - 1]['usc']
+                ]
+            )
+
+    # Debug output
+    ShowMessage("%d ranges loaded" % len(RANGES))
+
+	# Debug output
+    ShowMessage("Loading jp4-mov-timestamps.bin file...")
+
+    # Read state file
+    BINARY_DATA = open(InputFile, "rb").read()
+
+    # Determine data length
+    Len = len(BINARY_DATA)
+
+    # Determine entries count
+    Count = Len / MAIN_SIZE
+
+    # Initialize variables
+    VALUES = []
+    Offset = MAIN_SIZE
+
+    # Iterate over entries count
+    for i in range(0, Count):
+
+        # Unpack binary values
+        Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
+
+        # Append values to array
+        VALUES.append( Unpacked )
+
+        # Increment offset
+        Offset += MAIN_SIZE
+
+    # Debug output
+    ShowMessage("%d entries loaded" % Count)
+
+    # Results variables
+    Links_Created  = 0
+    Qurries_Length = 0
+
+    # Iterate over CSPS ranges
+    for i in RANGES:
+
+        # Debug output
+        ShowMessage("Processing segment %d - %d" % (i[0], i[2]))
+
+        # Search matching MOV files based on given ranges
+        Querry          = SearchRange(i[0], i[1], i[2], i[3], VALUES)
+        Qurries_Length += len(Querry)
+
+        # Determine base destination folder
+        BaseDestFolder = "%s/%d/mov" % (BaseSegmentFolder, i[0])
+
+        # Create base destination folder if not present
+        if not os.path.isdir(BaseDestFolder):
+            os.makedirs(BaseDestFolder)
+
+        # Verify that search returned values
+        if len(Querry) > 0:
+
+            # Iterate over search results
+            for j in Querry:
+
+                # Compute paths
+                DestFolder = "%s/%d" % (BaseDestFolder, j[2])
+                SourceFile = "%s/%d/%d_%06d.mov" % (SourceMOVDir, j[2], j[0], j[1])
+                DestFile = "%s/%d_%06d.mov" % (DestFolder, j[0], j[1])
+
+                # Create destination folder if not present
+                if not os.path.isdir(DestFolder):
+                    os.makedirs(DestFolder)
+
+                # Check presence of source file
+                if not os.path.isfile(SourceFile):
+                    ShowMessage("Missing source MOV '%s'" % SourceFile, 2)
+
+                # Create hard link if not present
+                if not os.path.isfile(DestFile):
+                    ShowMessage("%s -> %s" % (SourceFile, DestFile))
+                    os.link(SourceFile, DestFile)
+                    Links_Created += 1
+
+    # Debug output
+    ShowMessage("%d match(s) found, and %d link(s) created" % (Qurries_Length, Links_Created))
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

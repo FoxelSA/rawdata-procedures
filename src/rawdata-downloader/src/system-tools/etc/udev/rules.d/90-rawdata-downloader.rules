@@ -1,0 +1,2 @@
+KERNEL=="sd*", RUN+="__PREFIX__/sbin/scsi-disk-udev-eventhandler"
+

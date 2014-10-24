@@ -4,7 +4,7 @@
 #
 
     all:directories
-	#cp src/rawdata-autoseg bin/rawdata-autoseg
+	cp src/rawdata-hardlink bin/rawdata-hardlink
 
 #
 #   make - directories
