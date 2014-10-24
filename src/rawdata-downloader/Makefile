@@ -7,7 +7,7 @@ SYSTEM_PREFIX=/
     all:directories
 	cp -rv src/bin . 
 
-    system-tools:
+    install-system-tools:
 	${MAKE} -C src/system-tools install SYSTEM_PREFIX=${SYSTEM_PREFIX}
 
 #
