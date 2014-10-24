@@ -55,8 +55,6 @@ SPOOL=/var/spool/rawdata-downloader
 mkdir -p $SPOOL || exit 1
 [ -n "$DEBUG" ] && set -x
 
-trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
-
 assertcommands() {
   while [ $# -ne 0 ] ; do
     local CMD=$1
@@ -518,7 +516,7 @@ if [ -z "$DESTINATION" ] ; then
   usage 1
 fi
 
-[ $@ -gt 0 ] && usage 1
+[ $# -gt 0 ] && usage 1
 
 checkdependencies
 
@@ -548,6 +546,8 @@ echo 0 > $QSEQ_TMP
 echo 0 > $MUX_DONE_TMP
 echo 0 > $QUITTING_TMP
 touch $REMOVED_SCSI_TMP
+
+trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
 
 log ${LINENO} get camera uptime
 CAMERA_UPTIME=$(get_camera_uptime) 
