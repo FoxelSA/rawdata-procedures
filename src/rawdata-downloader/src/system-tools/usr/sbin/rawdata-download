@@ -268,7 +268,6 @@ backup() {
   SERIAL=$7
   DEVICE=$8
   ISRETRY=$9
-  MUX_DONE=$(cat $MUX_DONE_TMP)
 
   # quit if already backuped - should not happend
   [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped ] && killtree -KILL $MYPID
@@ -352,6 +351,7 @@ backup() {
   else
     # check mux done
     if ! is_any_ssd_left_in_queue_for_mux $MUX_INDEX ; then
+      MUX_DONE=$(cat $MUX_DONE_TMP)
       echo $((++MUX_DONE)) > $MUX_DONE_TMP
     fi
     log ${LINENO} mux_done_count $MUX_DONE
@@ -368,7 +368,8 @@ backup() {
     fi
     killtree -KILL $MYPID
   fi
-}
+
+} # backup
 
 is_any_ssd_left_in_queue_for_mux() {
    export MUX_INDEX=$1
@@ -478,7 +479,8 @@ connect_q_run() {
   done < $FIFO
   kill -TERM $TAIL_PID > /dev/null 2>&1
   rm $FIFO
-}
+
+} # connect_q_run
 
 # remount ssd on cameras
 reset_eyesis_ide() {
@@ -653,6 +655,7 @@ EXIT_CODE=$(cat $EXIT_CODE_TMP)
 # remove temporary files
 rm $TMP/$$ -r 2> /dev/null
 
+# on success, print destination folder 
 [ $EXIT_CODE -eq 0 ] && echo $DEST
 
 log ${LINENO} exit $EXIT_CODE
