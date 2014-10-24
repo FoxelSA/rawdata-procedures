@@ -1,5 +1,3 @@
-SYSTEM_PREFIX=/
-
 #
 #   make - synchronize
 #
@@ -8,7 +6,7 @@ SYSTEM_PREFIX=/
 	cp -rv src/bin . 
 
     install-system-tools:
-	${MAKE} -C src/system-tools install SYSTEM_PREFIX=${SYSTEM_PREFIX}
+	${MAKE} -C src/system-tools install
 
 #
 #   make - directories
