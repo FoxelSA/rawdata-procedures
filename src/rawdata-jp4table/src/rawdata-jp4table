@@ -424,10 +424,6 @@ def main(argv):
     if not os.path.isdir(OutputFolder):
         os.makedirs(OutputFolder)
 
-    # Verifiy presence of output state file
-    if os.path.isfile(OutputFile):
-        ShowMessage("State file '%s' already exists, halting..." % OutputFile, 2, 1)
-
     # Verifiy presence of prefs.xml
     if not os.path.isfile(CorrectionXML):
         ShowMessage("Preferences file '%s' does not exist" % CorrectionXML, 2, 1)

@@ -31,8 +31,8 @@
 #
 
     install:
-	cp $(addprefix bin/,$(SCRIPTS)) /bin 2>/dev/null || :
+	cp $(addprefix bin/,$(SCRIPTS)) /usr/bin 2>/dev/null || :
 
     uninstall:
-	@$(foreach SCRIPT, $(SCRIPTS), rm -f /bin/$(SCRIPT) && ) true
+	@$(foreach SCRIPT, $(SCRIPTS), rm -f /usr/bin/$(SCRIPT) && ) true
 
