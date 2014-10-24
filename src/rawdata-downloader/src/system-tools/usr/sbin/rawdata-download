@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# build-modules-file
+# rawdata-downloader
 #
 # Copyright (c) 2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -37,7 +37,7 @@
 #set -e
 
 if [ $UID -ne 0 ] ; then
-  echo error: $(basename $0) must be run as root
+  echo error: $(basename $0) must be run as root >&2
   exit 1
 fi
 
@@ -61,12 +61,12 @@ assertcommands() {
   while [ $# -ne 0 ] ; do
     local CMD=$1
     shift
-    [ -z "$(which $CMD)" ] && echo command $CMD not found && exit 1
+    [ -z "$(which $CMD)" ] && echo command $CMD not found >&2 && exit 1
   done
 }
 
 checkdependencies() {
-  assertcommands inotifywait arp wget ssh sshall __PREFIX__/sbin/scsi-disk-udev-eventhandler
+  assertcommands fsck rsync inotifywait arp wget ssh sshall __PREFIX__/usr/sbin/scsi-disk-udev-eventhandler
   if [ ! -f __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules ] ; then
     echo file not found: __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules >&2
     exit 1
@@ -74,16 +74,34 @@ checkdependencies() {
 }
 
 usage() {
-  echo "usage: $(basename $0) <destination>"
+  echo "usage: $(basename $0) <destination>" >&2
   exit $1
+}
+
+# sleep while fsck is running
+wait_fsck() {
+  log ${LINENO} wait_fsck
+  while killall -0 fsck 2>/dev/null || killall -0 fsck.ext2  2>/dev/null ; do
+    sleep 10
+  done
 }
 
 # kill child processes, and optionally the root process
 killtree() {
+
+    # disable ctrl-c
     trap '' SIGINT
+
     local _pid=$2
     local _sig=$1
     local killroot=$3
+
+    # avoid fsck race condition
+    if [ $(cat $QUITTING_TMP) -ne 1 ] ; then
+      echo 1 > $QUITTING_TMP
+      sleep 2
+      wait_fsck
+    fi
 
     # stop parents children production between child killing and parent killing
     #[ "${_pid}" != "$MYPID" ] && kill -STOP ${_pid}
@@ -167,37 +185,23 @@ get_module_index() {
   echo $(($(get_ssd_index $SERIAL)+1))
 }
 
-save_module_address() {
-  local MUX_INDEX=$1
-  local REMOTE_SSD_INDEX=$2
-  local SERIAL=$3
-  grep -q -E -e " $SERIAL\$" $MODULES_FILE && return 0
-  echo $(get_module_index $SERIAL) $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL >> $MODULES_FILE
-  MODULES_FILE_TMP=/tmp/$(basename $MODULES_FILE).$$
-  sort -u $MODULES_FILE > $MODULES_FILE_TMP
-  cat $MODULES_FILE_TMP > $MODULES_FILE
-  rm $MODULES_FILE_TMP
-}
-
 # check that specified module address match saved one
 check_module_address() {
   local MUX_INDEX=$1
   local REMOTE_SSD_INDEX=$2
   local SERIAL=$3
-  # ignore if not in modules file
-  grep -q -E -e "^[0-9]+ $MUX_INDEX $REMOTE_SSD_INDEX " $MODULES_FILE || return 0
   # return error if serial is not matching saved one for mux/ssd pair
   grep -q -E -e " $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL\$" $MODULES_FILE
 }
 
-# wait udev generated files in spool folder before mounting disk and save module address in background
-wait_and_register() {
+# wait udev generated files in spool folder before mounting disk and launching backup in background
+wait_and_backup() {
 
-  log ${LINENO} "<= wait_and_register"
+  log ${LINENO} "<= wait_and_backup"
 
   inotifywait -m -e close_write $SPOOL | while read l ; do
 
-    log ${LINENO} INOTIFY $SPOOL $l
+    log ${LINENO} $SPOOL INOTIFY $l
 
     # second string returned by inotifywait is filename (disk serial)
     event=($l)
@@ -225,9 +229,6 @@ wait_and_register() {
       killtree -KILL $MYPID 
     fi
 
-    # cache camera module address (mux index, ssd index)
-    save_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL
-
     # cache mux index and scsi host association
     save_scsihost $MUX_INDEX $SCSIHOST
 
@@ -241,13 +242,28 @@ wait_and_register() {
     touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connected || killtree -KILL $MYPID
     echo $SCSIHOST $SERIAL $DEVICE > $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connected
 
-    enqueue_next_ssd $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE $ISRETRY &
+    # launch backup in background
+    backup $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE $ISRETRY &
 
   done
 }
 
-# enqueue next ssd for this mux
-enqueue_next_ssd() {
+check_filesystem() {
+
+  # if process is exiting, just wait for kill
+  while [ "$(cat $QUITTING_TMP)" -eq 1 ] ; do sleep 100000 ; done
+
+  # else check filesystem
+  log ${LINENO} checking $SERIAL ${DEVICE}$PARTNUM integrity
+  # -p is safe
+  fsck -p ${DEVICE}$PARTNUM
+
+  return $?
+}
+
+# backup filesystem then enqueue next ssd backup for this mux
+backup() {
+
   MUX_INDEX=$1
   REMOTE_SSD_INDEX=$2
   SCSIHOST="$3 $4 $5 $6"
@@ -256,8 +272,60 @@ enqueue_next_ssd() {
   ISRETRY=$9
   MUX_DONE=$(cat $MUX_DONE_TMP)
 
-  # quit if already registered - should not happend
-  [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_registered ] && killtree -KILL $MYPID
+  # quit if already backuped - should not happend
+  [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped ] && killtree -KILL $MYPID
+
+  log ${LINENO} backup $@
+  PARTNUM=1
+  MOUNTPOINT=/mnt/$(basename ${DEVICE})$PARTNUM
+  mkdir -p $MOUNTPOINT || killtree -KILL $MYPID
+
+  # disable ncq
+  log ${LINENO} disabling NCQ $SERIAL ${DEVICE}$PARTNUM
+  echo 1 > /sys/block/$(basename $DEVICE)/device/queue_depth
+
+  # check / repair filesystem
+  check_filesystem | logstdout ${LINENO}
+  if [ $? -gt 1 ] ; then
+    log ${LINENO} fsck_failed module $(get_module_index $SERIAL)
+    return 1
+  fi
+
+# TODO: if fsck -p fails, make a disk image and fsck -y the disk image,
+# then mount it
+#
+# fsck exit code is the sum of the following conditions
+#            0    - No errors
+#            1    - Filesystem errors corrected
+#            2    - System should be rebooted
+#            4    - Filesystem errors left uncorrected
+#            8    - Operational error
+#            16   - Usage or syntax error
+#            32   - Fsck canceled by user request
+#            128  - Shared-library error
+  
+  # mount device read-only
+  if ! mount -o ro ${DEVICE}$PARTNUM $MOUNTPOINT ; then
+     log ${LINENO} mount_failed module $(get_module_index $SERIAL)
+     return 1
+  fi
+
+  # backup files
+  log ${LINENO} backuping mux $MUX_INDEX index $REMOTE_SSD_INDEX serial $SERIAL partition ${DEVICE}$PARTNUM
+  RSYNCDEST=$DEST/rsync/$(get_module_index $SERIAL)
+  rsync -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
+  STATUS=$?
+
+  log ${LINENO} backup_status $STATUS module $(get_module_index $SERIAL) mux ${MUX_INDEX} index ${REMOTE_SSD_INDEX}
+
+  # unmount device
+  log ${LINENO} umount $MOUNTPOINT
+  sync
+  umount ${DEVICE}$PARTNUM || umount -f ${DEVICE}$PARTNUM
+  sync
+
+  # remove flag
+  rm $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connected || killtree -KILL $MYPID
 
   # sync filesystems
   log ${LINENO} syncing
@@ -269,17 +337,15 @@ enqueue_next_ssd() {
   echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
   echo $SCSIHOST >> $REMOVED_SCSI_TMP
 
-  # remove flag
-  rm $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connected || killtree -KILL $MYPID
+  # set backuped flag
+  touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped || killtree -KILL $MYPID
+  echo $SCSIHOST $SERIAL $DEVICE $STATUS > $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped
 
-  # set registered flag
-  touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_registered || killtree -KILL $MYPID
-  echo $SCSIHOST $SERIAL $DEVICE $STATUS > $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_registered
-
-  echo $SERIAL >> $SERIAL_DONE_TMP
   # show progression
-  SERIAL_DONE_COUNT=$(sort -u $SERIAL_DONE_TMP | wc -l)
-  log ${LINENO} registration_done_count $SERIAL_DONE_COUNT
+  if [ $STATUS -eq 0 ] ; then
+    echo $SERIAL >> $SERIAL_DONE_TMP
+    log ${LINENO} backup_done_count $(sort -u $SERIAL_DONE_TMP | wc -l)
+  fi
 
   # enqueue this mux's next ssd for backup (ignore this step for retries)
   if [ "$ISRETRY" = "" -a $REMOTE_SSD_INDEX -lt ${MUX_MAX_INDEX[$MUX_INDEX]} ] ; then
@@ -370,7 +436,7 @@ connect_q_run() {
       INOTIFY_STDERR=$(mktemp)
       timeout -k 10 30 inotifywait -e close_write $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting > /dev/null 2> $INOTIFY_STDERR &
       TIMEOUTPID=$!
-      wait_watches_established $INOTIFY_STDERR 2>&1 | grep -v -e INOTIFY_STDERR | logstdout ${LINENO} 
+      wait_watches_established $INOTIFY_STDERR 2>&1 | grep -v -e INOTIFY_STDERR | logstdout ${LINENO}
 
       # before requesting disk connection, save connecting disk info
       echo $MUX_INDEX $REMOTE_SSD_INDEX $ISRETRY > $DISK_CONNECTING_TMP
@@ -416,7 +482,7 @@ connect_q_run() {
   rm $FIFO
 }
 
-# reset multiplexers
+# remount ssd on cameras
 reset_eyesis_ide() {
   log ${LINENO} reset eyesis_ide
   for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
@@ -432,13 +498,13 @@ umount_all() {
     msg=($l)
     [ ${msg[0]} = "sshall:" ] || continue
     LOGIN=${msg[1]}
-    [ -z "$LOGIN" ] && echo umount_all: $l && killtree -KILL $MYPID
+    [ -z "$LOGIN" ] && echo umount_all: $l >&2 && killtree -KILL $MYPID
     WHAT=${msg[2]}
     [ "$WHAT" != "status" ] && continue
     IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
     INDEX=$(expr $IP - $MASTER_IP)
     STATUS[$INDEX]=${msg[3]}
-    [ "${STATUS[$INDEX]}" != "0" ] && echo umount_cf $IP && killtree -KILL $MYPID
+    [ "${STATUS[$INDEX]}" != "0" ] && echo umount_cf $IP >&2 && killtree -KILL $MYPID
   done
 }
 
@@ -446,15 +512,13 @@ umount_all() {
 
 SCSIHOST=()
 
-[ -z "$DESTINATION" ] && DESTINATION=$1
+[ -z "$DESTINATION" ] && DESTINATION=$1 && shift
 
 if [ -z "$DESTINATION" ] ; then
   usage 1
 fi
 
-for opt in $@ ; do
-  [ "$opt" = "-h" ] && usage 0
-done
+[ $@ -gt 0 ] && usage 1
 
 checkdependencies
 
@@ -475,12 +539,14 @@ export REMOVED_DEVICES=$(mktemp --tmpdir=$TMP)
 export CONNECT_Q_TMP=$(mktemp --tmpdir=$TMP)
 export MUX_DONE_TMP=$(mktemp --tmpdir=$TMP)
 export QSEQ_TMP=$(mktemp --tmpdir=$TMP)
+export QUITTING_TMP=$(mktemp --tmpdir=$TMP)
 export SERIAL_DONE_TMP=$(mktemp --tmpdir=$TMP)
 export REMOVED_SCSI_TMP=$TMP/../removed_scsi
 
 echo 1 > $EXIT_CODE_TMP
 echo 0 > $QSEQ_TMP
 echo 0 > $MUX_DONE_TMP
+echo 0 > $QUITTING_TMP
 touch $REMOVED_SCSI_TMP
 
 log ${LINENO} get camera uptime
@@ -501,8 +567,14 @@ fi
 # set destination folder
 DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
 
-mkdir -p "$DEST/info/rawdata-downloader" || exit 1
-export MODULES_FILE="$DEST/info/rawdata-downloader/modules"
+mkdir -p "$DEST/rsync" || exit 1
+
+export MODULES_FILE=$DEST/info/rawdata-downloader/modules
+if [ ! -f $MODULES_FILE ] ; then
+  log ${LINENO} error file not found: $MODULES_FILE
+  log ${LINENO} error run build-modules-file $DESTINATION first
+  exit 1
+fi
 
 # build sshall login list
 for (( i=0 ; $i < $N ; ++i )) ; do
@@ -548,7 +620,7 @@ log ${LINENO} umount CF
 umount_all
 
 # run backgroud task waiting for disks and launching backups
-wait_and_register &
+wait_and_backup &
 
 # queue first ssd for each mux
 for (( i=0 ; i < ${#MUXES[@]} ; ++i )) ; do
@@ -566,7 +638,7 @@ wait
 trap '' SIGINT
 
 # reset multiplexers
-log ${LINENO} resetting multiplexers
+log ${LINENO} resetting eyesis ide
 reset_eyesis_ide
 
 # add previously removed scsi devices
@@ -578,10 +650,10 @@ done
 
 EXIT_CODE=$(cat $EXIT_CODE_TMP)
 
-[ $EXIT_CODE -eq 0 ] && echo $MODULES_FILE
-
 # remove temporary files
 rm $TMP/$$ -r 2> /dev/null
+
+[ $EXIT_CODE -eq 0 ] && echo $DEST
 
 log ${LINENO} exit $EXIT_CODE
 exit $EXIT_CODE
