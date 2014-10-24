@@ -48,14 +48,12 @@ N=9
 MUXES=(192.168.0.224 192.168.0.228)
 MUX_MAX_INDEX=(4 5)
 
-SPOOL=__PREFIX__/var/spool/rawdata-downloader
+SPOOL=/var/spool/rawdata-downloader
 
-[ -f __PREFIX__/etc/defaults/rawdata-downloader ] && . __PREFIX__/etc/defaults/rawdata-downloader
+[ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
 mkdir -p $SPOOL || exit 1
 [ -n "$DEBUG" ] && set -x
-
-trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
 
 assertcommands() {
   while [ $# -ne 0 ] ; do
@@ -66,9 +64,9 @@ assertcommands() {
 }
 
 checkdependencies() {
-  assertcommands fsck rsync inotifywait arp wget ssh sshall __PREFIX__/usr/sbin/scsi-disk-udev-eventhandler
-  if [ ! -f __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules ] ; then
-    echo file not found: __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules >&2
+  assertcommands fsck rsync inotifywait arp wget ssh sshall /usr/sbin/scsi-disk-udev-eventhandler
+  if [ ! -f /etc/udev/rules.d/90-rawdata-downloader.rules ] ; then
+    echo file not found: /etc/udev/rules.d/90-rawdata-downloader.rules >&2
     exit 1
   fi
 }
@@ -224,7 +222,7 @@ wait_and_backup() {
     log ${LINENO} device_connected $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
 
     # assert previously saved module address match the connecting disk
-    if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL ; then
+    if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO} ; then
       log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
       killtree -KILL $MYPID 
     fi
@@ -270,7 +268,6 @@ backup() {
   SERIAL=$7
   DEVICE=$8
   ISRETRY=$9
-  MUX_DONE=$(cat $MUX_DONE_TMP)
 
   # quit if already backuped - should not happend
   [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped ] && killtree -KILL $MYPID
@@ -354,6 +351,7 @@ backup() {
   else
     # check mux done
     if ! is_any_ssd_left_in_queue_for_mux $MUX_INDEX ; then
+      MUX_DONE=$(cat $MUX_DONE_TMP)
       echo $((++MUX_DONE)) > $MUX_DONE_TMP
     fi
     log ${LINENO} mux_done_count $MUX_DONE
@@ -370,7 +368,8 @@ backup() {
     fi
     killtree -KILL $MYPID
   fi
-}
+
+} # backup
 
 is_any_ssd_left_in_queue_for_mux() {
    export MUX_INDEX=$1
@@ -480,7 +479,8 @@ connect_q_run() {
   done < $FIFO
   kill -TERM $TAIL_PID > /dev/null 2>&1
   rm $FIFO
-}
+
+} # connect_q_run
 
 # remount ssd on cameras
 reset_eyesis_ide() {
@@ -518,7 +518,7 @@ if [ -z "$DESTINATION" ] ; then
   usage 1
 fi
 
-[ $@ -gt 0 ] && usage 1
+[ $# -gt 0 ] && usage 1
 
 checkdependencies
 
@@ -549,6 +549,8 @@ echo 0 > $MUX_DONE_TMP
 echo 0 > $QUITTING_TMP
 touch $REMOVED_SCSI_TMP
 
+trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
+
 log ${LINENO} get camera uptime
 CAMERA_UPTIME=$(get_camera_uptime) 
 [ -z "$CAMERA_UPTIME" ] && exit 1
@@ -572,7 +574,7 @@ mkdir -p "$DEST/rsync" || exit 1
 export MODULES_FILE=$DEST/info/rawdata-downloader/modules
 if [ ! -f $MODULES_FILE ] ; then
   log ${LINENO} error file not found: $MODULES_FILE
-  log ${LINENO} error run build-modules-file $DESTINATION first
+  log ${LINENO} "=> run 'build-modules-file $DESTINATION' first"
   exit 1
 fi
 
@@ -653,6 +655,7 @@ EXIT_CODE=$(cat $EXIT_CODE_TMP)
 # remove temporary files
 rm $TMP/$$ -r 2> /dev/null
 
+# on success, print destination folder 
 [ $EXIT_CODE -eq 0 ] && echo $DEST
 
 log ${LINENO} exit $EXIT_CODE

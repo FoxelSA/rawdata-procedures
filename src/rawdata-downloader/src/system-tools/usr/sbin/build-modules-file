@@ -48,9 +48,9 @@ N=9
 MUXES=(192.168.0.224 192.168.0.228)
 MUX_MAX_INDEX=(4 5)
 
-SPOOL=__PREFIX__/var/spool/rawdata-downloader
+SPOOL=/var/spool/rawdata-downloader
 
-[ -f __PREFIX__/etc/defaults/rawdata-downloader ] && . __PREFIX__/etc/defaults/rawdata-downloader
+[ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
 mkdir -p $SPOOL || exit 1
 [ -n "$DEBUG" ] && set -x
@@ -66,9 +66,9 @@ assertcommands() {
 }
 
 checkdependencies() {
-  assertcommands inotifywait arp wget ssh sshall __PREFIX__/usr/sbin/scsi-disk-udev-eventhandler
-  if [ ! -f __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules ] ; then
-    echo file not found: __PREFIX__/etc/udev/rules.d/90-rawdata-downloader.rules >&2
+  assertcommands inotifywait arp wget ssh sshall /usr/sbin/scsi-disk-udev-eventhandler
+  if [ ! -f /etc/udev/rules.d/90-rawdata-downloader.rules ] ; then
+    echo file not found: /etc/udev/rules.d/90-rawdata-downloader.rules >&2
     exit 1
   fi
 }
@@ -220,13 +220,13 @@ wait_and_register() {
     log ${LINENO} device_connected $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
 
     # assert previously saved module address match the connecting disk
-    if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL ; then
+    if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO} ; then
       log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
       killtree -KILL $MYPID 
     fi
 
     # cache camera module address (mux index, ssd index)
-    save_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL
+    save_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO}
 
     # cache mux index and scsi host association
     save_scsihost $MUX_INDEX $SCSIHOST
