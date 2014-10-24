@@ -31,14 +31,14 @@
 #
 
     install:
-ifeq ($(whoami),root)
+ifeq ($(shell whoami),root)
 	cp $(addprefix bin/,$(SCRIPTS)) /bin 2>/dev/null || :
 else
     $(error Install target need root privilege - see makefile content)
 endif
 
     uninstall:
-ifeq ($(whoami),root)
+ifeq ($(shell whoami),root)
 	@$(foreach SCRIPT, $(SCRIPTS), rm -f /bin/$(SCRIPT) && ) true
 else
     $(error Uninstall target need root privilege - see makefile content)
