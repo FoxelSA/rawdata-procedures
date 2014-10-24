@@ -32,14 +32,14 @@
 
     install:
 ifeq ($(whoami),root)
-	@$(foreach SOFT, $(MAKE_SOFTS), cp $(MAKE_BINARY)/$(SOFT) /bin/ && ) true
+	cp $(addprefix bin/,$(SCRIPTS)) /bin 2>/dev/null || :
 else
     $(error Install target need root privilege - see makefile content)
 endif
 
-ifeq ($(whoami),root)
     uninstall:
-	@$(foreach SOFT, $(MAKE_SOFTS), rm -f /bin/$(SOFT) && ) true
+ifeq ($(whoami),root)
+	@$(foreach SCRIPT, $(SCRIPTS), rm -f /bin/$(SCRIPT) && ) true
 else
     $(error Uninstall target need root privilege - see makefile content)
 endif
