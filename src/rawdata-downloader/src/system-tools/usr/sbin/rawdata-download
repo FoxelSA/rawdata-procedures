@@ -36,6 +36,8 @@
 
 #set -e
 
+export SCRIPT=$(basename $0)
+
 if [ $UID -ne 0 ] ; then
   echo error: $(basename $0) must be run as root >&2
   exit 1
@@ -134,13 +136,13 @@ get_hbtl() {
 }
 
 log() {
-  echo $(date +%F_%r) $BASHPID $@ >&2
+  echo $(date +%F_%r) $SCRIPT $BASHPID $@ >&2
 }
 
 # format stdin for logginG
 logstdout() {
   while read l ; do
-    echo $(date +%F_%R:%S) $BASHPID $@ $l >&2
+    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ $l >&2
   done
 }
 
@@ -549,7 +551,7 @@ echo 0 > $MUX_DONE_TMP
 echo 0 > $QUITTING_TMP
 touch $REMOVED_SCSI_TMP
 
-trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
+trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 log ${LINENO} get camera uptime
 CAMERA_UPTIME=$(get_camera_uptime) 
@@ -591,7 +593,7 @@ done
 STATUS=()
 log ${LINENO} get ssd serials
 export SSD_SERIAL=()
-get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
+get_remote_disk_serial /dev/hda 2>&1 | tee | while read l ; do
   msg=($l)
   [ ${msg[0]} = "sshall:" ] || continue
   [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
@@ -658,6 +660,9 @@ EXIT_CODE=$(cat $EXIT_CODE_TMP)
 
 # remove temporary files
 rm $TMP/$$ -r 2> /dev/null
+
+# kill zombies
+killtree -KILL $MYPID
 
 # on success, print destination folder 
 [ $EXIT_CODE -eq 0 ] && echo $DEST

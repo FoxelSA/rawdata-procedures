@@ -36,6 +36,8 @@
 
 #set -e
 
+export SCRIPT=$(basename $0)
+
 if [ $UID -ne 0 ] ; then
   echo error: $(basename $0) must be run as root
   exit 1
@@ -118,13 +120,13 @@ get_hbtl() {
 }
 
 log() {
-  echo $(date +%F_%r) $BASHPID $@ >&2
+  echo $(date +%F_%r) $SCRIPT $BASHPID $@ >&2
 }
 
 # format stdin for logginG
 logstdout() {
   while read l ; do
-    echo $(date +%F_%R:%S) $BASHPID $@ $l >&2
+    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ $l >&2
   done
 }
 
