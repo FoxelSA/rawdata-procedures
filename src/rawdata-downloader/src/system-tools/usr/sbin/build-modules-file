@@ -254,7 +254,6 @@ enqueue_next_ssd() {
   SERIAL=$7
   DEVICE=$8
   ISRETRY=$9
-  MUX_DONE=$(cat $MUX_DONE_TMP)
 
   # quit if already registered - should not happend
   [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_registered ] && killtree -KILL $MYPID
@@ -288,6 +287,7 @@ enqueue_next_ssd() {
   else
     # check mux done
     if ! is_any_ssd_left_in_queue_for_mux $MUX_INDEX ; then
+      MUX_DONE=$(cat $MUX_DONE_TMP)
       echo $((++MUX_DONE)) > $MUX_DONE_TMP
     fi
     log ${LINENO} mux_done_count $MUX_DONE
