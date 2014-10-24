@@ -102,7 +102,7 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
         STATUS=$?
 
         # Check procedure status #
-        if [ $STATUS -e 0 ]; then
+        if [ $STATUS -eq 0 ]; then
 
             # Extract returned value - MAC address and master timestamp #
             ARRAY=($RETURN)
