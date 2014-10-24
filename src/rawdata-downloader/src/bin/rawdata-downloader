@@ -25,11 +25,14 @@ firsttimestamp() {
 TIMESTAMP=$(firsttimestamp $DEST/rsync)
 
 if [ -z "$TIMESTAMP" ] ; then
+  echo first timestamp not found
   exit 1
 fi
 
 # move files
-rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ >&2 || exit 1
+if ! rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ >&2 ; then
+  exit 1
+fi
 
 echo $(dirname $DEST) $TIMESTAMP
 

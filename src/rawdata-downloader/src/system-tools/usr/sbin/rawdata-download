@@ -554,7 +554,11 @@ trap "killtree -9 $MYPID yes" EXIT SIGINT SIGKILL SIGTERM SIGHUP
 log ${LINENO} get camera uptime
 CAMERA_UPTIME=$(get_camera_uptime) 
 [ -z "$CAMERA_UPTIME" ] && exit 1
-[ $CAMERA_UPTIME -lt 120 ] && sleep $((120-CAMERA_UPTIME))
+
+if [ $CAMERA_UPTIME -lt 120 ] ; then
+  log ${LINENO} wait $((120-CAMERA_UPTIME)) seconds for camera wake up
+  sleep $((120-CAMERA_UPTIME))
+fi
 
 # clear scsi hosts cache if modification time older than camera uptime
 export SCSIHOST_TMP=$TMP/../scsihosts
