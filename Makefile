@@ -25,3 +25,21 @@
 
     clean:
 	rm bin/* -f
+
+#
+#   make - implementation
+#
+
+    install:
+ifeq ($(whoami),root)
+	@$(foreach SOFT, $(MAKE_SOFTS), cp $(MAKE_BINARY)/$(SOFT) /bin/ && ) true
+else
+    $(error Install target need root privilege - see makefile content)
+endif
+
+ifeq ($(whoami),root)
+    uninstall:
+	@$(foreach SOFT, $(MAKE_SOFTS), rm -f /bin/$(SOFT) && ) true
+else
+    $(error Uninstall target need root privilege - see makefile content)
+endif
