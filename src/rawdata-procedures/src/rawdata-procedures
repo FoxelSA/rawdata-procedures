@@ -139,6 +139,16 @@ else
     # Run procedure #
     echo "rawdata-procedures : auto-segmentation ..."
     rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+    STATUS=$?
+
+    # Check procedure status #
+    if [ $STATUS -ne 0 ]; then
+
+        # Exit script #
+        echo "Error : rawdata-autoseg fail to process"
+        exit 1
+
+    fi
 
     # Run procedure #
     echo "rawdata-procedures : creating table of jp4 files ..."

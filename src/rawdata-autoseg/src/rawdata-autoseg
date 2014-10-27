@@ -174,47 +174,56 @@ topology() {
 process() {
 
     # Creates CSPS/csps-suite sync-specific directories #
+    >&2 echo "  rawdata-autoseg : creating directories ..."
     mkdir -p $AS_SYNC/csps
     mkdir -p $AS_SYNC/csps/decomposed
     mkdir -p $AS_SYNC/csps/recomposed
     mkdir -p $AS_SYNC/csps/validated
 
     # Perform audit on raw logs-files #
+    >&2 echo "  rawdata-autoseg : audit raw logs-files ..."
     csps-$(device_detect $AS_MACAD)-audit \
         -p $AS_SYNC/mov/1/ \
          > $AS_SYNC/csps/audit-raw.log
 
     # Perform logs-files decomposition #
+    >&2 echo "  rawdata-autoseg : decomposing logs-files ..."
     csps-$(device_detect $AS_MACAD)-decompose \
         -r $AS_SYNC/mov/1/ -d $AS_SYNC/csps/decomposed -i 1.0 \
          > $AS_SYNC/csps/logs-decompose.log
 
     # Perform audit on decomposed logs-files #
+    >&2 echo "  rawdata-autoseg : audit decomposed logs-files ..."
     csps-$(device_detect $AS_MACAD)-audit \
         -p $AS_SYNC/csps/decomposed \
          > $AS_SYNC/csps/audit-decompose.log
 
     # Perform logs-files recomposition #
+    >&2 echo "  rawdata-autoseg : recomposing logs-files ..."
     csps-$(device_detect $AS_MACAD)-recompose \
         -d $AS_SYNC/csps/decomposed -r $AS_SYNC/csps/recomposed -i 1.0 \
          > $AS_SYNC/csps/logs-recompose.log
 
     # Perform audit on recomposed logs-files #
+    >&2 echo "  rawdata-autoseg : audit recomposed logs-files ..."
     csps-$(device_detect $AS_MACAD)-audit \
         -p $AS_SYNC/csps/recomposed \
          > $AS_SYNC/csps/audit-recompose.log
 
     # Perform logs-files validation #
+    >&2 echo "  rawdata-autoseg : validating logs-files ..."
     csps-$(device_detect $AS_MACAD)-validate \
         -r $AS_SYNC/csps/recomposed -v $AS_SYNC/csps/validated -i 5.0 \
          > $AS_SYNC/csps/logs-validate.log
 
     # Perform audit on validated logs-files #
+    >&2 echo "  rawdata-autoseg : audit validated logs-files ..."
     csps-$(device_detect $AS_MACAD)-audit \
         -p $AS_SYNC/csps/validated \
          > $AS_SYNC/csps/audit-validate.log
 
     # Create CSPS/csps-suite segments-specific directories #
+    >&2 echo "  rawdata-autoseg : broadcasting segments ..."
     echo "Segments broadcasting : $AS_MACAD:$AS_TIMES :" \
          > $AS_SYNC/csps/logs-broadcast.log
     mkdir -p $AS_SEGM
@@ -277,6 +286,7 @@ unprocess() {
     if [ -d $AS_SYNC/csps ]; then
 
         # Safe-remove #
+        >&2 echo "  rawdata-autoseg : safe removing sync auto-segmentation directories ..."
         rm    --force                    $AS_SYNC/csps/validated/*
         rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/validated
         rm    --force                    $AS_SYNC/csps/recomposed/*
@@ -326,28 +336,38 @@ arguments $@
 AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/sync/$AS_TIMES
 AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/segment/$AS_TIMES
 
-# Check state #
-if [ -n $AS_DOWN ]; then
+# Check directory #
+if [ ! -d $AS_MOUNT/camera/$AS_MACAD/raw ]; then
 
-    # Remove previous processing #
-    unprocess
+    # Exit script #
+    exit 1
 
-    # Process raw data #
-    process
+else
 
-elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+    # Check state #
+    if [ -n $AS_DOWN ]; then
 
-    # Remove previous processing #
-    unprocess
+        # Remove previous processing #
+        unprocess
 
-    # Process raw data #
-    process
+        # Process raw data #
+        process
+
+    elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+
+        # Remove previous processing #
+        unprocess
+
+        # Process raw data #
+        process
 
 
-elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+    elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
-    # Process raw data #
-    process
+        # Process raw data #
+        process
+
+    fi
 
 fi
 
