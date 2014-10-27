@@ -59,6 +59,7 @@ import exifread
 Threads_Sleep_Delay = 0.1
 
 # Global variables
+STD_OUTPUT = 0
 QUEUE_Done     = 0
 QUEUE_Count    = 0
 QUEUE_Slots    = []
@@ -80,8 +81,12 @@ class MovFile:
 # Function to print debug messages
 def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
 
-    # Disable output
-    return
+    # Global variables
+    global STD_OUTPUT
+
+    # Check if output is enabled
+    if not STD_OUTPUT:
+        return
 
     NO_COLORS = 0
 
@@ -368,6 +373,7 @@ def _usage():
 
     [Optional arguments]
     -j --threads            Jobs count (Threads)
+    -o --output             Show STDOUT logs
     -h --help               Show this message
 
     """ % sys.argv[0]
@@ -375,6 +381,9 @@ def _usage():
 # Program entry point function
 # pylint: disable=W0142
 def main(argv):
+
+    # Global variables
+    global STD_OUTPUT
 
     # Arguments variables
     __MountPoint__      = ""
@@ -384,7 +393,7 @@ def main(argv):
 
     # Arguments parser
     try:
-        opt, args = getopt.getopt(argv, "hd:m:t:j:", ["help", "mount-point=", "mac-address=", "master-timestamp=", "threads="])
+        opt, args = getopt.getopt(argv, "hd:m:t:j:o", ["help", "mount-point=", "mac-address=", "master-timestamp=", "threads=", "output"])
         args = args
     except getopt.GetoptError, err:
         pass
@@ -401,6 +410,8 @@ def main(argv):
             __MasterTimestamp__ = a
         elif o in ("-j", "--threads"):
             __Jobs__ = int(a)
+        elif o in ("-o", "--output"):
+            STD_OUTPUT = 1
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
@@ -409,8 +420,8 @@ def main(argv):
 
     # Compute paths
     InputFolder  = "%s/camera/%s/raw/sync/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFolder = "%s/camera/%s/raw/sync/%s/info" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFile = "%s/jp4-mov-timestamps.bin" % (OutputFolder)
+    OutputFolder = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFile = "%s/jp4table.bin" % (OutputFolder)
     CorrectionXML = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
 
     # Get camera modules count

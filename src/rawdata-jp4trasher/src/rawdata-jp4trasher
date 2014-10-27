@@ -47,6 +47,9 @@ import sys
 from datetime import datetime
 from xml.dom.minidom import parse
 
+# Global variables
+STD_OUTPUT = 0
+
 # Main binary file structure parameters
 MAIN_TYPE   = 'i i i i h'
 MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
@@ -54,10 +57,15 @@ MAIN_STRUCT = struct.Struct(MAIN_TYPE)
 
 # Function to print debug messages
 def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
-    NO_COLORS = 0
 
-    # Disable output
-    return
+    # Global variables
+    global STD_OUTPUT
+
+    # Check if output is enabled
+    if not STD_OUTPUT:
+        return
+
+    NO_COLORS = 0
 
     # Flush stdout
     sys.stdout.flush()
@@ -125,12 +133,16 @@ def _usage():
     -t --master-timestamp   Master timestamp
 
     [Optional arguments]
+    -o --output             Show STDOUT logs
     -h --help               Show this message
 
     """ % sys.argv[0]
 
 # Program entry point function
 def main(argv):
+
+    # Global variables
+    global STD_OUTPUT
 
     # Arguments variables
     __MountPoint__      = ""
@@ -139,7 +151,7 @@ def main(argv):
 
     # Arguments parser
     try:
-        opt, args = getopt.getopt(argv, "hd:m:t:", ["help", "mount-point=", "mac-address=", "master-timestamp="])
+        opt, args = getopt.getopt(argv, "hd:m:t:o", ["help", "mount-point=", "mac-address=", "master-timestamp=", "output"])
         args = args
     except getopt.GetoptError, err:
         print str(err)
@@ -155,17 +167,17 @@ def main(argv):
             __CameraMAC__ = a
         elif o in ("-t", "--master-timestamp"):
             __MasterTimestamp__ = a
-        else:
-            assert False, "unhandled option"
+        elif o in ("-o", "--output"):
+            STD_OUTPUT = 1
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
         _usage()
         sys.exit(0)
 
-    # Compute state file path
+    # Compute paths
     BaseSyncFolder    = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    InputFile         = "%s/info/jp4-mov-timestamps.bin" % (BaseSyncFolder)
+    InputFile         = "%s/info/rawdata-procedures/jp4table.bin" % (BaseSyncFolder)
     CorrectionXML = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
 
     # Get camera modules count
