@@ -278,8 +278,9 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
             # Calculate the output filename
             date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
             epoch = calendar.timegm(date_object.utctimetuple())
+            timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
 
-            if "%d_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"]) in Valid_Timestamps:
+            if timestamp in Valid_Timestamps:
                 Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
 
                 # Increment extracted files count
@@ -327,6 +328,7 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
     return Results
 
 # Thread function to extract MOV files
+@timed
 def extractMOV_Thread(tid, Threads, InputFile, OutputFolder, TrashFolder, ModuleName, Results_back, Valid_Timestamps):
 
     # Add action to queue
@@ -343,6 +345,7 @@ def extractMOV_Thread(tid, Threads, InputFile, OutputFolder, TrashFolder, Module
     )
 
 # Function to rearange images into full modules sets
+@timed
 def rearrangeImages(Folder, Images, Output, Limit, ModuleCount):
 
     # Scope variables
@@ -380,6 +383,7 @@ def rearrangeImages(Folder, Images, Output, Limit, ModuleCount):
     return Arranged_List
 
 # Function to load validated timestamps from CSPS JSON file
+@timed
 def LoadTimestampsFromJSON(JSONFile):
 
     # Results variable
@@ -410,6 +414,7 @@ def LoadTimestampsFromJSON(JSONFile):
     return sorted(Results)
 
 # Function to get camera modules count by reading correction XML
+@timed
 def GetCameraModules(CorrectionXMLPath):
 
     # Load XML file
@@ -607,7 +612,7 @@ def _usage():
 def main(argv):
 
     # Global variables
-    global STD_OUTPUT
+    global STD_OUTPUT, QUEUE_Done
 
     # Arguments variables
     __MountPoint__       = ""
@@ -620,16 +625,6 @@ def main(argv):
     # Scope variables initialisation
     __Segments__           = []
     __Exec_Timer__         = time.clock()
-    __extractMOV_Results_Template__ = [
-        0,  # Fail counter
-        [], # Last extracted files timestamps
-        [], # Extracted files
-        0,  # Extracted files count
-        __Max_Files__,  # File limit value
-        __Max_Files__,  # File limit counter
-        0,  # File limit dir index
-        0   # Thread id
-    ]
     __State_List__ = {
         'extracted_segments': []
     }
@@ -705,13 +700,21 @@ def main(argv):
         if not Segment in __State_List__['extracted_segments']:
 
             # Scope variables
+            __extractMOV_Results_Template__ = [
+                0,  # Fail counter
+                [], # Last extracted files timestamps
+                [], # Extracted files
+                0,  # Extracted files count
+                __Max_Files__,  # File limit value
+                __Max_Files__,  # File limit counter
+                0,  # File limit dir index
+                0   # Thread id
+            ]
             __extractMOV_Results__ = __extractMOV_Results_Template__[:]
-            __Input__              = ""
-            __Output__             = ""
-            __Trash__              = ""
             __MOV_List__           = []
             __MOV_List_Optimized__ = []
             __Total_Files__        = 0
+            QUEUE_Done             = 0
 
             # Debug output
             if not quietEnabled():
