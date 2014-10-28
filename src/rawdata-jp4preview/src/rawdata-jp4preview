@@ -1,0 +1,603 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+# Imports
+import getopt
+import glob
+import os
+import signal
+import sys
+
+from datetime import datetime
+from xml.dom.minidom import parse
+
+# Static parameters
+CAMERA_ARRAY = {
+    '00-0E-64-08-1B-6E': 1,
+    '00-0E-64-08-1C-D2': 2
+}
+
+# Global variables
+STD_OUTPUT = 0
+NO_COLORS  = 0
+
+# Function to catch CTRL-C
+def signal_handler(_signal, _frame):
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
+
+# JP4 file container class
+class JP4Image:
+    def __init__(self, timestamp, module, base_folder=-1):
+        self.timestamp = timestamp
+        self.module = int(module)
+        self.base_folder = int(base_folder)
+
+        # Compute default path
+        if self.base_folder != -1:
+            self.path = "%s/%s_%s" % (base_folder, timestamp, module)
+            self.path_nomod = "%s/%s" % (base_folder, timestamp)
+        else:
+            self.path = "%s_%s" % (timestamp, module)
+            self.path_nomod = "%s_%s" % (timestamp)
+
+# Function to check presence of an executable in PATH
+def which(program):
+
+    # Check if file is executable
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    # Split path
+    fpath, _ = os.path.split(program)
+
+    # Check if file exists
+    if fpath:
+
+        # Check if file exists
+        if is_exe(program):
+            return program
+    else:
+
+        # Walk over PATHS to check if file exists
+        for path in os.environ["PATH"].split(os.pathsep):
+
+            # Remove quotes from path
+            path = path.strip('"')
+
+            # Build file name
+            exe_file = os.path.join(path, program)
+
+            # Check if file exists
+            if is_exe(exe_file):
+                return exe_file
+
+    # Return result
+    return None
+
+# Function to print debug messages
+# pylint: disable=W0603
+def ShowMessage(Message, Type=0, Halt=0, force_output=0):
+
+    # Global variables
+    global STD_OUTPUT
+
+    if not STD_OUTPUT and not force_output:
+        return
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stdout.write("%s [INFO] %s\n" % (DateNow, Message))
+        else:
+            sys.stdout.write("%s \033[32m[INFO]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stdout.write("%s [WARNING] %s\n" % (DateNow, Message))
+        else:
+            sys.stdout.write("%s \033[33m[WARNING]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stdout.write("%s [ERROR] %s\n" % (DateNow, Message))
+        else:
+            sys.stdout.write("%s \033[31m[ERROR]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stdout.write("%s [DEBUG] %s\n" % (DateNow, Message))
+        else:
+            sys.stdout.write("%s \033[34m[DEBUG]\033[39m %s\n" % (DateNow, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# Function to convert a JP4 file into JPEG
+def JP4ToJPEG(List, _output, _temp, _grayscale=0):
+
+    # Local counter index
+    idx = 1
+
+    # Itertate over paths
+    for path in List:
+
+        # Extract filename
+        FileName = os.path.splitext(os.path.basename(path))[0]
+
+        # Debug output
+        sys.stdout.flush()
+        sys.stdout.write("Processing %d/%d...\r" % (idx, len(List)))
+        sys.stdout.flush()
+
+        # Check presence of grayscale option
+        if _grayscale:
+
+            # Convert image
+            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s | djpeg -fast -scale 1/8 > %s/%s.jpeg\n" % (path, _temp, FileName))
+
+            # Rotate image
+            os.system("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_output, FileName, _output, FileName))
+        else:
+
+            # Convert image to dng
+            os.system("movie2dng --dng --stdout %s > %s/%s.dng" % (path, _temp, FileName))
+
+            # Debay dng file and convert it into jpeg
+            os.system("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg" % (_temp, FileName, _output, FileName))
+
+            # Rotate image
+            os.system("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_output, FileName, _output, FileName))
+
+            # Remove temporary dng file
+            os.remove("%s/%s.dng" % (_temp, FileName))
+
+        # Increment counter index
+        idx += 1
+
+# Function to convert a JP4 file into JPEG (parallelized)
+def JP4ToJPEG_Parallel(List, _output, _temp, _grayscale=0, _jobs=1):
+
+    # Local command container
+    Commands = ""
+
+    # Itertate over paths
+    for path in List:
+
+        # Extract filename
+        FileName = os.path.splitext(os.path.basename(path))[0]
+
+        # Check presence of grayscale option
+        if _grayscale:
+
+            # Convert image
+            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s | djpeg -fast -scale 1/8 > %s/%s.jpeg && " % (path, _temp, FileName))
+
+            # Rotate image
+            Commands += ("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_temp, FileName, _temp, FileName))
+        else:
+
+            # Convert image to dng
+            Commands += ("movie2dng --dng --stdout %s > %s/%s.dng && " % (path, _temp, FileName))
+
+            # Debay dng file and convert it into jpeg
+            Commands += ("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg && " % (_temp, FileName, _output, FileName))
+
+            # Rotate image
+            Commands += ("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg && " % (_output, FileName, _output, FileName))
+
+            # Remove temporary dng file
+            Commands += ("rm %s/%s.dng\n" % (_temp, FileName))
+
+    # Write command to file
+    with open("%s/.JP4ToJPEG.txt" % _temp, "w") as f:
+        f.write(Commands)
+
+    # Run GNU parallel
+    os.system("cat %s/.JP4ToJPEG.txt | parallel -j%d sh -c '{}'" % (_temp, _jobs))
+
+    # Remove temporary command file
+    os.system("rm %s/.JP4ToJPEG.txt" % _temp)
+
+# Function to generate tiles form a crow
+def MakeTiles(_input, _output):
+
+    # Extract filename
+    FileName = os.path.splitext(os.path.basename(_input))[0]
+
+    # Split image into 3 parts
+    os.system("convert -crop 33.3%%x100%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
+
+    # Remove the unnecessary third image
+    if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
+        os.remove("%s/%s_3.jpeg" % (_output, FileName))
+
+# Function to get a sequence of images
+def getSeq(List, _sequences):
+
+    # Local variables
+    Index = 0
+    Result = []
+
+    # Iterate over file list
+    for i in List:
+
+        # Split segments of file
+        parts = i.rstrip('.jpeg').split('_')
+
+        # Compute path
+        path = "%s_%s_%s_%s.jpeg " % (parts[0], parts[1], parts[2], _sequences[Index])
+
+        # Insert into list if not present
+        if not path in Result:
+            Result.append(path)
+
+        # Increment index
+        Index += 1
+
+    # Return result
+    return Result
+
+# Function to stitch a set of tiles
+def StitchPano(_tilesdir, _output, _temp, _grayscale=0, _camera=2):
+
+    # Retrieve file list
+    List = sorted(glob.glob("%s/*_0.jpeg" % _tilesdir))
+
+    # Camera 1 parameters
+    if _camera == 1:
+
+        # Check presence of grayscale option
+        if _grayscale:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
+
+            # Flop images
+            for i in TopList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in MidList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in BotList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+        else:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 0, 2, 0, 2, 0, 2, 0])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 2, 0, 2, 0, 2, 0, 2])
+
+    elif _camera == 2:
+
+        # Check presence of grayscale option
+        if _grayscale:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
+
+            # Flop images
+            for i in TopList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in MidList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in BotList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+        else:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 0, 0, 0, 2, 0, 2, 0])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 2, 2, 2, 0, 2, 0, 2])
+
+            # Flip images
+            os.system("convert -flip %s %s" % (TopList[2], TopList[2]))
+            os.system("convert -flip %s %s" % (MidList[2], MidList[2]))
+            os.system("convert -flip %s %s" % (BotList[2], BotList[2]))
+
+    # Generate 3 crowns (top, middle, bottom)
+    os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
+    os.system("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
+    os.system("montage -flip -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
+
+    # Stitch crowns
+    os.system("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
+
+    # Remove temporary files
+    os.remove("%s/top.jpeg" % _temp)
+    os.remove("%s/mid.jpeg" % _temp)
+    os.remove("%s/bot.jpeg" % _temp)
+
+# Function to get camera ID from is MAC address
+def GetCameraID(_MAC):
+    if _MAC in CAMERA_ARRAY:
+        return CAMERA_ARRAY[_MAC]
+    else:
+        ShowMessage("Invalid MAC address '%s'" % (_MAC), 2, 1)
+
+# Function to get camera modules count by reading correction XML
+def GetCameraModules(CorrectionXMLPath):
+
+    # Load XML file
+    dom = parse(CorrectionXMLPath)
+
+    # Iterate over XML entries
+    for i in dom.getElementsByTagName('entry'):
+
+        # Check if key is 'CAMERAS.cameraIPs.length'
+        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
+
+            # Return value
+            return int(i.childNodes[0].data)
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -h --help           Prints this
+    -s --segment-timestamp  Segment timestamp
+    -j --threads        Use GNU parallel with x threads
+    -n --no-split           Exit program
+    -b --no-debayer     Write grayscale images (without debayer)
+
+    """ % sys.argv[0]
+
+# Program entry point function
+# pylint: disable=W0603
+def main(argv):
+
+    global STD_OUTPUT
+
+    # Arguments variables initialisation
+    __MountPoint__       = ""
+    __CameraMAC__        = ""
+    __MasterTimestamp__  = ""
+    __SegmentTimestamp__ = ""
+    __Jobs__             = 1
+    __NoDebayer__        = 0
+    __Camera__           = 2
+    __Temp_Base__        = "/tmp/rawdata-jp4preview"
+    __Temp__             = "%s/%d" %  (__Temp_Base__, os.getpid())
+
+    # Scope variables initialisation
+    __Segments__   = []
+    __JP4_Files__  = []
+    __TimeStamps__ = []
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hd:m:t:s:j:onb", ["help", "mount-point=", "mac-address=", "master-timestamp=", "segment-timestamp=", "threads=", "output", "no-split", "no-debayer"])
+        args = args
+    except getopt.GetoptError, err:
+        print str(err)
+        _usage()
+        sys.exit(2)
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+        elif o in ("-s", "--segment-timestamp"):
+            __SegmentTimestamp__ = a
+        elif o in ("-j", "--threads"):
+            __Jobs__ = int(a)
+        elif o in ("-o", "--output"):
+            STD_OUTPUT = 1
+        elif o in ("-b", "--no-debayer"):
+            __NoDebayer__ = 1
+        elif o in ("-n", "--no-split"):
+            return
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Check required programs
+    Error = 0
+
+    # Check presence of ImageMagick
+    if not which("convert"):
+        ShowMessage("ImageMagick not installed, install it with 'sudo apt-get install imagemagick'", 2, 0)
+        Error = 1
+
+    # Check presence of dcraw
+    if not which("cjpeg"):
+        ShowMessage("cjpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
+        Error = 1
+
+    # Check presence of dcraw
+    if not which("djpeg"):
+        ShowMessage("djpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
+        Error = 1
+
+    # Check presence of dcraw
+    if not which("dcraw"):
+        ShowMessage("dcraw not installed, install it with 'sudo apt-get install dcraw'", 2, 0)
+        Error = 1
+
+    # Check presence of movie2dng
+    if not which("movie2dng"):
+        ShowMessage("movie2dng not installed, see http://wiki.elphel.com/index.php?title=Movie2dng", 2, 0)
+        Error = 1
+
+    # Exif if dependencies are not installed
+    if Error: return
+
+    # Remove previous temp folder if exists
+    if os.path.isdir(__Temp_Base__):
+        os.system("rm -rf %s 2> /dev/null" % __Temp_Base__)
+
+    # Compute paths
+    BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    CorrectionXML      = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+
+    # Get camera modules count
+    ModuleCount = GetCameraModules(CorrectionXML)
+
+    # Get camera ID
+    __Camera__ = GetCameraID(__CameraMAC__)
+
+    # Get available segments
+    if __SegmentTimestamp__:
+        __Segments__.append(__SegmentTimestamp__)
+    else:
+        __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
+
+    # Counter index
+    Index = 1
+
+    for Segment in __Segments__:
+
+        # Debug output
+        ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
+
+        # Compute paths
+        __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+
+        # Retrieve list of filenames (only module 1)
+        __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
+        __JP4_Images__ = []
+
+        # Build images list
+        for i in __JP4_Files__:
+
+            # Split segments of file
+            parts = i.split('/')
+            timestamps = parts[-1].rstrip('.jp4').split('_')
+            basefolder = parts[-2]
+
+            # Compute timestamp
+            ts = "%s_%s" % (timestamps[0], timestamps[1])
+
+            # Insert into list if not present
+            if not ts in __TimeStamps__:
+                __JP4_Images__.append(JP4Image(ts, 1, basefolder))
+
+        # Sort timestamps
+        __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
+
+        # Initialize counter index
+        idx = 1
+
+        # Iterate over timestamps
+        for image in __JP4_Images__:
+
+            # Check if temp folder exists
+            if not os.path.isdir(__Temp__):
+
+                # Create temp folder
+                os.system("mkdir -p %s/tiles" % __Temp__)
+
+            # Determine output path
+            __Output__   = "%s/%s/preview/%d" % (BaseSegmentsFolder, Segment, image.base_folder)
+
+            # Create output folder if not present
+            if not os.path.isdir(__Output__):
+                os.makedirs(__Output__)
+
+            # Debug output
+            ShowMessage("%d/%d processing %s..." % (idx, len(__JP4_Images__), image.timestamp))
+
+            # Debug output
+            ShowMessage("Converting modules to jpeg")
+
+            # Build list of images to be converted
+            JP4ToJPEG_List = []
+            for i in range(1, ModuleCount):
+                JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, image.path_nomod, i))
+
+            # Check presence of parallel option and start conversion
+            if __Jobs__ != 1:
+                JP4ToJPEG_Parallel(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __Jobs__)
+            else:
+                JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
+
+            # Debug output
+            ShowMessage("Extracting tiles")
+
+            # Create tiles for previously converted images
+            for i in range(1, ModuleCount):
+                MakeTiles("%s/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
+
+            # Debug output
+            ShowMessage("Stitching panorama")
+
+            # Stitch panorama
+            StitchPano("%s/tiles" % __Temp__, "%s/%s.jpeg" % (__Output__, image.timestamp), __Temp__, __NoDebayer__, __Camera__)
+
+            # Remove temp files
+            os.system("rm -rf %s" % __Temp__)
+
+            # Increment counter index
+            idx += 1
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

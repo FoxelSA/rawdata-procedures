@@ -4,7 +4,7 @@
 #
 
     all:directories
-	#cp src/rawdata-autoseg bin/rawdata-autoseg
+	cp src/rawdata-jp4preview bin/rawdata-jp4preview
 
 #
 #   make - directories
