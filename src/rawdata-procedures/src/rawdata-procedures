@@ -90,42 +90,50 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
-# Check execution consitency #
+# Check execution consistency #
 if [ -n "$SWITCH_DOWNLOAD" ]; then
 
-    # Check execution consitency #
+    # Check execution consistency #
     if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ]; then
 
         # Exit script #
         echo "Error : unable to understand --download switch with --mac-address/--master-timestamp parameters"
         exit 1
 
-    else
+    fi
 
-        # Run procedure #
-        echo "rawdata-procedures : downloading raw data ..."
-        RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
-        STATUS=$?
+    # Check execution consistency #
+    if [ $EUID -ne 0 ]; then
 
-        # Check procedure status #
-        if [ $STATUS -ne 0 ]; then
-
-            # Exit script #
-            echo "Error : rawdata-downloader fail to proceed"
-            exit 1
-
-        else
-
-            # Extract returned value - MAC address and master timestamp #
-            ARRAY=($RETURN)
-            PARAM_MAC=${ARRAY[0]}
-            PARAM_MASTER=${ARRAY[1]}
-
-        fi
+        # Exit script #
+        echo "Error : cannot execute --download switch without being root"
+        exit 1
 
     fi
 
+    # Run procedure #
+    echo "rawdata-procedures : downloading raw data ..."
+    RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
+    STATUS=$?
+
+    # Check procedure status #
+    if [ $STATUS -ne 0 ]; then
+
+        # Exit script #
+        echo "Error : rawdata-downloader fail to proceed"
+        exit 1
+
+    fi
+
+    # Extract returned value - MAC address and master timestamp #
+    ARRAY=($RETURN)
+    PARAM_MAC=${ARRAY[0]}
+    PARAM_MASTER=${ARRAY[1]}
+
 fi
+
+# Change privileges #
+su $(grep 1000 /etc/passwd | cut -f1 -d:)
 
 # Check execution consistency #
 if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
@@ -134,47 +142,45 @@ if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
     echo "Error : cannot continue execution without --mac-address/--master-timestamp parameters"
     exit 1
 
-else
+fi
 
-    # Run procedure #
-    echo "rawdata-procedures : auto-segmentation ..."
-    rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
-    STATUS=$?
+# Run procedure #
+echo "rawdata-procedures : auto-segmentation ..."
+rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+STATUS=$?
 
-    # Check procedure status #
-    if [ $STATUS -ne 0 ]; then
+# Check procedure status #
+if [ $STATUS -ne 0 ]; then
 
-        # Exit script #
-        echo "Error : rawdata-autoseg fail to process"
-        exit 1
-
-    fi
-
-    # Run procedure #
-    echo "rawdata-procedures : creating table of jp4 files ..."
-    rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
-
-    # Run procedure #
-    echo "rawdata-procedures : hard-linking of mov files ..."
-    rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
-
-    # Run procedure #
-    echo "rawdata-procedures : creating table of trashed jp4 files ..."
-    rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
-
-    # Check execution switch #
-    if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
-
-    # Run procedure #
-    echo "rawdata-procedures : splitting of mov files ..."
-    rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
-
-    # Check execution switch #
-    if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
-
-    # Run procedure #
-    echo "rawdata-procedures : generating image previews ..."
-    rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+    # Exit script #
+    echo "Error : rawdata-autoseg fail to process"
+    exit 1
 
 fi
+
+# Run procedure #
+echo "rawdata-procedures : creating table of jp4 files ..."
+rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+
+# Run procedure #
+echo "rawdata-procedures : hard-linking of mov files ..."
+rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+
+# Run procedure #
+echo "rawdata-procedures : creating table of trashed jp4 files ..."
+rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+
+# Check execution switch #
+if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
+
+# Run procedure #
+echo "rawdata-procedures : splitting of mov files ..."
+rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+
+# Check execution switch #
+if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
+
+# Run procedure #
+echo "rawdata-procedures : generating image previews ..."
+rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
 
