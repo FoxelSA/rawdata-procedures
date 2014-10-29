@@ -1,0 +1,129 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import getopt
+import struct
+import sys
+
+# Main binary file structure parameters
+MAIN_TYPE   = 'i i i i h'
+MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
+MAIN_STRUCT = struct.Struct(MAIN_TYPE)
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -h --help               Show this message
+
+    """ % sys.argv[0]
+
+# Program entry point function
+def main(argv):
+
+    # Arguments variables
+    __MountPoint__      = ""
+    __CameraMAC__       = ""
+    __MasterTimestamp__ = ""
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hd:m:t:", ["help", "mount-point=", "mac-address=", "master-timestamp="])
+        args = args
+    except getopt.GetoptError, err:
+        print str(err)
+        _usage()
+        sys.exit(2)
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+        else:
+            assert False, "unhandled option"
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Compute state file path
+    InputFile = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures/jp4table.bin" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+
+    # Read state file
+    BINARY_DATA = open(InputFile, "rb").read()
+
+    # Determine data length
+    Len = len(BINARY_DATA)
+
+    # Determine entries count
+    Count = Len / MAIN_SIZE
+
+    # Initialize variables
+    Offset = MAIN_SIZE
+
+    # Iterate over entries count
+    for i in range(0, Count):
+
+        # Unpack binary values
+        Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
+
+        # Print values
+        print("%010d_%06d.jp4 => %d/%010d_%06d.mov" % (Unpacked[0], Unpacked[1], Unpacked[4], Unpacked[2], Unpacked[3]))
+
+        # Increment offset
+        Offset += MAIN_SIZE
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

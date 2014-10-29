@@ -1,0 +1,326 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import getopt
+import glob
+import os
+import struct
+import sys
+from datetime import datetime
+from xml.dom.minidom import parse
+
+# Main binary file structure parameters
+MAIN_TYPE   = 'i i i i h'
+MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
+MAIN_STRUCT = struct.Struct(MAIN_TYPE)
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
+
+    NO_COLORS = 0
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Display proper message
+    Prepend = ""
+
+    if ThreadID != -1:
+        Prepend = "[Thread %d]" % (ThreadID+1)
+
+    if Type == 0:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+        else:
+            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# MOV file container class
+class MovFile:
+    def __init__(self, path, modulename):
+        self.path = path
+        self.filename = os.path.basename(path)
+        self.timestamp = int(self.filename.split('_')[0])
+        self.microtimestamp = int(self.filename.split('_')[1][:-4])
+        self.module = int(modulename)
+
+# Function to get camera modules count by reading correction XML
+def GetCameraModules(CorrectionXMLPath):
+
+    # Load XML file
+    dom = parse(CorrectionXMLPath)
+
+    # Iterate over XML entries
+    for i in dom.getElementsByTagName('entry'):
+
+        # Check if key is 'CAMERAS.cameraIPs.length'
+        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
+
+            # Return value
+            return int(i.childNodes[0].data)
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -h --help               Show this message
+
+    """ % sys.argv[0]
+
+
+# Program entry point function
+def main(argv):
+
+    # Arguments variables
+    __MountPoint__      = ""
+    __CameraMAC__       = ""
+    __MasterTimestamp__ = ""
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hd:m:t:", ["help", "mount-point=", "mac-address=", "master-timestamp="])
+        args = args
+    except getopt.GetoptError, err:
+        print str(err)
+        _usage()
+        sys.exit(2)
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Compute paths
+    BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    BaseSyncFolder = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    BinFile        = "%s/info/rawdata-procedures/jp4table.bin" % (BaseSyncFolder)
+    CorrectionXML  = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+
+    # Get camera modules count
+    ModuleCount = GetCameraModules(CorrectionXML)
+
+    # Get all segments
+    __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
+
+    # Debug output
+    ShowMessage("Loading jp4table.bin file (%s)..." % BinFile)
+
+    # Read state file
+    BIN_MOV_LIST = []
+
+    with open(BinFile, "rb") as bin_file:
+        BINARY_DATA = bin_file.read()
+
+        # Determine data length
+        Len = len(BINARY_DATA)
+
+        # Determine entries count
+        Count = Len / MAIN_SIZE
+
+        # Initialize variables
+        Offset = MAIN_SIZE
+
+        # Iterate over entries count
+        for i in range(0, Count):
+
+            # Unpack binary values
+            Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
+
+            # Append result
+            Entry = "%s_%s" % (Unpacked[2], Unpacked[3])
+
+            if not Entry in BIN_MOV_LIST:
+                BIN_MOV_LIST.append( Entry )
+
+            # Increment offset
+            Offset += MAIN_SIZE
+
+    # Insert all MOV files into list
+    __MOV_List__  = []
+
+    # List camera modules
+    CameraModules = [i for i in range(1, ModuleCount + 1)]
+
+    # Find all mov files
+    for mn in CameraModules:
+        for MOV in sorted(glob.glob("%s/mov/%s/*.mov" % (BaseSyncFolder, mn))):
+            __MOV_List__.append( MovFile(MOV, mn) )
+
+
+    # Debug output
+    ShowMessage("Validating MOV files in jp4table.bin...")
+
+    # Error counter
+    MOV_Errors = 0
+
+    # Check if all MOV files are present in jp4table.bin
+    for mov in __MOV_List__:
+        if not "%s_%s" % (mov.timestamp, mov.microtimestamp) in BIN_MOV_LIST:
+            ShowMessage("MOV file %s not present in jp4table.bin" % mov.path, 1)
+            MOV_Errors += 1
+
+    if MOV_Errors > 0:
+        ShowMessage("%d MOV file(s) are missing in jp4table.bin" % MOV_Errors, 1)
+    else:
+        ShowMessage("All MOV files are present in jp4table.bin")
+
+    # Debug output
+    ShowMessage("Validating segments hardlinks based on inodes...")
+
+    # Find all MOV inodes
+    RAW_MOV_INODES = []
+
+    for mov in __MOV_List__:
+        inode = os.stat(mov.path).st_ino
+        RAW_MOV_INODES.append(inode)
+    RAW_MOV_INODES = sorted(RAW_MOV_INODES)
+
+
+    # Error counter
+    Inode_Errors = 0
+
+    # Check if all mov files have valid hardlinks
+    # Iterate over segments
+    for Segment in __Segments__:
+
+        # Compute paths
+        __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
+        __MOV_Files__  = sorted(glob.glob("%s/*/*.mov" % __Input__))
+
+        # Iterate over MOV files
+        for mov in __MOV_Files__:
+            inode = os.stat(mov).st_ino
+
+            if not inode in RAW_MOV_INODES:
+                ShowMessage("Inode error on %s" % mov, 1)
+                Inode_Errors += 1
+
+    if Inode_Errors > 0:
+        ShowMessage("%d MOV file(s) have bad inodes" % Inode_Errors, 1)
+    else:
+        ShowMessage("All MOV files have good inodes")
+
+
+    # Debug outputfiles
+    ShowMessage("Validating segments hardlinks based on MOV files...")
+
+    # Check if all mov files are hardlinked
+    # Iterate over segments
+    SEGMENTS_MOV_FILES = []
+
+    for Segment in __Segments__:
+
+        # Compute paths
+        __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
+
+        # Find all mov files
+        for mn in CameraModules:
+            for MOV in sorted(glob.glob("%s/*/*.mov" % __Input__)):
+                File = MovFile(MOV, mn)
+                SEGMENTS_MOV_FILES.append( "%s_%s" % (File.timestamp, File.microtimestamp) )
+        SEGMENTS_MOV_FILES = sorted(SEGMENTS_MOV_FILES)
+
+    # Error counter
+    Hardlink_Errors = 0
+
+    # Iterate over MOV files
+    for mov in __MOV_List__:
+        timestamp = "%s_%d" % (mov.timestamp, mov.microtimestamp)
+
+        if not timestamp in SEGMENTS_MOV_FILES:
+            ShowMessage("Source MOV file %s are not hardlinked" % mov.path, 1)
+            Hardlink_Errors += 1
+
+    if Hardlink_Errors > 0:
+        ShowMessage("%d MOV file(s) are not hardlinked" % Inode_Errors, 1)
+    else:
+        ShowMessage("All MOV files are hardlinked")
+
+    ShowMessage("== Tests summary ==")
+    ShowMessage("Missing MOV file(s) in jp4table.bin: %d" % MOV_Errors)
+    ShowMessage("Wrong hardlinks inodes: %d" % Inode_Errors)
+    ShowMessage("Unlinked MOV files: %d" % Hardlink_Errors)
+
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

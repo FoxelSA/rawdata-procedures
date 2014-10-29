@@ -343,9 +343,9 @@ def StitchPano(_tilesdir, _output, _temp, _grayscale=0, _camera=2):
             BotList = getSeq(List, [0, 2, 2, 2, 0, 2, 0, 2])
 
             # Flip images
-            os.system("convert -flip %s %s" % (TopList[2], TopList[2]))
-            os.system("convert -flip %s %s" % (MidList[2], MidList[2]))
-            os.system("convert -flip %s %s" % (BotList[2], BotList[2]))
+            os.system("convert -flip -flop %s %s" % (TopList[2], TopList[2]))
+            os.system("convert -flip -flop %s %s" % (MidList[2], MidList[2]))
+            os.system("convert -flip -flop %s %s" % (BotList[2], BotList[2]))
 
     # Generate 3 crowns (top, middle, bottom)
     os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
@@ -584,7 +584,7 @@ def main(argv):
                 DebayFolder = "no-debayer"
 
             __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
-            
+
             # Create output folder if not present
             if not os.path.isdir(__Output__):
                 os.makedirs(__Output__)
