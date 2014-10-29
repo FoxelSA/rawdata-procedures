@@ -42,10 +42,10 @@
 # Imports
 import getopt
 import glob
+import json
 import os
 import signal
 import sys
-
 from datetime import datetime
 from xml.dom.minidom import parse
 
@@ -117,9 +117,6 @@ def which(program):
 # pylint: disable=W0603
 def ShowMessage(Message, Type=0, Halt=0, force_output=0):
 
-    # Global variables
-    global STD_OUTPUT
-
     if not STD_OUTPUT and not force_output:
         return
 
@@ -171,9 +168,10 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         FileName = os.path.splitext(os.path.basename(path))[0]
 
         # Debug output
-        sys.stdout.flush()
-        sys.stdout.write("Processing %d/%d...\r" % (idx, len(List)))
-        sys.stdout.flush()
+        if STD_OUTPUT:
+            sys.stdout.flush()
+            sys.stdout.write("Processing %d/%d...\r" % (idx, len(List)))
+            sys.stdout.flush()
 
         # Check presence of grayscale option
         if _grayscale:
@@ -362,6 +360,28 @@ def StitchPano(_tilesdir, _output, _temp, _grayscale=0, _camera=2):
     os.remove("%s/mid.jpeg" % _temp)
     os.remove("%s/bot.jpeg" % _temp)
 
+# Function to update JSON file flags
+def UpdateJSON(JSONFile, __NoDebayer__):
+
+    # Open file
+    SourceJSON = open(JSONFile, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Close JSON file
+    SourceJSON.close()
+
+    # Determine state
+    State = "nodebayer" if __NoDebayer__ else "debayer"
+
+    # Set 'preview' tag to true
+    json_data['preview'] = State
+
+    # Write validated JSON file
+    with open(JSONFile, 'w') as outfile:
+        json.dump(json_data, outfile, sort_keys = True, indent = 4)
+
 # Function to get camera ID from is MAC address
 def GetCameraID(_MAC):
     if _MAC in CAMERA_ARRAY:
@@ -520,6 +540,7 @@ def main(argv):
 
         # Compute paths
         __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
 
         # Retrieve list of filenames (only module 1)
         __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
@@ -597,6 +618,9 @@ def main(argv):
 
             # Increment counter index
             idx += 1
+
+        # Update JSON file
+        UpdateJSON(__JSONFile__, __NoDebayer__)
 
 # Program entry point
 if __name__ == "__main__":

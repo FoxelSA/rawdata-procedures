@@ -432,7 +432,7 @@ def LoadTimestampsFromJSON(JSONFile):
     # Return result
     return sorted(Results)
 
-# Function tu update JSON file flags
+# Function to update JSON file flags
 @timed
 def UpdateJSON(JSONFile, Arranged_Images):
 
@@ -445,7 +445,7 @@ def UpdateJSON(JSONFile, Arranged_Images):
     # Close JSON file
     SourceJSON.close()
 
-    # Set 'split' tag as true
+    # Set 'split' tag to true
     json_data['split'] = True
 
     # Create base folder reference table
