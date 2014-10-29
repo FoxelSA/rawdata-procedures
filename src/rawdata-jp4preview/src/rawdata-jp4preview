@@ -373,10 +373,11 @@ def UpdateJSON(JSONFile, __NoDebayer__):
     SourceJSON.close()
 
     # Determine state
-    State = "nodebayer" if __NoDebayer__ else "debayer"
+    State = "no-debayer" if __NoDebayer__ else "debayer"
 
     # Set 'preview' tag to true
-    json_data['preview'] = State
+    if not 'debayer' in json_data['preview']:
+        json_data['preview'] = State
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
@@ -577,8 +578,13 @@ def main(argv):
                 os.system("mkdir -p %s/tiles" % __Temp__)
 
             # Determine output path
-            __Output__   = "%s/%s/preview/%d" % (BaseSegmentsFolder, Segment, image.base_folder)
+            DebayFolder = "debayer"
 
+            if __NoDebayer__:
+                DebayFolder = "no-debayer"
+
+            __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
+            
             # Create output folder if not present
             if not os.path.isdir(__Output__):
                 os.makedirs(__Output__)
