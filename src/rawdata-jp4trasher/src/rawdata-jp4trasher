@@ -154,9 +154,7 @@ def main(argv):
         opt, args = getopt.getopt(argv, "hd:m:t:o", ["help", "mount-point=", "mac-address=", "master-timestamp=", "output"])
         args = args
     except getopt.GetoptError, err:
-        print str(err)
-        _usage()
-        sys.exit(2)
+        pass
     for o, a in opt:
         if o in ("-h", "--help"):
             _usage()
@@ -184,7 +182,7 @@ def main(argv):
     ModuleCount = GetCameraModules(CorrectionXML)
 
     # Debug output
-    ShowMessage("Loading jp4-mov-timestamps.bin file...")
+    ShowMessage("Loading jp4table.bin file...")
 
     # Read state file
     with open(InputFile, "rb") as bin_file:

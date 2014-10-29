@@ -382,6 +382,25 @@ def rearrangeImages(Folder, Images, Output, Limit, ModuleCount):
     # Return result
     return Arranged_List
 
+# Function to check if a segment is already extracted
+@timed
+def SegmentFinished(JSONFile):
+
+    # Open file
+    SourceJSON = open(JSONFile, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Close file
+    SourceJSON.close()
+
+    # Check if segment is already extracted
+    if json_data['split']:
+        return True
+    else:
+        return False
+
 # Function to load validated timestamps from CSPS JSON file
 @timed
 def LoadTimestampsFromJSON(JSONFile):
@@ -412,6 +431,46 @@ def LoadTimestampsFromJSON(JSONFile):
 
     # Return result
     return sorted(Results)
+
+# Function tu update JSON file flags
+@timed
+def UpdateJSON(JSONFile, Arranged_Images):
+
+    # Open file
+    SourceJSON = open(JSONFile, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Close JSON file
+    SourceJSON.close()
+
+    # Set 'split' tag as true
+    json_data['split'] = True
+
+    # Create base folder reference table
+    BASE_REF = {}
+
+    for image in Arranged_Images:
+        BASE_REF[image.timestamp] = image.base_folder
+
+    # Get pose sections
+    poses = json_data['pose']
+
+    # Iterate over poses
+    for pose in poses:
+
+        # Compute timestamp
+        timestamp = "%d_%06d" % (pose['sec'], pose['usc'])
+
+        # Check if
+        if timestamp in BASE_REF:
+            pose['folder'] = BASE_REF[timestamp]
+
+    # Write validated JSON file
+    with open(JSONFile, 'w') as outfile:
+        json.dump(json_data, outfile, sort_keys = True, indent = 4)
+
 
 # Function to get camera modules count by reading correction XML
 @timed
@@ -625,9 +684,6 @@ def main(argv):
     # Scope variables initialisation
     __Segments__           = []
     __Exec_Timer__         = time.clock()
-    __State_List__ = {
-        'extracted_segments': []
-    }
 
     # Arguments parser
     try:
@@ -666,20 +722,10 @@ def main(argv):
     BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     CorrectionXML      = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
     StateDir           = "%s/info/rawdata-procedures" % BaseSyncFolder
-    StateFile          = "%s/movsplit-state.json" % StateDir
 
     # Check if state dir exists, if not create it
     if not os.path.isdir(StateDir):
         os.makedirs(StateDir)
-
-    # Check presence of state file
-    if os.path.isfile(StateFile):
-
-        # Open file
-        with open(StateFile, 'r') as f:
-
-            # Load JSON file
-            __State_List__ = json.load(f)
 
     # Get camera modules count
     ModuleCount = GetCameraModules(CorrectionXML)
@@ -697,7 +743,11 @@ def main(argv):
 
     for Segment in __Segments__:
 
-        if not Segment in __State_List__['extracted_segments']:
+        # Compute JSON file path
+        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+
+        # Check if segment is already extracted
+        if not SegmentFinished(__JSONFile__):
 
             # Scope variables
             __extractMOV_Results_Template__ = [
@@ -724,7 +774,6 @@ def main(argv):
             __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
             __Output__   = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
             __Trash__    = "%s/%s/trash" % (BaseSegmentsFolder, Segment)
-            __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
 
             # Append temp folder to output path
             __Output__ = ("%s/temp" % __Output__)
@@ -799,7 +848,14 @@ def main(argv):
                 ShowMessage("Rearranging images...")
 
             # Rearrange images
-            rearrangeImages(__Output__, __extractMOV_Results__[2], __Output__, Limit, ModuleCount)
+            Arranged_Images = rearrangeImages(__Output__, __extractMOV_Results__[2], __Output__, Limit, ModuleCount)
+
+            # Debug output
+            if not quietEnabled():
+                ShowMessage("Updating JSON file...")
+
+            # Update JSON file flags
+            UpdateJSON(__JSONFile__, Arranged_Images)
 
             # Remove temp folder
             if os.path.isdir(__Output__):
@@ -808,12 +864,6 @@ def main(argv):
             # Increment index
             Index += 1
 
-            # Add segment to state file
-            __State_List__['extracted_segments'].append(Segment)
-
-            # Write state file
-            with open(StateFile, 'w') as outfile:
-                json.dump(__State_List__, outfile, sort_keys = True, indent = 4)
         else:
 
             # Debug output
