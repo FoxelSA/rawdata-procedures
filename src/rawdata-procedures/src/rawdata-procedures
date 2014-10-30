@@ -172,7 +172,7 @@ echo "rawdata-procedures : creating table of jp4 files ..."
 rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
-echo "rawdata-procedures : hard-linking of mov files ..."
+echo "rawdata-procedures : hard-linking mov files ..."
 rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
@@ -183,7 +183,7 @@ rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-
 if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
-echo "rawdata-procedures : splitting of mov files ..."
+echo "rawdata-procedures : splitting mov files ..."
 rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
