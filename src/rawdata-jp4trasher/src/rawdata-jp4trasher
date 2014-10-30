@@ -39,7 +39,6 @@
        Attribution" section of <http://foxel.ch/license>.
 """
 
-import getopt
 import glob
 import json
 import struct
@@ -128,14 +127,13 @@ def _usage():
     Usage: %s [OPTIONS]
 
     [Required arguments]
-    -d --mount-point        Base mount directory
-    -m --mac-address        Camera MAC address
-    -t --master-timestamp   Master timestamp
+    --mount-point        Base mount directory
+    --mac-address        Camera MAC address
+    --master-timestamp   Master timestamp
 
     [Optional arguments]
-    -a --auto-segmented     Auto segmentation executed (master script)
-    -o --output             Show STDOUT logs
-    -h --help               Show this message
+    --auto-segmented     Auto segmentation executed (master script)
+    --output             Show STDOUT logs
 
     """ % sys.argv[0]
 
@@ -145,42 +143,42 @@ def main(argv):
     # Global variables
     global STD_OUTPUT
 
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
     # Arguments variables
-    __MountPoint__      = ""
-    __CameraMAC__       = ""
-    __MasterTimestamp__ = ""
-    __AutoSegmented__   = 0
-
-    # Arguments parser
-    try:
-        opt, args = getopt.getopt(argv, "hd:m:t:ao", ["help", "mount-point=", "mac-address=", "master-timestamp=", "auto-segmented", "output"])
-        args = args
-    except getopt.GetoptError, err:
-        pass
-    for o, a in opt:
-        if o in ("-h", "--help"):
-            _usage()
-            sys.exit()
-        elif o in ("-d", "--mount-point"):
-            __MountPoint__ = a.rstrip('/')
-        elif o in ("-m", "--mac-address"):
-            __CameraMAC__ = a
-        elif o in ("-t", "--master-timestamp"):
-            __MasterTimestamp__ = a
-        elif o in ("-a", "--auto-segmented"):
-            __AutoSegmented__ = 1
-        elif o in ("-o", "--output"):
-            STD_OUTPUT = 1
-
-    # Check if auto-segmented argument is given
-    if not __AutoSegmented__:
-        print >> sys.stderr, 'No auto-segmented argument given, exiting...'
-        return
+    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
+    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
+    STD_OUTPUT          = (1 if 'output' in Arguments else 0)
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
         _usage()
         sys.exit(0)
+
+    # Check if auto-segmented argument is given
+    if not __AutoSegmented__:
+        print >> sys.stderr, 'No --auto-segmented argument given, exiting...'
+        return
 
     # Compute paths
     BaseSyncFolder    = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)

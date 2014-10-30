@@ -40,7 +40,6 @@
 """
 
 # Imports
-import getopt
 import glob
 import json
 import os
@@ -414,16 +413,15 @@ def _usage():
     Usage: %s [OPTIONS]
 
     [Required arguments]
-    -d --mount-point        Base mount directory
-    -m --mac-address        Camera MAC address
-    -t --master-timestamp   Master timestamp
+    --mount-point        Base mount directory
+    --mac-address        Camera MAC address
+    --master-timestamp   Master timestamp
 
     [Optional arguments]
-    -h --help           Prints this
-    -s --segment-timestamp  Segment timestamp
-    -j --threads        Use GNU parallel with x threads
-    -n --no-split           Exit program
-    -b --no-debayer     Write grayscale images (without debayer)
+    --segment-timestamp  Segment timestamp
+    --threads            Use GNU parallel with x threads
+    --no-split           Exit program
+    --no-debayer         Write grayscale images (without debayer)
 
     """ % sys.argv[0]
 
@@ -433,50 +431,47 @@ def main(argv):
 
     global STD_OUTPUT
 
-    # Arguments variables initialisation
-    __MountPoint__       = ""
-    __CameraMAC__        = ""
-    __MasterTimestamp__  = ""
-    __SegmentTimestamp__ = ""
-    __Jobs__             = 1
-    __NoDebayer__        = 0
-    __Camera__           = 2
-    __Temp_Base__        = "/tmp/rawdata-jp4preview"
-    __Temp__             = "%s/%d" %  (__Temp_Base__, os.getpid())
-
     # Scope variables initialisation
     __Segments__   = []
     __JP4_Files__  = []
     __TimeStamps__ = []
+    __Camera__     = 2
+    __Temp_Base__  = "/tmp/rawdata-jp4preview"
+    __Temp__       = "%s/%d" %  (__Temp_Base__, os.getpid())
 
-    # Arguments parser
-    try:
-        opt, args = getopt.getopt(argv, "hd:m:t:s:j:onb", ["help", "mount-point=", "mac-address=", "master-timestamp=", "segment-timestamp=", "threads=", "output", "no-split", "no-debayer"])
-        args = args
-    except getopt.GetoptError, err:
-        print str(err)
-        _usage()
-        sys.exit(2)
-    for o, a in opt:
-        if o in ("-h", "--help"):
-            _usage()
-            sys.exit()
-        elif o in ("-d", "--mount-point"):
-            __MountPoint__ = a.rstrip('/')
-        elif o in ("-m", "--mac-address"):
-            __CameraMAC__ = a
-        elif o in ("-t", "--master-timestamp"):
-            __MasterTimestamp__ = a
-        elif o in ("-s", "--segment-timestamp"):
-            __SegmentTimestamp__ = a
-        elif o in ("-j", "--threads"):
-            __Jobs__ = int(a)
-        elif o in ("-o", "--output"):
-            STD_OUTPUT = 1
-        elif o in ("-b", "--no-debayer"):
-            __NoDebayer__ = 1
-        elif o in ("-n", "--no-split"):
-            return
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables initialisation
+    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
+    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
+    __Jobs__             = (1 if not 'threads' in Arguments else int(Arguments['threads']))
+    __NoDebayer__        = (0 if not 'no-debayer' in Arguments else 1)
+    STD_OUTPUT           = (1 if 'output' in Arguments else 0)
+
+    if 'no-split' in Arguments:
+        print >> sys.stderr, '--no-split argument given, exiting...'
+        sys.exit(0)
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
