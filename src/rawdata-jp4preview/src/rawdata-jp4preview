@@ -408,6 +408,24 @@ def GetCameraModules(CorrectionXMLPath):
             # Return value
             return int(i.childNodes[0].data)
 
+# Function to check if previews are already generated for a segment
+def PreviewsFinished(JSONFile):
+
+    # Open file
+    SourceJSON = open(JSONFile, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Close file
+    SourceJSON.close()
+
+    # Check if segment is already extracted
+    if json_data['preview']:
+        return True
+    else:
+        return False
+
 # Usage display function
 def _usage():
     print """
@@ -539,100 +557,110 @@ def main(argv):
 
     for Segment in __Segments__:
 
-        # Debug output
-        ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
-
-        # Compute paths
-        __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+        # Compute JSON file path
         __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
 
-        # Retrieve list of filenames (only module 1)
-        __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
-        __JP4_Images__ = []
-
-        # Build images list
-        for i in __JP4_Files__:
-
-            # Split segments of file
-            parts = i.split('/')
-            timestamps = parts[-1].rstrip('.jp4').split('_')
-            basefolder = parts[-2]
-
-            # Compute timestamp
-            ts = "%s_%s" % (timestamps[0], timestamps[1])
-
-            # Insert into list if not present
-            if not ts in __TimeStamps__:
-                __JP4_Images__.append(JP4Image(ts, 1, basefolder))
-
-        # Sort timestamps
-        __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
-
-        # Initialize counter index
-        idx = 1
-
-        # Iterate over timestamps
-        for image in __JP4_Images__:
-
-            # Check if temp folder exists
-            if not os.path.isdir(__Temp__):
-
-                # Create temp folder
-                os.system("mkdir -p %s/tiles" % __Temp__)
-
-            # Determine output path
-            DebayFolder = "debayer"
-
-            if __NoDebayer__:
-                DebayFolder = "no-debayer"
-
-            __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
-
-            # Create output folder if not present
-            if not os.path.isdir(__Output__):
-                os.makedirs(__Output__)
+        if not PreviewsFinished(__JSONFile__):
 
             # Debug output
-            ShowMessage("%d/%d processing %s..." % (idx, len(__JP4_Images__), image.timestamp))
+            ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
+
+            # Compute jp4 path
+            __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+
+            # Retrieve list of filenames (only module 1)
+            __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
+            __JP4_Images__ = []
+
+            # Build images list
+            for i in __JP4_Files__:
+
+                # Split segments of file
+                parts = i.split('/')
+                timestamps = parts[-1].rstrip('.jp4').split('_')
+                basefolder = parts[-2]
+
+                # Compute timestamp
+                ts = "%s_%s" % (timestamps[0], timestamps[1])
+
+                # Insert into list if not present
+                if not ts in __TimeStamps__:
+                    __JP4_Images__.append(JP4Image(ts, 1, basefolder))
+
+            # Sort timestamps
+            __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
+
+            # Initialize counter index
+            idx = 1
+
+            # Iterate over timestamps
+            for image in __JP4_Images__:
+
+                # Check if temp folder exists
+                if not os.path.isdir(__Temp__):
+
+                    # Create temp folder
+                    os.system("mkdir -p %s/tiles" % __Temp__)
+
+                # Determine output path
+                DebayFolder = "debayer"
+
+                if __NoDebayer__:
+                    DebayFolder = "no-debayer"
+
+                __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
+
+                # Create output folder if not present
+                if not os.path.isdir(__Output__):
+                    os.makedirs(__Output__)
+
+                # Debug output
+                ShowMessage("%d/%d processing %s..." % (idx, len(__JP4_Images__), image.timestamp))
+
+                # Debug output
+                ShowMessage("Converting modules to jpeg")
+
+                # Build list of images to be converted
+                JP4ToJPEG_List = []
+                for i in range(1, ModuleCount):
+                    JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, image.path_nomod, i))
+
+                # Check presence of parallel option and start conversion
+                if __Jobs__ != 1:
+                    JP4ToJPEG_Parallel(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __Jobs__)
+                else:
+                    JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
+
+                # Debug output
+                ShowMessage("Extracting tiles")
+
+                # Create tiles for previously converted images
+                for i in range(1, ModuleCount):
+                    MakeTiles("%s/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
+
+                # Debug output
+                ShowMessage("Stitching panorama")
+
+                # Stitch panorama
+                StitchPano("%s/tiles" % __Temp__, "%s/%s.jpeg" % (__Output__, image.timestamp), __Temp__, __NoDebayer__, __Camera__)
+
+                # Remove temp files
+                os.system("rm -rf %s" % __Temp__)
+
+                # Increment counter index
+                idx += 1
 
             # Debug output
-            ShowMessage("Converting modules to jpeg")
+            ShowMessage("Updating JSON file...")
 
-            # Build list of images to be converted
-            JP4ToJPEG_List = []
-            for i in range(1, ModuleCount):
-                JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, image.path_nomod, i))
+            # Update JSON file
+            UpdateJSON(__JSONFile__, __NoDebayer__)
 
-            # Check presence of parallel option and start conversion
-            if __Jobs__ != 1:
-                JP4ToJPEG_Parallel(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __Jobs__)
-            else:
-                JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
+        else:
 
             # Debug output
-            ShowMessage("Extracting tiles")
+            ShowMessage("Skipping segment '%s', previews already generated" % Segment, 1)
 
-            # Create tiles for previously converted images
-            for i in range(1, ModuleCount):
-                MakeTiles("%s/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
-
-            # Debug output
-            ShowMessage("Stitching panorama")
-
-            # Stitch panorama
-            StitchPano("%s/tiles" % __Temp__, "%s/%s.jpeg" % (__Output__, image.timestamp), __Temp__, __NoDebayer__, __Camera__)
-
-            # Remove temp files
-            os.system("rm -rf %s" % __Temp__)
-
-            # Increment counter index
-            idx += 1
-
-        # Debug output
-        ShowMessage("Updating JSON file...")
-
-        # Update JSON file
-        UpdateJSON(__JSONFile__, __NoDebayer__)
 
 # Program entry point
 if __name__ == "__main__":
