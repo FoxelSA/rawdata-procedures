@@ -532,10 +532,6 @@ def main(argv):
     # Exif if dependencies are not installed
     if Error: return
 
-    # Remove previous temp folder if exists
-    if os.path.isdir(__Temp_Base__):
-        os.system("rm -rf %s 2> /dev/null" % __Temp_Base__)
-
     # Compute paths
     BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     CorrectionXML      = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
