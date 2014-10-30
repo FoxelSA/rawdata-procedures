@@ -36,7 +36,7 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 # Script switch #
-AS_DOWN=""
+AS_DOWN="FALSE"
 
 # Script parameters #
 AS_MOUNT=""
@@ -346,7 +346,7 @@ if [ ! -d $AS_MOUNT/camera/$AS_MACAD/raw ]; then
 else
 
     # Check state #
-    if [ -n $AS_DOWN ]; then
+    if [ "$AS_DOWN" == "TRUE" ]; then
 
         # Remove previous processing #
         unprocess
