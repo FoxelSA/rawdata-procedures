@@ -90,14 +90,23 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
+# Check standard directories #
+if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/footage ]; then
+
+    # Exit script #
+    echo "Error : unable to access standard directory with specified mount point"
+    exit 1
+
+fi
+
 # Check execution consistency #
 if [ -n "$SWITCH_DOWNLOAD" ]; then
 
     # Check execution consistency #
-    if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ]; then
+    if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ] || [ -n "$PARAM_SEGMENT" ]; then
 
         # Exit script #
-        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp parameters"
+        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
         exit 1
 
     fi
@@ -146,7 +155,7 @@ fi
 
 # Run procedure #
 echo "rawdata-procedures : auto-segmentation ..."
-rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+RETURN=$(rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@)
 STATUS=$?
 
 # Check procedure status #
@@ -160,15 +169,15 @@ fi
 
 # Run procedure #
 echo "rawdata-procedures : creating table of jp4 files ..."
-rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
 echo "rawdata-procedures : hard-linking of mov files ..."
-rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
 echo "rawdata-procedures : creating table of trashed jp4 files ..."
-rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
 if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
