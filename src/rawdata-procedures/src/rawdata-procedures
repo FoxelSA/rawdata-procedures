@@ -106,7 +106,7 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
     if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ] || [ -n "$PARAM_SEGMENT" ]; then
 
         # Exit script #
-        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp parameters"
+        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
         exit 1
 
     fi
