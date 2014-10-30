@@ -311,7 +311,7 @@ def main(argv):
             Hardlink_Errors += 1
 
     if Hardlink_Errors > 0:
-        ShowMessage("%d MOV file(s) are not hardlinked" % Inode_Errors, 1)
+        ShowMessage("%d MOV file(s) are not hardlinked" % Hardlink_Errors, 1)
     else:
         ShowMessage("All MOV files are hardlinked")
 
