@@ -1,5 +1,5 @@
 #!/bin/bash
-# rawdata-procedures - Camera raw data procedures 
+# rawdata-procedures - Camera raw data procedures
 #
 # Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -184,12 +184,12 @@ if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
 echo "rawdata-procedures : splitting of mov files ..."
-rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
 if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
 echo "rawdata-procedures : generating image previews ..."
-rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
