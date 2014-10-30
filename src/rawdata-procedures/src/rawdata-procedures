@@ -130,10 +130,10 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
     PARAM_MAC=${ARRAY[0]}
     PARAM_MASTER=${ARRAY[1]}
 
-fi
+    # Change privileges #
+    su $(grep 1000 /etc/passwd | cut -f1 -d:)
 
-# Change privileges #
-su $(grep 1000 /etc/passwd | cut -f1 -d:)
+fi
 
 # Check execution consistency #
 if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
