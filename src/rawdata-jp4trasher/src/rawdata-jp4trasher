@@ -133,6 +133,7 @@ def _usage():
     -t --master-timestamp   Master timestamp
 
     [Optional arguments]
+    -d --download           Download MOV files (master script)
     -o --output             Show STDOUT logs
     -h --help               Show this message
 
@@ -148,10 +149,11 @@ def main(argv):
     __MountPoint__      = ""
     __CameraMAC__       = ""
     __MasterTimestamp__ = ""
+    __Download__        = 0
 
     # Arguments parser
     try:
-        opt, args = getopt.getopt(argv, "hd:m:t:o", ["help", "mount-point=", "mac-address=", "master-timestamp=", "output"])
+        opt, args = getopt.getopt(argv, "hd:m:t:do", ["help", "mount-point=", "mac-address=", "master-timestamp=", "download", "output"])
         args = args
     except getopt.GetoptError, err:
         pass
@@ -165,8 +167,15 @@ def main(argv):
             __CameraMAC__ = a
         elif o in ("-t", "--master-timestamp"):
             __MasterTimestamp__ = a
+        elif o in ("-d", "--download"):
+            __Download__ = 1
         elif o in ("-o", "--output"):
             STD_OUTPUT = 1
+
+    # Check if download argument is given
+    if not __Download__:
+        print >> sys.stderr, 'No download argument given, exiting...'
+        return
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
