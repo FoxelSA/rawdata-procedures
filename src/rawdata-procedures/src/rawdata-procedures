@@ -90,11 +90,20 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
+# Check standard directories #
+if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/footage ]; then
+
+    # Exit script #
+    echo "Error : unable to access standard directory with specified mount point"
+    exit 1
+
+fi
+
 # Check execution consistency #
 if [ -n "$SWITCH_DOWNLOAD" ]; then
 
     # Check execution consistency #
-    if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ]; then
+    if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ] || [ -n "$PARAM_SEGMENT" ]; then
 
         # Exit script #
         echo "Error : unable to understand --download switch with --mac-address/--master-timestamp parameters"
