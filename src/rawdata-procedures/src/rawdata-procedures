@@ -155,7 +155,7 @@ fi
 
 # Run procedure #
 echo "rawdata-procedures : auto-segmentation ..."
-rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+RETURN=$(rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@)
 STATUS=$?
 
 # Check procedure status #
@@ -169,15 +169,15 @@ fi
 
 # Run procedure #
 echo "rawdata-procedures : creating table of jp4 files ..."
-rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
 echo "rawdata-procedures : hard-linking of mov files ..."
-rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
 echo "rawdata-procedures : creating table of trashed jp4 files ..."
-rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@
+rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
 if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi

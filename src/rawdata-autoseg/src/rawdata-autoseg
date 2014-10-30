@@ -354,6 +354,9 @@ else
         # Process raw data #
         process
 
+        # Processed flag #
+        echo "--auto-segmented"
+
     elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
         # Remove previous processing #
@@ -362,11 +365,16 @@ else
         # Process raw data #
         process
 
+        # Processed flag #
+        echo "--auto-segmented"
 
     elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
 
         # Process raw data #
         process
+
+        # Processed flag #
+        echo "--auto-segmented"
 
     else
 
