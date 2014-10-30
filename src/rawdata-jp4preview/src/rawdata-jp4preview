@@ -408,24 +408,6 @@ def GetCameraModules(CorrectionXMLPath):
             # Return value
             return int(i.childNodes[0].data)
 
-# Function to check if previews are already generated for a segment
-def PreviewsFinished(JSONFile):
-
-    # Open file
-    SourceJSON = open(JSONFile, 'r')
-
-    # Load JSON file
-    json_data = json.load(SourceJSON)
-
-    # Close file
-    SourceJSON.close()
-
-    # Check if segment is already extracted
-    if json_data['preview']:
-        return True
-    else:
-        return False
-
 # Usage display function
 def _usage():
     print """
@@ -553,58 +535,57 @@ def main(argv):
 
     for Segment in __Segments__:
 
-        # Compute JSON file path
-        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+        # Debug output
+        ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
 
-        if not PreviewsFinished(__JSONFile__):
+        # Compute jp4 path
+        __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
 
-            # Debug output
-            ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
+        # Retrieve list of filenames (only module 1)
+        __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
+        __JP4_Images__ = []
 
-            # Compute jp4 path
-            __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+        # Build images list
+        for i in __JP4_Files__:
 
-            # Retrieve list of filenames (only module 1)
-            __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
-            __JP4_Images__ = []
+            # Split segments of file
+            parts = i.split('/')
+            timestamps = parts[-1].rstrip('.jp4').split('_')
+            basefolder = parts[-2]
 
-            # Build images list
-            for i in __JP4_Files__:
+            # Compute timestamp
+            ts = "%s_%s" % (timestamps[0], timestamps[1])
 
-                # Split segments of file
-                parts = i.split('/')
-                timestamps = parts[-1].rstrip('.jp4').split('_')
-                basefolder = parts[-2]
+            # Insert into list if not present
+            if not ts in __TimeStamps__:
+                __JP4_Images__.append(JP4Image(ts, 1, basefolder))
 
-                # Compute timestamp
-                ts = "%s_%s" % (timestamps[0], timestamps[1])
+        # Sort timestamps
+        __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
 
-                # Insert into list if not present
-                if not ts in __TimeStamps__:
-                    __JP4_Images__.append(JP4Image(ts, 1, basefolder))
+        # Initialize counter index
+        idx = 1
 
-            # Sort timestamps
-            __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
+        # Iterate over timestamps
+        for image in __JP4_Images__:
 
-            # Initialize counter index
-            idx = 1
+            # Determine output paths
+            DebayFolder = "debayer"
 
-            # Iterate over timestamps
-            for image in __JP4_Images__:
+            if __NoDebayer__:
+                DebayFolder = "no-debayer"
+
+            __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
+            __Output_Image__ = "%s/%s.jpeg" % (__Output__, image.timestamp)
+
+            # Check if destination file already exists
+            if not os.path.isfile(__Output_Image__):
 
                 # Check if temp folder exists
                 if not os.path.isdir(__Temp__):
 
                     # Create temp folder
                     os.system("mkdir -p %s/tiles" % __Temp__)
-
-                # Determine output path
-                DebayFolder = "debayer"
-
-                if __NoDebayer__:
-                    DebayFolder = "no-debayer"
-
-                __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
 
                 # Create output folder if not present
                 if not os.path.isdir(__Output__):
@@ -638,7 +619,7 @@ def main(argv):
                 ShowMessage("Stitching panorama")
 
                 # Stitch panorama
-                StitchPano("%s/tiles" % __Temp__, "%s/%s.jpeg" % (__Output__, image.timestamp), __Temp__, __NoDebayer__, __Camera__)
+                StitchPano("%s/tiles" % __Temp__, __Output_Image__, __Temp__, __NoDebayer__, __Camera__)
 
                 # Remove temp files
                 os.system("rm -rf %s" % __Temp__)
@@ -646,16 +627,22 @@ def main(argv):
                 # Increment counter index
                 idx += 1
 
-            # Debug output
-            ShowMessage("Updating JSON file...")
+            else:
 
-            # Update JSON file
-            UpdateJSON(__JSONFile__, __NoDebayer__)
+                # Debug output
+                ShowMessage("Skipping %s, already generated" % __Output_Image__)
 
-        else:
+                # Increment counter index
+                idx += 1
 
-            # Debug output
-            ShowMessage("Skipping segment '%s', previews already generated" % Segment, 1)
+        # Debug output
+        ShowMessage("Updating JSON file...")
+
+        # Compute JSON file path
+        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+
+        # Update JSON file
+        UpdateJSON(__JSONFile__, __NoDebayer__)
 
 
 # Program entry point
