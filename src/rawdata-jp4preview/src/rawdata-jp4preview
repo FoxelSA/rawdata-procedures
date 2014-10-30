@@ -375,8 +375,11 @@ def UpdateJSON(JSONFile, __NoDebayer__):
     # Determine state
     State = "no-debayer" if __NoDebayer__ else "debayer"
 
-    # Set 'preview' tag to true
-    if not 'debayer' in json_data['preview']:
+    # Set apropriate state
+    if json_data['preview']:
+        if 'no-debayer' in json_data['preview']:
+            json_data['preview'] = State
+    else:
         json_data['preview'] = State
 
     # Write validated JSON file
@@ -624,6 +627,9 @@ def main(argv):
 
             # Increment counter index
             idx += 1
+
+        # Debug output
+        ShowMessage("Updating JSON file...")
 
         # Update JSON file
         UpdateJSON(__JSONFile__, __NoDebayer__)
