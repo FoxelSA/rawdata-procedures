@@ -2,7 +2,9 @@
 #   make - synchronize
 #
 
-    all:directories
+    all:directories install
+    
+    install:
 	cp -rv src/bin . 
 
     install-system-tools:
