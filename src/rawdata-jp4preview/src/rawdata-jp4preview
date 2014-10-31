@@ -625,7 +625,7 @@ def main(argv):
             else:
 
                 # Debug output
-                print >> sys.stderr, "Skipping %s, already generated" % __Output_Image__
+                ShowMessage("Skipping %s, already generated" % __Output_Image__, 1)
 
                 # Increment counter index
                 idx += 1
