@@ -1,5 +1,8 @@
 #!/bin/bash
 
+_UID=$UID
+_GID=1000
+
 SCRIPT=$(basename $0)
 
 log() {
@@ -46,9 +49,17 @@ if [ -z "$TIMESTAMP" ] ; then
 fi
 
 # move files
-if ! rsync -av --remove-source-files $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ 2>&1 | logstdout ${LINENO} ; then
+if ! rsync -av --remove-source-files --chmod=u+w,a+rX $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/ 2>&1 | logstdout ${LINENO} ; then
   exit 1
 fi
 
+# remove remaining source files
+rm /$DEST/rsync -r
+
+# set permissions for directories
+chown $_UID.$_GID $DEST/raw $DEST/raw/sync/$TIMESTAMP
+chmod 0775 $DEST/raw $DEST/raw/sync/$TIMESTAMP
+
+# return mac address and first timestamp
 echo $(basename $DEST) $TIMESTAMP
 
