@@ -90,7 +90,7 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
-# Check standard directories #
+# Check execution consistency #
 if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/footage ]; then
 
     # Exit script #
@@ -149,6 +149,24 @@ if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
 
     # Exit script #
     echo "Error : cannot continue execution without --mac-address/--master-timestamp parameters"
+    exit 1
+
+fi
+
+# Check execution consistency #
+if [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/sync/$PARAM_MASTER" ]; then
+
+    # Exit script #
+    echo "Error : cannot access master allocation"
+    exit 1
+
+fi
+
+# Check execution consistency #
+if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/segment/$PARAM_MASTER/$PARAM_SEGMENT" ]; then
+
+    # Exit script #
+    echo "Error : cannot access segment allocation"
     exit 1
 
 fi
