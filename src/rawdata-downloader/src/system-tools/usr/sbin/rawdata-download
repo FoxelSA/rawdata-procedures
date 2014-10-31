@@ -489,7 +489,9 @@ reset_eyesis_ide() {
   log ${LINENO} reset eyesis_ide
   for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
     log ${LINENO} wget http://${MUXES[$i]}/eyesis_ide.php
-    wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null || exit 1
+    if ! wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null ; then
+      log ${LINENO} wget failed
+    fi
   done
 }
 
@@ -525,9 +527,16 @@ fi
 checkdependencies
 
 # get camera master ip mac address
-ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null || exit 1
+if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
+  log ${LINENO} unable to ping $BASE_IP.$MASTER_IP
+  exit 1
+fi
+
 MACADDR=$(macaddr $BASE_IP.$MASTER_IP)
-[ -z "$MACADDR" ] && exit 1
+if [ -z "$MACADDR" ] ; then
+  log ${LINENO} unable to get MAC address for $BASE_IP.$MASTER_IP
+  exit 1
+fi
 
 TMP=/tmp/rawdata-downloader/$MACADDR/$$
 mkdir -p $TMP
@@ -555,7 +564,10 @@ trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 log ${LINENO} get camera uptime
 CAMERA_UPTIME=$(get_camera_uptime) 
-[ -z "$CAMERA_UPTIME" ] && exit 1
+if [ -z "$CAMERA_UPTIME" ] ; then
+  log ${LINENO} cannot get camera uptime
+  exit 1
+fi
 
 if [ $CAMERA_UPTIME -lt 120 ] ; then
   log ${LINENO} wait $((120-CAMERA_UPTIME)) seconds for camera wake up
@@ -575,7 +587,9 @@ fi
 # set destination folder
 DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
 
-mkdir -p "$DEST/rsync" || exit 1
+if ! mkdir -p "$DEST/rsync" 2>&1 | logstdout ${LINENO} ; then
+   exit 1
+fi
 
 export MODULES_FILE=$DEST/info/rawdata-downloader/modules
 if [ ! -f $MODULES_FILE ] ; then
