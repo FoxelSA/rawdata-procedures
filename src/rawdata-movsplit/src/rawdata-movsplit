@@ -753,7 +753,7 @@ def main(argv):
         __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
 
         # Check if segment is already extracted
-        if SegmentFinished(__JSONFile__):
+        if not SegmentFinished(__JSONFile__):
 
             # Scope variables
             __extractMOV_Results_Template__ = [
