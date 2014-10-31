@@ -779,7 +779,7 @@ def main(argv):
             # Compute paths
             __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
             __Output__   = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
-            __Trash__    = "%s/%s/corruped/eof" % (BaseSegmentsFolder, Segment)
+            __Trash__    = "%s/%s/info/corrupted/jp4/eof" % (BaseSegmentsFolder, Segment)
 
             # Append temp folder to output path
             __Output__ = ("%s/temp" % __Output__)
