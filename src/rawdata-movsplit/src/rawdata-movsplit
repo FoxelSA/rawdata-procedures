@@ -242,6 +242,9 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         # Extract JPEG from MOV file
         ImageData = mov_data[_Offset:(Size + _Offset if Size is not None else None)]
 
+        # Compute image HEX footer
+        Footer = [ImageData[len(ImageData) -2], ImageData[len(ImageData) -1]]
+
         # Extract EXIF data from JPEG file
         ImageData_File = StringIO(ImageData)
         EXIF_Tags = exifread.process_file(ImageData_File)
@@ -251,36 +254,33 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         Output_Name = ""
         Output_Image = None
 
-        # Error handling
-        if len(EXIF_Tags) <= 0:
+        # Calculate the output filename
+        date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
+        epoch = calendar.timegm(date_object.utctimetuple())
+        timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
+        Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
 
-            # Print error
-            ShowMessage("Failed to read EXIF data", 1, 0, tid)
+        # Check if timestamp is valid
+        if timestamp in Valid_Timestamps:
 
-            # Create trash folder if not present
-            if TrashFolder and not os.path.isdir(TrashFolder):
-                os.makedirs(TrashFolder)
+            # Chceck image footer (integrity)
+            if (Footer[0] != b'\xFF') or (Footer[1] != b'\xD9'):
 
-            # Calculate filename
-            Output_Name = "fail_%d_exif" % (Results[0])
+                # Debug output
+                ShowMessage("Bad image footer (%s) in image %s.jp4" % (Footer, Output_Name), 1)
 
-            # Open output file
-            Output_Image = open('%s/%s.jp4' % (TrashFolder, Output_Name), 'wb')
+                # Create output trash dir if not exists
+                if not os.path.isdir(TrashFolder):
+                    os.makedirs(TrashFolder)
 
-            # Print error
-            ShowMessage("Saving image to %s/%s.jp4" % (TrashFolder, Output_Name), 1, 0, tid)
+                # Open output file
+                Output_Image = open('%s/%s.jp4' % (TrashFolder, Output_Name), 'wb')
 
-            # Increment fail counter
-            Results[0] += 1
-        else:
+                # Add corruped timestamp to list
+                if not timestamp in Results[8]:
+                    Results[8].append(timestamp)
 
-            # Calculate the output filename
-            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
-            epoch = calendar.timegm(date_object.utctimetuple())
-            timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
-
-            if timestamp in Valid_Timestamps:
-                Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
+            else:
 
                 # Increment extracted files count
                 Results[3] += 1
@@ -345,7 +345,7 @@ def extractMOV_Thread(tid, Threads, InputFile, OutputFolder, TrashFolder, Module
 
 # Function to rearange images into full modules sets
 @timed
-def rearrangeImages(Folder, Images, Output, Limit, ModuleCount):
+def rearrangeImages(Folder, Images, CorruptedOEF, Output, Limit, ModuleCount):
 
     # Scope variables
     Counter = 0
@@ -362,13 +362,16 @@ def rearrangeImages(Folder, Images, Output, Limit, ModuleCount):
         if not os.path.isdir(OutDir):
             os.makedirs(OutDir)
 
-        # Compute source file name
-        SourceFile = '%s/%s.jp4' % (Folder, image.path)
+        # Check if sequence is not corrupted
+        if image.timestamp not in CorruptedOEF:
 
-        # If file exists move it
-        if os.path.isfile(SourceFile):
-            shutil.move(SourceFile, '%s/%s_%d.jp4' % (OutDir, image.timestamp, image.module))
-            Arranged_List.append( JP4Image(image.timestamp, image.module, Folder_Index, -1) )
+            # Compute source file name
+            SourceFile = '%s/%s.jp4' % (Folder, image.path)
+
+            # If file exists move it
+            if os.path.isfile(SourceFile):
+                shutil.move(SourceFile, '%s/%s_%d.jp4' % (OutDir, image.timestamp, image.module))
+                Arranged_List.append( JP4Image(image.timestamp, image.module, Folder_Index, -1) )
 
         # Increment index
         Counter += 1
@@ -433,7 +436,7 @@ def LoadTimestampsFromJSON(JSONFile):
 
 # Function to update JSON file flags
 @timed
-def UpdateJSON(JSONFile, Arranged_Images):
+def UpdateJSON(JSONFile, Arranged_Images, CorrupedEOF):
 
     # Open file
     SourceJSON = open(JSONFile, 'r')
@@ -462,9 +465,13 @@ def UpdateJSON(JSONFile, Arranged_Images):
         # Compute timestamp
         timestamp = "%d_%06d" % (pose['sec'], pose['usc'])
 
-        # Check if
+        # Assign apropriate base folder to image
         if timestamp in BASE_REF:
             pose['folder'] = BASE_REF[timestamp]
+
+        # Assing eof tag if image is corrupted
+        if timestamp in CorrupedEOF:
+            pose['status'] = "eof"
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
@@ -506,6 +513,9 @@ def mergeResults(Source, Dest):
 
     # Merge file limit dir index
     Dest[6] = Source[6]
+
+    # Merge corruped eof timestamps
+    Dest[8] = Source[8]
 
 # Function to get first available slot
 def GetSlot(Slots):
@@ -743,7 +753,7 @@ def main(argv):
         __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
 
         # Check if segment is already extracted
-        if not SegmentFinished(__JSONFile__):
+        if SegmentFinished(__JSONFile__):
 
             # Scope variables
             __extractMOV_Results_Template__ = [
@@ -754,7 +764,8 @@ def main(argv):
                 __Max_Files__,  # File limit value
                 __Max_Files__,  # File limit counter
                 0,  # File limit dir index
-                0   # Thread id
+                0,  # Thread id
+                []  # Corruped EOF timestamps
             ]
             __extractMOV_Results__ = __extractMOV_Results_Template__[:]
             __MOV_List__           = []
@@ -768,7 +779,7 @@ def main(argv):
             # Compute paths
             __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
             __Output__   = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
-            __Trash__    = "%s/%s/trash" % (BaseSegmentsFolder, Segment)
+            __Trash__    = "%s/%s/corruped/eof" % (BaseSegmentsFolder, Segment)
 
             # Append temp folder to output path
             __Output__ = ("%s/temp" % __Output__)
@@ -843,14 +854,14 @@ def main(argv):
                 ShowMessage("Rearranging images...")
 
             # Rearrange images
-            Arranged_Images = rearrangeImages(__Output__, __extractMOV_Results__[2], __Output__, Limit, ModuleCount)
+            Arranged_Images = rearrangeImages(__Output__, __extractMOV_Results__[2], __extractMOV_Results__[8], __Output__, Limit, ModuleCount)
 
             # Debug output
             if not quietEnabled():
                 ShowMessage("Updating JSON file...")
 
             # Update JSON file flags
-            UpdateJSON(__JSONFile__, Arranged_Images)
+            UpdateJSON(__JSONFile__, Arranged_Images, __extractMOV_Results__[8])
 
             # Remove temp folder
             if os.path.isdir(__Output__):
