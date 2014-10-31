@@ -58,10 +58,11 @@ import exifread
 Threads_Sleep_Delay = 0.1
 
 # Global variables
-STD_OUTPUT = 0
-QUEUE_Done     = 0
-QUEUE_Count    = 0
-QUEUE_Slots    = []
+STD_OUTPUT      = 0
+CORRUPTED_COUNT = 0
+QUEUE_Done      = 0
+QUEUE_Count     = 0
+QUEUE_Slots     = []
 
 # Main binary file structure parameters
 MAIN_STRUCT = 'i i i i h'
@@ -186,7 +187,10 @@ def UsedSlots(Slots):
     # Return result
     return ret
 
-def indexMOV(InputFile, tid=0):
+def indexMOV(InputFile, EXIFTrashFolder, tid=0):
+
+    # Global variables
+    global CORRUPTED_COUNT
 
     # Local variables
     JPEGHeader    = b'\xff\xd8\xff\xe1'
@@ -221,7 +225,20 @@ def indexMOV(InputFile, tid=0):
 
         # Check EXIF integrity
         if not EXIF_Tags:
+
             ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
+
+            # Create output trash dir if not exists
+            if not os.path.isdir(EXIFTrashFolder):
+                os.makedirs(EXIFTrashFolder)
+
+            # Save corrupted image
+            with open("%s/exif_fail_%d.jp4" % (EXIFTrashFolder, CORRUPTED_COUNT), 'w') as f:
+                f.write(ImageData)
+
+            # Increment index
+            CORRUPTED_COUNT += 1
+
         else:
 
             # Get date object
@@ -249,11 +266,11 @@ def indexMOV(InputFile, tid=0):
     return Result
 
 # Thread function to index MOV files
-def indexMOV_Thread(Threads, InputFile, tid):
+def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, tid):
 
     # Add action to queue
     Threads.put(
-        indexMOV(InputFile, tid)
+        indexMOV(InputFile, EXIFTrashFolder, tid)
     )
 
 # MOV counting data collector
@@ -287,7 +304,7 @@ def WorkerThread_indexCollector(Source, Dest):
 
 # Main thread
 # pylint: disable=W0602
-def WorkerThread(__Jobs__, __MOV_List__, __Total_Files__, __Results__):
+def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Results__):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -339,7 +356,7 @@ def WorkerThread(__Jobs__, __MOV_List__, __Total_Files__, __Results__):
             # Create thread
             ThreadJob = threading.Thread(
                 target = indexMOV_Thread,
-                args = (Threads, MOV, Index)
+                args = (Threads, MOV, EXIFTrashFolder, Index)
             )
 
             # Start thread
@@ -423,10 +440,11 @@ def main(argv):
         return
 
     # Compute paths
-    InputFolder  = "%s/camera/%s/raw/sync/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFolder = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFile = "%s/jp4table.bin" % (OutputFolder)
-    CorrectionXML = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+    InputFolder     = "%s/camera/%s/raw/sync/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFolder    = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFile      = "%s/jp4table.bin" % (OutputFolder)
+    CorrectionXML   = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+    EXIFTrashFolder = "%s/camera/%s/raw/sync/%s/info/corrupted/jp4/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
 
     # Get camera modules count
     ModuleCount = GetCameraModules(CorrectionXML)
@@ -463,7 +481,7 @@ def main(argv):
     #Create main thread
     MainThread = threading.Thread(
         target = WorkerThread,
-        args = (__Jobs__, __MOV_List__, len(__MOV_List__), Results)
+        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, len(__MOV_List__), Results)
     )
 
     # Start main thread
