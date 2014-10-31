@@ -763,8 +763,7 @@ def main(argv):
             QUEUE_Done             = 0
 
             # Debug output
-            if not quietEnabled():
-                ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
+            print >> sys.stderr, "Processing segment %s %d/%d" % (Segment, Index, len(__Segments__))
 
             # Compute paths
             __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
@@ -863,8 +862,7 @@ def main(argv):
         else:
 
             # Debug output
-            if not quietEnabled():
-                ShowMessage("Skipping segment '%s', already extracted" % Segment, 1)
+            print >> sys.stderr, "Skipping segment '%s', already extracted" % Segment
 
             # Increment index
             Index += 1

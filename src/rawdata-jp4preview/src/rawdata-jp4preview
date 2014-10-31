@@ -531,7 +531,7 @@ def main(argv):
     for Segment in __Segments__:
 
         # Debug output
-        ShowMessage("Processing segment %s %d/%d" % (Segment, Index, len(__Segments__)))
+        print >> sys.stderr, "Processing segment %s %d/%d" % (Segment, Index, len(__Segments__))
 
         # Compute jp4 path
         __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
@@ -625,7 +625,7 @@ def main(argv):
             else:
 
                 # Debug output
-                ShowMessage("Skipping %s, already generated" % __Output_Image__)
+                print >> sys.stderr, "Skipping %s, already generated" % __Output_Image__
 
                 # Increment counter index
                 idx += 1
