@@ -121,7 +121,7 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
     fi
 
     # Run procedure #
-    echo "rawdata-procedures : downloading raw data ..."
+    echo "[$(date '+%F %R')] rawdata-procedures : downloading raw data ..."
     RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
     STATUS=$?
 
@@ -172,7 +172,7 @@ if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/segment
 fi
 
 # Run procedure #
-echo "rawdata-procedures : auto-segmentation ..."
+echo "[$(date '+%F %R')] rawdata-procedures : auto-segmentation ..."
 RETURN=$(rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@)
 STATUS=$?
 
@@ -186,28 +186,28 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Run procedure #
-echo "rawdata-procedures : creating table of jp4 files ..."
+echo "[$(date '+%F %R')] rawdata-procedures : creating table of jp4 files ..."
 rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
-echo "rawdata-procedures : hard-linking mov files ..."
+echo "[$(date '+%F %R')] rawdata-procedures : hard-linking mov files ..."
 rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
-echo "rawdata-procedures : creating table of trashed jp4 files ..."
+echo "[$(date '+%F %R')] rawdata-procedures : creating table of trashed jp4 files ..."
 rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
 if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
-echo "rawdata-procedures : splitting mov files ..."
+echo "[$(date '+%F %R')] rawdata-procedures : splitting mov files ..."
 rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Check execution switch #
 if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
-echo "rawdata-procedures : generating image previews ..."
+echo "[$(date '+%F %R')] rawdata-procedures : generating image previews ..."
 rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
