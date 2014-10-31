@@ -111,18 +111,9 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
 
     fi
 
-    # Check execution consistency #
-    if [ $EUID -ne 0 ]; then
-
-        # Exit script #
-        echo "Error : cannot execute --download switch without being root"
-        exit 1
-
-    fi
-
     # Run procedure #
     echo "[$(date '+%F %R')] rawdata-procedures : downloading raw data ..."
-    RETURN=$(rawdata-downloader $PARAM_MOUNT/camera/ )
+    RETURN=$(sudo rawdata-downloader $PARAM_MOUNT/camera/ )
     STATUS=$?
 
     # Check procedure status #
@@ -138,9 +129,6 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
     ARRAY=($RETURN)
     PARAM_MAC=${ARRAY[0]}
     PARAM_MASTER=${ARRAY[1]}
-
-    # Change privileges #
-    su $(grep 1000 /etc/passwd | cut -f1 -d:)
 
 fi
 
