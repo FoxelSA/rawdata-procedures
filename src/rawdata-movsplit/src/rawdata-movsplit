@@ -55,9 +55,9 @@ from cStringIO import StringIO
 from datetime import datetime
 from functools import wraps
 from xml.dom.minidom import parse
+from pycheckjpeg import validate_jpeg_from_buffer
 
 import exifread
-from PIL import Image
 
 # Global variables
 QUEUE_Done     = 0
@@ -202,25 +202,6 @@ def find_all(a_str, sub):
         # Move pointer to next occurence
         start += len(sub)
 
-# Function to ckeck if an image is corrupted
-def IsImageValid(path):
-
-    # Instanciate image
-    image = Image.open(path)
-
-    try:
-
-        # Try to load image
-        image.load()
-
-    except IOError as e:
-
-        # Image is corrupted
-        return False
-
-    # Image is valid
-    return True
-
 # Function to extract JPEG images inside a MOV file
 @timed
 def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_back, Valid_Timestamps):
@@ -280,7 +261,7 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         if timestamp in Valid_Timestamps:
 
             # Chceck image integrity
-            if not IsImageValid(ImageData_File):
+            if validate_jpeg_from_buffer(ImageData, len(ImageData)) > 0:
 
                 # Debug output
                 ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
