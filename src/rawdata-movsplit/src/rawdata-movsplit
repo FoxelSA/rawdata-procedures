@@ -218,6 +218,7 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
     Results = Results_back
     Results[1] = []
     Results[2] = []
+    Results[8] = []
 
     # Search all JPEG files inside the MOV file
     JPEG_Offsets     = list(find_all(mov_data, JPEGHeader))
