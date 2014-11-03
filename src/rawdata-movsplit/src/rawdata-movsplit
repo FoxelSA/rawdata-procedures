@@ -261,7 +261,7 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         if timestamp in Valid_Timestamps:
 
             # Chceck image integrity
-            if validate_jpeg_from_buffer(ImageData, len(ImageData)) > 0:
+            if validate_jpeg_from_buffer(ImageData, len(ImageData)):
 
                 # Debug output
                 ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
