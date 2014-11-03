@@ -561,16 +561,18 @@ def main(argv):
         # Initialize counter index
         idx = 1
 
+        # Determine output paths
+        DebayFolder = "debayer"
+
+        if __NoDebayer__:
+            DebayFolder = "no-debayer"
+
+        __Output_Base__   = "%s/%s/preview/%s" % (BaseSegmentsFolder, Segment, DebayFolder)
+
         # Iterate over timestamps
         for image in __JP4_Images__:
 
-            # Determine output paths
-            DebayFolder = "debayer"
-
-            if __NoDebayer__:
-                DebayFolder = "no-debayer"
-
-            __Output__   = "%s/%s/preview/%s/%d" % (BaseSegmentsFolder, Segment, DebayFolder, image.base_folder)
+            __Output__   = "%s/%d" % (__Output_Base__, image.base_folder)
             __Output_Image__ = "%s/%s.jpeg" % (__Output__, image.timestamp)
 
             # Check if destination file already exists
@@ -639,6 +641,8 @@ def main(argv):
         # Update JSON file
         UpdateJSON(__JSONFile__, __NoDebayer__)
 
+        # Create previews movie
+        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm', __Output_Base__, __Output_Base__)
 
 # Program entry point
 if __name__ == "__main__":
