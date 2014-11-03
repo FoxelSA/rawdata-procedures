@@ -57,6 +57,7 @@ from functools import wraps
 from xml.dom.minidom import parse
 
 import exifread
+from PIL import Image
 
 # Global variables
 QUEUE_Done     = 0
@@ -201,6 +202,25 @@ def find_all(a_str, sub):
         # Move pointer to next occurence
         start += len(sub)
 
+# Function to ckeck if an image is corrupted
+def IsImageValid(path):
+
+    # Instanciate image
+    image = Image.open(path)
+
+    try:
+
+        # Try to load image
+        image.load()
+
+    except IOError as e:
+
+        # Image is corrupted
+        return False
+
+    # Image is valid
+    return True
+
 # Function to extract JPEG images inside a MOV file
 @timed
 def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_back, Valid_Timestamps):
@@ -242,13 +262,9 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         # Extract JPEG from MOV file
         ImageData = mov_data[_Offset:(Size + _Offset if Size is not None else None)]
 
-        # Compute image HEX footer
-        Footer = [ImageData[len(ImageData) -2], ImageData[len(ImageData) -1]]
-
         # Extract EXIF data from JPEG file
         ImageData_File = StringIO(ImageData)
         EXIF_Tags = exifread.process_file(ImageData_File)
-        ImageData_File.close()
 
         # Output file variables
         Output_Name = ""
@@ -263,11 +279,11 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         # Check if timestamp is valid
         if timestamp in Valid_Timestamps:
 
-            # Chceck image footer (integrity)
-            if (Footer[0] != b'\xFF') or (Footer[1] != b'\xD9'):
+            # Chceck image integrity
+            if not IsImageValid(ImageData_File):
 
                 # Debug output
-                ShowMessage("Bad image footer (%s) in image %s.jp4" % (Footer, Output_Name), 1)
+                ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
 
                 # Create output trash dir if not exists
                 if not os.path.isdir(TrashFolder):
@@ -323,6 +339,9 @@ def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_ba
         if Output_Image:
             Output_Image.write(ImageData)
             Output_Image.close()
+
+        # Close StringIO image stream
+        ImageData_File.close()
 
     return Results
 
