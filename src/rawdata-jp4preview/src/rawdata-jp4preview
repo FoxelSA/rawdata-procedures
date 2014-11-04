@@ -641,6 +641,9 @@ def main(argv):
         # Update JSON file
         UpdateJSON(__JSONFile__, __NoDebayer__)
 
+        # Debug output
+        ShowMessage("Generating previews movie...")
+
         # Create previews movie
         os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm > /dev/null 2>&1' % (__Output_Base__, __Output_Base__))
 
