@@ -176,14 +176,14 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         if _grayscale:
 
             # Convert image
-            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s | djpeg -fast -scale 1/8 > %s/%s.jpeg\n" % (path, _temp, FileName))
+            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/%s.jpeg\n" % (path, _temp, FileName))
 
             # Rotate image
             os.system("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_output, FileName, _output, FileName))
         else:
 
             # Convert image to dng
-            os.system("movie2dng --dng --stdout %s > %s/%s.dng" % (path, _temp, FileName))
+            os.system("movie2dng --dng --stdout %s 2> /dev/null > %s/%s.dng" % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
             os.system("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg" % (_temp, FileName, _output, FileName))
@@ -213,14 +213,14 @@ def JP4ToJPEG_Parallel(List, _output, _temp, _grayscale=0, _jobs=1):
         if _grayscale:
 
             # Convert image
-            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s | djpeg -fast -scale 1/8 > %s/%s.jpeg && " % (path, _temp, FileName))
+            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/%s.jpeg && " % (path, _temp, FileName))
 
             # Rotate image
             Commands += ("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_temp, FileName, _temp, FileName))
         else:
 
             # Convert image to dng
-            Commands += ("movie2dng --dng --stdout %s > %s/%s.dng && " % (path, _temp, FileName))
+            Commands += ("movie2dng --dng --stdout %s 2> /dev/null > %s/%s.dng && " % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
             Commands += ("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg && " % (_temp, FileName, _output, FileName))
@@ -642,7 +642,7 @@ def main(argv):
         UpdateJSON(__JSONFile__, __NoDebayer__)
 
         # Create previews movie
-        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm 2>&1 >/dev/null' % (__Output_Base__, __Output_Base__))
+        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm > /dev/null 2>&1' % (__Output_Base__, __Output_Base__))
 
 # Program entry point
 if __name__ == "__main__":
