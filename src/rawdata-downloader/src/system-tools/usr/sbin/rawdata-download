@@ -1,9 +1,14 @@
 #!/bin/bash
+# rawdata-procedures - Camera raw data procedures
 #
-# rawdata-downloader
-#
-# Copyright (c) 2014 FOXEL SA - http://foxel.ch
+# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Luc Deschenaux <l.deschenaux@foxel.ch>
+#
 #
 # This file is part of the FOXEL project <http://foxel.ch>.
 #
@@ -23,16 +28,12 @@
 #
 # Additional Terms:
 #
-#      You are required to preserve legal notices and author attributions in
-#      that material or in the Appropriate Legal Notices displayed by works
-#      containing it.
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
 #
-#      You are required to attribute the work as explained in the "Usage and
-#      Attribution" section of <http://foxel.ch/license>.
-#
-# Author(s):
-#
-#      Luc Deschenaux <l.deschenaux@foxel.ch>
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
 
 #set -e
 
@@ -226,7 +227,7 @@ wait_and_backup() {
     # assert previously saved module address match the connecting disk
     if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO} ; then
       log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
-      killtree -KILL $MYPID 
+      killtree -KILL $MYPID
     fi
 
     # cache mux index and scsi host association
@@ -302,7 +303,7 @@ backup() {
 #            16   - Usage or syntax error
 #            32   - Fsck canceled by user request
 #            128  - Shared-library error
-  
+
   # mount device read-only
   if ! mount -o ro ${DEVICE}$PARTNUM $MOUNTPOINT ; then
      log ${LINENO} mount_failed module $(get_module_index $SERIAL)
@@ -563,7 +564,7 @@ touch $REMOVED_SCSI_TMP
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 log ${LINENO} get camera uptime
-CAMERA_UPTIME=$(get_camera_uptime) 
+CAMERA_UPTIME=$(get_camera_uptime)
 if [ -z "$CAMERA_UPTIME" ] ; then
   log ${LINENO} cannot get camera uptime
   exit 1
@@ -664,7 +665,7 @@ log ${LINENO} resetting eyesis ide
 reset_eyesis_ide
 
 # add previously removed scsi devices
-sort -u $REMOVED_SCSI_TMP | while read hbtl ; do 
+sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
   log ${LINENO} "adding previously removed scsi devices"
   echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
   sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP
@@ -678,7 +679,7 @@ rm $TMP/$$ -r 2> /dev/null
 # kill zombies
 killtree -KILL $MYPID
 
-# on success, print destination folder 
+# on success, print destination folder
 [ $EXIT_CODE -eq 0 ] && echo $DEST
 
 log ${LINENO} exit $EXIT_CODE

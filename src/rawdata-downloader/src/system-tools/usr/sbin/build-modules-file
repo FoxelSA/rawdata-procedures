@@ -1,9 +1,14 @@
 #!/bin/bash
+# rawdata-procedures - Camera raw data procedures
 #
-# build-modules-file
-#
-# Copyright (c) 2014 FOXEL SA - http://foxel.ch
+# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Luc Deschenaux <l.deschenaux@foxel.ch>
+#
 #
 # This file is part of the FOXEL project <http://foxel.ch>.
 #
@@ -23,16 +28,12 @@
 #
 # Additional Terms:
 #
-#      You are required to preserve legal notices and author attributions in
-#      that material or in the Appropriate Legal Notices displayed by works
-#      containing it.
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
 #
-#      You are required to attribute the work as explained in the "Usage and
-#      Attribution" section of <http://foxel.ch/license>.
-#
-# Author(s):
-#
-#      Luc Deschenaux <l.deschenaux@foxel.ch>
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
 
 #set -e
 
@@ -224,7 +225,7 @@ wait_and_register() {
     # assert previously saved module address match the connecting disk
     if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO} ; then
       log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
-      killtree -KILL $MYPID 
+      killtree -KILL $MYPID
     fi
 
     # cache camera module address (mux index, ssd index)
@@ -372,7 +373,7 @@ connect_q_run() {
       INOTIFY_STDERR=$(mktemp)
       timeout -k 10 30 inotifywait -e close_write $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting > /dev/null 2> $INOTIFY_STDERR &
       TIMEOUTPID=$!
-      wait_watches_established $INOTIFY_STDERR 2>&1 | grep -v -e INOTIFY_STDERR | logstdout ${LINENO} 
+      wait_watches_established $INOTIFY_STDERR 2>&1 | grep -v -e INOTIFY_STDERR | logstdout ${LINENO}
 
       # before requesting disk connection, save connecting disk info
       echo $MUX_INDEX $REMOTE_SSD_INDEX $ISRETRY > $DISK_CONNECTING_TMP
@@ -487,7 +488,7 @@ touch $REMOVED_SCSI_TMP
 
 # sleep if camera uptime > 120 seconds
 log ${LINENO} get camera uptime
-CAMERA_UPTIME=$(get_camera_uptime) 
+CAMERA_UPTIME=$(get_camera_uptime)
 [ -z "$CAMERA_UPTIME" ] && exit 1
 
 if [ $CAMERA_UPTIME -lt 120 ] ; then
@@ -577,7 +578,7 @@ log ${LINENO} resetting multiplexers
 reset_eyesis_ide
 
 # add previously removed scsi devices
-sort -u $REMOVED_SCSI_TMP | while read hbtl ; do 
+sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
   log ${LINENO} "adding previously removed scsi devices"
   echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
   sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP

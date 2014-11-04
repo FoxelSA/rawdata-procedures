@@ -1,5 +1,5 @@
 #!/bin/bash
-# rawdata-procedures - Auto-segmentation
+# rawdata-procedures - Camera raw data procedures
 #
 # Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -129,7 +129,7 @@ topology() {
     echo "end" >> $1
     echo "device gps" >> $1
     echo "    model LS20031" >> $1
-    echo "    tag ls20031" >> $1 
+    echo "    tag ls20031" >> $1
     echo "    block 1024" >> $1
     echo "end" >> $1
     echo "module cam-mod-DSIDE" >> $1
@@ -142,14 +142,14 @@ topology() {
     echo "    ls20031" >> $1
     echo "    mod-DSIDE" >> $1
     echo "end" >> $1
-    echo "module imu-mod-DSIDE" >> $1 
+    echo "module imu-mod-DSIDE" >> $1
     echo "    adis16375" >> $1
     echo "end" >> $1
-    echo "module imu-mod-SGSFR" >> $1 
+    echo "module imu-mod-SGSFR" >> $1
     echo "    adis16375" >> $1
     echo "    mod-DSIDE" >> $1
     echo "end" >> $1
-    echo "module imu-mod-SGNDN" >> $1 
+    echo "module imu-mod-SGNDN" >> $1
     echo "    adis16375" >> $1
     echo "    mod-SGSFR" >> $1
     echo "end" >> $1
@@ -164,7 +164,7 @@ topology() {
     echo "end" >> $1
     echo "module imu-mod-IFETI" >> $1
     echo "    adis16375" >> $1
-    echo "    mod-SGNDN" >> $1 
+    echo "    mod-SGNDN" >> $1
     echo "    mod-IFICR" >> $1
     echo "end" >> $1
 
