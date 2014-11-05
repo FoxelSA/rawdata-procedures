@@ -648,6 +648,9 @@ def main(argv):
         if not os.path.isfile("%s/segment.webm" % __Output_Base__):
             os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm > /dev/null 2>&1' % (__Output_Base__, __Output_Base__))
 
+        # Increment index
+        Index += 1
+
 # Program entry point
 if __name__ == "__main__":
     main(sys.argv[1:])
