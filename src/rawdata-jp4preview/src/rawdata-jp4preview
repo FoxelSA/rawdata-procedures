@@ -419,7 +419,6 @@ def _usage():
 
     [Optional arguments]
     --segment-timestamp  Segment timestamp
-    --threads            Use GNU parallel with x threads
     --no-split           Exit program
     --no-debayer         Write grayscale images (without debayer)
 
@@ -465,9 +464,9 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __Jobs__             = (1 if not 'threads' in Arguments else int(Arguments['threads']))
     __NoDebayer__        = (0 if not 'no-debayer' in Arguments else 1)
     STD_OUTPUT           = (1 if 'output' in Arguments else 0)
+    __Jobs__             = 1
 
     if 'no-split' in Arguments:
         print >> sys.stderr, '--no-split argument given, exiting...'

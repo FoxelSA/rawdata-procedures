@@ -670,7 +670,6 @@ def _usage():
 
     [Optional arguments]
     --segment-timestamp  Segment timestamp
-    --threads            Jobs count (Threads)
     --output             Show STDOUT logs
     --no-split           Exit program
 
@@ -713,8 +712,8 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __Jobs__             = (1 if not 'threads' in Arguments else int(Arguments['threads']))
     STD_OUTPUT           = (1 if 'output' in Arguments else 0)
+    __Jobs__             = 1
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
