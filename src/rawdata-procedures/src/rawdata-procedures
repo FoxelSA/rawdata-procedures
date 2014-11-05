@@ -99,8 +99,6 @@ if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/footage ]; then
 
 fi
 
-exit
-
 # Check execution consistency #
 if [ -n "$SWITCH_DOWNLOAD" ]; then
 
