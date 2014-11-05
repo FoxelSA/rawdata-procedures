@@ -419,7 +419,6 @@ def _usage():
 
     [Optional arguments]
     --segment-timestamp  Segment timestamp
-    --threads            Use GNU parallel with x threads
     --no-split           Exit program
     --no-debayer         Write grayscale images (without debayer)
 
@@ -465,9 +464,9 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __Jobs__             = (1 if not 'threads' in Arguments else int(Arguments['threads']))
     __NoDebayer__        = (0 if not 'no-debayer' in Arguments else 1)
     STD_OUTPUT           = (1 if 'output' in Arguments else 0)
+    __Jobs__             = 1
 
     if 'no-split' in Arguments:
         print >> sys.stderr, '--no-split argument given, exiting...'
@@ -636,7 +635,7 @@ def main(argv):
         ShowMessage("Updating JSON file...")
 
         # Compute JSON file path
-        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
 
         # Update JSON file
         UpdateJSON(__JSONFile__, __NoDebayer__)
@@ -647,6 +646,9 @@ def main(argv):
         # Create previews movie if not exists
         if not os.path.isfile("%s/segment.webm" % __Output_Base__):
             os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm > /dev/null 2>&1' % (__Output_Base__, __Output_Base__))
+
+        # Increment index
+        Index += 1
 
 # Program entry point
 if __name__ == "__main__":

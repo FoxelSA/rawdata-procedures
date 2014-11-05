@@ -437,7 +437,7 @@ def LoadTimestampsFromJSON(JSONFile):
 
 # Function to update JSON file flags
 @timed
-def UpdateJSON(JSONFile, Arranged_Images, CorrupedEOF):
+def UpdateJSON(JSONFile, Arranged_Images, CorruptedTimestamps):
 
     # Open file
     SourceJSON = open(JSONFile, 'r')
@@ -470,9 +470,9 @@ def UpdateJSON(JSONFile, Arranged_Images, CorrupedEOF):
         if timestamp in BASE_REF:
             pose['folder'] = BASE_REF[timestamp]
 
-        # Assing eof tag if image is corrupted
-        if timestamp in CorrupedEOF:
-            pose['status'] = "eof"
+        # Assing corrupted tag if image is corrupted
+        if timestamp in CorruptedTimestamps:
+            pose['status'] = "corrupted"
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
@@ -515,7 +515,7 @@ def mergeResults(Source, Dest):
     # Merge file limit dir index
     Dest[6] = Source[6]
 
-    # Merge corruped eof timestamps
+    # Merge corruped timestamps
     for i in Source[8]:
         Dest[8].append(i)
 
@@ -670,7 +670,6 @@ def _usage():
 
     [Optional arguments]
     --segment-timestamp  Segment timestamp
-    --threads            Jobs count (Threads)
     --output             Show STDOUT logs
     --no-split           Exit program
 
@@ -713,8 +712,8 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __Jobs__             = (1 if not 'threads' in Arguments else int(Arguments['threads']))
     STD_OUTPUT           = (1 if 'output' in Arguments else 0)
+    __Jobs__             = 1
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
@@ -752,7 +751,7 @@ def main(argv):
     for Segment in __Segments__:
 
         # Compute JSON file path
-        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
 
         # Check if segment is already extracted
         if not SegmentFinished(__JSONFile__):
@@ -767,7 +766,7 @@ def main(argv):
                 __Max_Files__,  # File limit counter
                 0,  # File limit dir index
                 0,  # Thread id
-                []  # Corruped EOF timestamps
+                []  # Corruped timestamps
             ]
             __extractMOV_Results__ = __extractMOV_Results_Template__[:]
             __MOV_List__           = []
@@ -781,7 +780,7 @@ def main(argv):
             # Compute paths
             __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
             __Output__   = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
-            __Trash__    = "%s/%s/info/corrupted/jp4/eof" % (BaseSegmentsFolder, Segment)
+            __Trash__    = "%s/%s/info/corrupted/jp4" % (BaseSegmentsFolder, Segment)
 
             # Append temp folder to output path
             __Output__ = ("%s/temp" % __Output__)
@@ -818,7 +817,7 @@ def main(argv):
 
             # Debug output
             if not quietEnabled():
-                ShowMessage("Loading rawdata-navigator.json...")
+                ShowMessage("Loading segment.json...")
 
             # Load valid timestamps list
             Valid_Timestamps = LoadTimestampsFromJSON(__JSONFile__)
