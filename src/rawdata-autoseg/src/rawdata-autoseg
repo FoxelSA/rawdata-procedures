@@ -242,7 +242,6 @@ process() {
         mkdir -p $AS_SEGM/$MTS/csps/devices
         mkdir -p $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)
         mkdir -p $AS_SEGM/$MTS/csps/streams
-        mkdir -p $AS_SEGM/$MTS/csps/exports
 
         # Create hard-link to logs-file in sync #
         ln -f \
@@ -258,15 +257,20 @@ process() {
             -t $AS_SEGM/$MTS/csps/topology \
              > /dev/null
 
-        # Json-file generation #
-        csps-export \
-            -p $AS_SEGM/$MTS/csps \
-            -e $AS_SEGM/$MTS/csps/exports/rawdata-navigator.json \
-            -c eyesis4pi \
-            -m mod-DSIDE \
-            -g ls20031 \
-            -n mod-SGNQF \
-             > /dev/null
+        # Check file #
+        if [ ! -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json ]; then
+
+            # Json-file generation #
+            csps-export \
+                -p $AS_SEGM/$MTS/csps \
+                -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json \
+                -c eyesis4pi \
+                -m mod-DSIDE \
+                -g ls20031 \
+                -n mod-SGNQF \
+                 > /dev/null
+
+        fi
 
         # Logging segments broadcasting #
         echo "Broadcast $AS_ENUM segment in $(basename $AS_SEGM/$MTS)" \
@@ -312,8 +316,6 @@ unprocess() {
                 rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices
                 rm    --force                    $AS_SEGM/$AS_ENUM/csps/streams/*
                 rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/streams
-                rm    --force                    $AS_SEGM/$AS_ENUM/csps/exports/*
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/exports
                 rm    --force                    $AS_SEGM/$AS_ENUM/csps/*
                 rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps
                 rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM
