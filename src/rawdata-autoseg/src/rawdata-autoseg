@@ -242,6 +242,7 @@ process() {
         mkdir -p $AS_SEGM/$MTS/csps/devices
         mkdir -p $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)
         mkdir -p $AS_SEGM/$MTS/csps/streams
+        mkdir -p $AS_SEGM/$MTS/info/rawdata-autoseg
 
         # Create hard-link to logs-file in sync #
         ln -f \
