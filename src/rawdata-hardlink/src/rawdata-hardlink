@@ -222,13 +222,13 @@ def main(argv):
     SourceMOVDir      = "%s/mov" % (BaseSyncFolder)
 
     # Debug output
-    ShowMessage("Parsing rawdata-navigator.json files...")
+    ShowMessage("Parsing segment.json files...")
 
     # Build CSPS range list
     RANGES = []
 
     # Find all JSON files
-    JSON_Files = glob.glob("%s/camera/%s/raw/segment/%s/*/csps/exports/rawdata-navigator.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
+    JSON_Files = glob.glob("%s/camera/%s/raw/segment/%s/*/info/rawdata-autoseg/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
 
     # Iterate over JSON files
     for i in JSON_Files:

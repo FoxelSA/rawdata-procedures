@@ -636,7 +636,7 @@ def main(argv):
         ShowMessage("Updating JSON file...")
 
         # Compute JSON file path
-        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
 
         # Update JSON file
         UpdateJSON(__JSONFile__, __NoDebayer__)

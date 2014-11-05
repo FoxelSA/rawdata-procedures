@@ -752,7 +752,7 @@ def main(argv):
     for Segment in __Segments__:
 
         # Compute JSON file path
-        __JSONFile__ = "%s/%s/csps/exports/rawdata-navigator.json" % (BaseSegmentsFolder, Segment)
+        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
 
         # Check if segment is already extracted
         if not SegmentFinished(__JSONFile__):
@@ -818,7 +818,7 @@ def main(argv):
 
             # Debug output
             if not quietEnabled():
-                ShowMessage("Loading rawdata-navigator.json...")
+                ShowMessage("Loading segment.json...")
 
             # Load valid timestamps list
             Valid_Timestamps = LoadTimestampsFromJSON(__JSONFile__)
