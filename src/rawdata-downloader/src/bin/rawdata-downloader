@@ -93,9 +93,10 @@ fi
 rm /$DEST/rsync -r
 
 # set permissions for directories
-chown $_UID.$_GID $DEST/raw $DEST/raw/sync/$TIMESTAMP
-chmod 0775 $DEST/raw $DEST/raw/sync/$TIMESTAMP
+chown $_UID.$_GID $DEST/raw $DEST/raw/sync $DEST/raw/sync/$TIMESTAMP $DEST/raw/sync/$TIMESTAMP/mov
+chown -R $_UID.$_GID $DEST/raw/sync/$TIMESTAMP/mov
+chmod 0775 $DEST/raw $DEST/raw/sync $DEST/raw/sync/$TIMESTAMP $DEST/raw/sync/$TIMESTAMP/mov
+chmod -R 0775 $DEST/raw/sync/$TIMESTAMP/mov
 
 # return mac address and first timestamp
 echo $(basename $DEST) $TIMESTAMP
-
