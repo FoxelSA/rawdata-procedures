@@ -128,6 +128,17 @@ exit 0
 EOF
 }
 
+mount_cf() {
+  HOSTS=$USER_AT_HOST sshall << 'EOF'
+if ! grep -q ' /usr/html/CF ' /proc/mounts ; then
+  fsck -p /dev/hda1 || exit 1
+  mount /dev/hda1 /usr/html/CF || exit 1
+  sync
+fi
+exit 0
+EOF
+}
+
 get_remote_disk_serial() {
   HOSTS=$USER_AT_HOST sshall /sbin/hdparm -i $1 \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
 }
@@ -497,6 +508,23 @@ reset_eyesis_ide() {
 }
 
 # unmount ssd on cameras
+mount_all() {
+  STATUS=()
+  mount_cf 2>&1 | tee | while read l ; do
+    msg=($l)
+    [ ${msg[0]} = "sshall:" ] || continue
+    LOGIN=${msg[1]}
+    [ -z "$LOGIN" ] && echo umount_all: $l >&2 && killtree -KILL $MYPID
+    WHAT=${msg[2]}
+    [ "$WHAT" != "status" ] && continue
+    IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
+    INDEX=$(expr $IP - $MASTER_IP)
+    STATUS[$INDEX]=${msg[3]}
+    [ "${STATUS[$INDEX]}" != "0" ] && echo mount_cf $IP >&2 && killtree -KILL $MYPID
+  done
+}
+
+# unmount ssd on cameras
 umount_all() {
   STATUS=()
   umount_cf 2>&1 | tee | while read l ; do
@@ -638,9 +666,13 @@ log ${LINENO} got ${#SSD_SERIAL[@]} SSD serials
 
 rm $SSD_SERIAL_TMP
 
+# mount camera ssd
+log ${LINENO} mount ssd
+mount_all | logstdout ${LINENO}
+
 # unmount camera ssd
 log ${LINENO} umount CF
-umount_all
+umount_all | logstdout ${LINENO}
 
 # run backgroud task waiting for disks and launching backups
 wait_and_backup &
