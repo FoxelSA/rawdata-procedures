@@ -44,14 +44,14 @@ if [ $UID -ne 0 ] ; then
   exit 1
 fi
 
-BASE_IP=192.168.0
-MASTER_IP=221
-N=9
+[ -z "$BASE_IP" ] && BASE_IP=192.168.0
+[ -z "$MASTER_IP" ] && MASTER_IP=221
+[ -z "$N" ] && N=9
 
-MUXES=(192.168.0.224 192.168.0.228)
-MUX_MAX_INDEX=(4 5)
+[ -z "$MUXES" ] && MUXES=(192.168.0.224 192.168.0.228)
+[ -z "$MUX_MAX_INDEX" ] && MUX_MAX_INDEX=(4 5)
 
-SPOOL=/var/spool/rawdata-downloader
+[ -z "$SPOOL" ] && SPOOL=/var/spool/rawdata-downloader
 
 [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
