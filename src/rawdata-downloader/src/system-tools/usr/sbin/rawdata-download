@@ -50,7 +50,6 @@ fi
 
 [ -z "$MUXES" ] && MUXES=(192.168.0.224 192.168.0.228)
 [ -z "$MUX_MAX_INDEX" ] && MUX_MAX_INDEX=(4 5)
-[ -z "$MUXES_TO_PROCESS" ] && MUXES_TO_PROCESS=(0 1)
 
 [ -z "$SPOOL" ] && SPOOL=/var/spool/rawdata-downloader
 
@@ -374,7 +373,7 @@ backup() {
 
   # exit when nothing left to do
   if [ "$MUX_DONE" = "${#MUXES[@]}" ] ; then
-    if [ $(sort -u $SERIAL_DONE_TMP | wc -l) -eq $DISKS_TO_PROCESS ] ; then
+    if [ $(sort -u $SERIAL_DONE_TMP | wc -l) -eq $SUBCAMERA_COUNT ] ; then
       log ${LINENO} exit_status 0
       echo 0 > $EXIT_CODE_TMP
     else
@@ -544,6 +543,8 @@ umount_all() {
 
 ########### main script
 
+SCSIHOST=()
+
 [ -z "$DESTINATION" ] && DESTINATION=$1 && shift
 
 if [ -z "$DESTINATION" ] ; then
@@ -553,13 +554,6 @@ fi
 [ $# -gt 0 ] && usage 1
 
 checkdependencies
-
-# get the number of disks to process
-DISKS_TO_PROCESS=0
-for MUX in ${MUXES_TO_PROCESS[@]} ; do
-  INDEX=${MUX_MAX_INDEX[MUX]}
-  ((DISKS_TO_PROCESS+=INDEX+1))
-done
 
 # get camera master ip mac address
 if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
@@ -684,8 +678,8 @@ umount_all | logstdout ${LINENO}
 wait_and_backup &
 
 # queue first ssd for each mux
-for MUX in ${MUXES_TO_PROCESS[@]} ; do
-  echo $MUX 1 >> $CONNECT_Q_TMP
+for (( i=0 ; i < ${#MUXES[@]} ; ++i )) ; do
+  echo $i 1 >> $CONNECT_Q_TMP
 done
 
 # run queue in background
