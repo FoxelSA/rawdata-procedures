@@ -46,7 +46,7 @@ fi
 
 [ -z "$BASE_IP" ] && BASE_IP=192.168.0
 [ -z "$MASTER_IP" ] && MASTER_IP=221
-[ -z "$SUBCAMERA_COUNT" ] && SUBCAMERA_COUNT=9
+[ -z "$N" ] && N=9
 
 [ -z "$MUXES" ] && MUXES=(192.168.0.224 192.168.0.228)
 [ -z "$MUX_MAX_INDEX" ] && MUX_MAX_INDEX=(4 5)
@@ -373,7 +373,7 @@ backup() {
 
   # exit when nothing left to do
   if [ "$MUX_DONE" = "${#MUXES[@]}" ] ; then
-    if [ $(sort -u $SERIAL_DONE_TMP | wc -l) -eq $SUBCAMERA_COUNT ] ; then
+    if [ $(sort -u $SERIAL_DONE_TMP | wc -l) -eq $N ] ; then
       log ${LINENO} exit_status 0
       echo 0 > $EXIT_CODE_TMP
     else
@@ -628,7 +628,7 @@ if [ ! -f $MODULES_FILE ] ; then
 fi
 
 # build sshall login list
-for (( i=0 ; $i < $SUBCAMERA_COUNT ; ++i )) ; do
+for (( i=0 ; $i < $N ; ++i )) ; do
   USER_AT_HOST="$USER_AT_HOST "root@$BASE_IP.$((MASTER_IP + i))
 done
 
@@ -662,7 +662,7 @@ cat $SSD_SERIAL_TMP | logstdout ${LINENO}
 
 log ${LINENO} got ${#SSD_SERIAL[@]} SSD serials
 
-[ ${#SSD_SERIAL[@]} -ne $SUBCAMERA_COUNT ] && exit 1
+[ ${#SSD_SERIAL[@]} -ne $N ] && exit 1
 
 rm $SSD_SERIAL_TMP
 
