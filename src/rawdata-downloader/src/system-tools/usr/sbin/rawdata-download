@@ -373,7 +373,7 @@ backup() {
   fi
 
   # exit when nothing left to do
-  if [ "$MUX_DONE" = "${#MUXES_TO_PROCESS[@]}" ] ; then
+  if [ "$MUX_DONE" = "${#MUXES[@]}" ] ; then
     if [ $(sort -u $SERIAL_DONE_TMP | wc -l) -eq $DISKS_TO_PROCESS ] ; then
       log ${LINENO} exit_status 0
       echo 0 > $EXIT_CODE_TMP
@@ -500,7 +500,7 @@ connect_q_run() {
 # remount ssd on cameras
 reset_eyesis_ide() {
   log ${LINENO} reset eyesis_ide
-  for i in ${MUXES_TO_PROCESS[@]} ; do
+  for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
     log ${LINENO} wget http://${MUXES[$i]}/eyesis_ide.php
     if ! wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null ; then
       log ${LINENO} wget failed
