@@ -53,6 +53,8 @@ MUX_MAX_INDEX=(4 5)
 
 SPOOL=/var/spool/rawdata-downloader
 
+FSTYPE=ext2
+
 [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
 mkdir -p $SPOOL || exit 1
@@ -316,7 +318,7 @@ backup() {
 #            128  - Shared-library error
 
   # mount device read-only
-  if ! mount -o ro ${DEVICE}$PARTNUM $MOUNTPOINT ; then
+  if ! mount -t $FSTYPE -o ro ${DEVICE}$PARTNUM $MOUNTPOINT ; then
      log ${LINENO} mount_failed module $(get_module_index $SERIAL)
      return 1
   fi
