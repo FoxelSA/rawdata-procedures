@@ -62,7 +62,6 @@ arguments() {
             ;;
             --keep-intermediates)
                 AS_KEEP="TRUE"
-                shift
             ;;
             --mount-point)
                 AS_MOUNT="$1"
