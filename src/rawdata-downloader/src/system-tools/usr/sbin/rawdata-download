@@ -37,7 +37,7 @@
 
 #set -e
 
-export SCRIPT=$(basename $0)
+export __SCRIPT__=$(basename $0)
 
 if [ $UID -ne 0 ] ; then
   echo error: $(basename $0) must be run as root >&2
@@ -150,13 +150,13 @@ get_hbtl() {
 }
 
 log() {
-  echo $(date +%F_%r) $SCRIPT $BASHPID $@ >&2
+  echo $(date +%F_%r) $__SCRIPT__ $BASHPID $@ >&2
 }
 
 # format stdin for logginG
 logstdout() {
   while read l ; do
-    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ $l >&2
+    echo $(date +%F_%R:%S) $__SCRIPT__ $BASHPID $@ $l >&2
   done
 }
 
@@ -638,9 +638,12 @@ done
 STATUS=()
 log ${LINENO} get ssd serials
 export SSD_SERIAL=()
-get_remote_disk_serial /dev/hda 2>&1 | tee | while read l ; do
+get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
   msg=($l)
-  [ ${msg[0]} = "sshall:" ] || continue
+  if [ ${msg[0]} != "sshall:" ] ; then
+    log ${LINENO} get_remote_disk_serial: $l
+    continue 
+  fi
   [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
   LOGIN=${msg[1]}
   [ -z "$LOGIN" ] && log ${LINENO} get_remote_disk_serial: $l && killtree -KILL $MYPID
