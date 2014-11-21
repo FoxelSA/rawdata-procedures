@@ -650,7 +650,7 @@ get_remote_disk_serial /dev/hda 2>&1 | tee | while read l ; do
   case "$WHAT" in
   status)
     STATUS[$INDEX]=${msg[3]}
-    [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} "error: hdparm failed on camera $IP with exit code ${STATUS[$INDEX]}" && killtree -KILL $MYPID
+    [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} "error: $l" && log ${LINENO} "error: hdparm failed on camera $IP with exit code ${STATUS[$INDEX]}" && killtree -KILL $MYPID
     ;;
   stdout)
     SERIAL=${msg[3]}
