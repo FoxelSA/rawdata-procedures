@@ -1,5 +1,5 @@
 ## Changelog
 
-### Release 1.0 (November 7, 2014)
+### Beta 1.0 (master)
 
 - `Added` : Initial release

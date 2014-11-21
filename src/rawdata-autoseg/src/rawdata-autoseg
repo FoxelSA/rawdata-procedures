@@ -37,6 +37,7 @@
 
 # Script switch #
 AS_DOWN="FALSE"
+AS_KEEP="FALSE"
 
 # Script parameters #
 AS_MOUNT=""
@@ -58,6 +59,9 @@ arguments() {
         case $args in
             --download)
                 AS_DOWN="TRUE"
+            ;;
+            --keep-intermediates)
+                AS_KEEP="TRUE"
             ;;
             --mount-point)
                 AS_MOUNT="$1"
@@ -278,6 +282,17 @@ process() {
              >> $AS_SYNC/csps/logs-broadcast.log
 
     done
+
+    # Check intermediates removal #
+    if [ "$AS_KEEP" == "TRUE" ]; then
+
+        # Safe-remove #
+        rm    --force                    $AS_SYNC/csps/recomposed/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
+        rm    --force                    $AS_SYNC/csps/decomposed/*
+        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
+
+    fi
 
     # Create processed data marker #
     touch $AS_SYNC/csps/logs-processed.log
