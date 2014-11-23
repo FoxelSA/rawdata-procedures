@@ -44,6 +44,7 @@ if [ $UID -ne 0 ] ; then
   exit 1
 fi
 
+HOTSWAP_USING_SYS=yes
 BASE_IP=192.168.0
 MASTER_IP=221
 N=9
@@ -208,6 +209,33 @@ check_module_address() {
   grep -q -E -e " $MUX_INDEX $REMOTE_SSD_INDEX $SERIAL\$" $MODULES_FILE
 }
 
+# remove scsi host (will be added in connect_q_run after requesting connection for next ssd of this mux)
+remove_scsi_device() {
+  if [ -n "$HOTSWAP_USING_SYS" ] ; then
+    log ${LINENO} set device $DEVICE  offline and delete it
+    echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
+    echo 1 | tee /sys/block/$(basename $DEVICE)/device/delete 2>&1 | logstdout ${LINENO}
+  else 
+    log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
+    echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+  fi
+  echo $SCSIHOST >> $REMOVED_SCSI_TMP
+}
+
+# add scsi device, if previously removed after previous ssd backup for this mux
+add_scsi_device() {
+  hbtl=$(get_scsihost $MUX_INDEX)
+  if [ -n "$hbtl" ] ; then
+    log ${LINENO} "adding scsi device using values from cache"
+    if [ -n "$HOTSWAP_USING_SYS" ] ; then
+      hbtl=($hbtl)
+      echo "${hbtl[1]} ${hbtl[2]} ${hbtl[3]}" | tee /sys/class/scsi_host/host${hbtl[0]}/scan 2>&1 | logstdout ${LINENO}
+    else
+      echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+    fi
+  fi
+}
+
 # wait udev generated files in spool folder before mounting disk and launching backup in background
 wait_and_backup() {
 
@@ -344,11 +372,9 @@ backup() {
   log ${LINENO} syncing
   sync
 
-  # remove scsi host (will be added in connect_q_run after requesting connection for next ssd of this mux)
-  log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
   [ -n "$SCSIHOST" ] || killtree -KILL $MYPID
-  echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
-  echo $SCSIHOST >> $REMOVED_SCSI_TMP
+
+  remove_scsi_device
 
   # set backuped flag
   touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_backuped || killtree -KILL $MYPID
@@ -461,12 +487,8 @@ connect_q_run() {
       log ${LINENO} wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
       wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
-      # add scsi device, if previously removed after previous ssd backup for this mux
-      hbtl=$(get_scsihost $MUX_INDEX)
-      if [ -n "$hbtl" ] ; then
-        log ${LINENO} "adding scsi device using values from cache"
-        echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
-      fi
+      sleep 3
+      add_scsi_device
 
       # wait for inotifywait and timeout setup above
       log ${LINENO} waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
@@ -702,11 +724,13 @@ log ${LINENO} resetting eyesis ide
 reset_eyesis_ide
 
 # add previously removed scsi devices
-sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
-  log ${LINENO} "adding previously removed scsi devices"
-  echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
-  sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP
-done
+if [ -z "$HOTSWAP_USING_SYS" ] ; then
+  sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
+    log ${LINENO} "adding previously removed scsi devices"
+    echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+    sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP
+  done
+fi
 
 EXIT_CODE=$(cat $EXIT_CODE_TMP)
 
