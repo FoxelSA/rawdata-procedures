@@ -213,8 +213,8 @@ check_module_address() {
 remove_scsi_device() {
   if [ -n "$HOTSWAP_USING_SYS" ] ; then
     log ${LINENO} set device $DEVICE  offline and delete it
-    echo offline | tee /sys/block/$DEVICE/device/state 2>&1 | logstdout ${LINENO}
-    echo 1 | tee /sys/block/$DEVICE/device/delete 2>&1 | logstdout ${LINENO}
+    echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
+    echo 1 | tee /sys/block/$(basename $DEVICE)/device/delete 2>&1 | logstdout ${LINENO}
   else 
     log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
     echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
