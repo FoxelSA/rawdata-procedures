@@ -354,7 +354,7 @@ backup() {
   # backup files
   log ${LINENO} backuping mux $MUX_INDEX index $REMOTE_SSD_INDEX serial $SERIAL partition ${DEVICE}$PARTNUM
   RSYNCDEST=$DEST/rsync/$(get_module_index $SERIAL)
-  rsync -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
+  rsync --exclude='lost+found' --inplace -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
   STATUS=$?
 
   log ${LINENO} backup_status $STATUS module $(get_module_index $SERIAL) mux ${MUX_INDEX} index ${REMOTE_SSD_INDEX}
