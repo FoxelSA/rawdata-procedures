@@ -85,7 +85,7 @@ fi
 
 # move files
 mkdir -p $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout || exit 1
-if ! rsync -av --remove-source-files --chmod=u+w,a+rX $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout ${LINENO} ; then
+if ! rsync -av --inplace --exclude='lost+found' --remove-source-files --chmod=u+w,a+rX $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout ${LINENO} ; then
   exit 1
 fi
 
