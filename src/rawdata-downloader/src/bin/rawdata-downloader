@@ -85,11 +85,15 @@ fi
 
 # move files
 mkdir -p $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout || exit 1
+log ${LINENO} moving files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
 if ! rsync -av --inplace --exclude='lost+found' --remove-source-files --chmod=u+w,a+rX $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout ${LINENO} ; then
   exit 1
+  log ${LINENO} error: failed to move files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
 fi
+log ${LINENO} success: moved files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
 
 # remove remaining source files
+log ${LINENO} removing source rsync folder
 rm /$DEST/rsync -r
 
 # set permissions for directories
