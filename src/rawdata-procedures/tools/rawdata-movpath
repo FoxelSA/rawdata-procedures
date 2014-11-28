@@ -1,0 +1,250 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2014 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import getopt
+import glob
+import os
+import re
+import shutil
+import sys
+from cStringIO import StringIO
+from xml.dom.minidom import parse
+
+import exifread
+
+# MOV file container class
+class MovFile:
+    def __init__(self, path, modulename):
+        self.path = path
+        self.filename = os.path.basename(path)
+        self.timestamp = int(self.filename.split('_')[0])
+        self.microtimestamp = int(self.filename.split('_')[1][:-4])
+        self.module = int(modulename)
+
+# Function to get camera modules count by reading correction XML
+def GetCameraModules(CorrectionXMLPath):
+
+    # Load XML file
+    dom = parse(CorrectionXMLPath)
+
+    # Iterate over XML entries
+    for i in dom.getElementsByTagName('entry'):
+
+        # Check if key is 'CAMERAS.cameraIPs.length'
+        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
+
+            # Return value
+            return int(i.childNodes[0].data)
+
+# Function to find all occurences of a given input
+def find_all(a_str, sub):
+    start = 0
+    while True:
+        # Find first element
+        start = a_str.find(sub, start)
+
+        # If no match found exit function
+        if start == -1: return
+
+        # If there is a match return it and process the next element
+        yield start
+
+        # Move pointer to next occurence
+        start += len(sub)
+
+def getModuleFromMOV(MOV):
+
+    # Local variables
+    JPEGHeader    = b'\xff\xd8\xff\xe1'
+
+    # Open file
+    mov = open(MOV.path, 'rb')
+    mov_data = mov.read()
+    mov.close()
+
+    # Search all JPEG files inside the MOV file
+    JPEG_Offsets     = list(find_all(mov_data, JPEGHeader))
+
+    # Walk over JPEG files positions
+    for _Index, _Offset in enumerate(JPEG_Offsets):
+
+        # Calculate the filesize for extraction
+        if (_Index >= len(JPEG_Offsets) - 1):
+            Size = len(mov_data) - _Offset
+        else:
+            Size = (JPEG_Offsets[_Index+1] - _Offset)
+
+        # Extract JPEG from MOV file
+        ImageData = mov_data[_Offset:(Size + _Offset if Size is not None else None)]
+
+        # Extract EXIF data from JPEG file
+        ImageData_File = StringIO(ImageData)
+        EXIF_Tags = exifread.process_file(ImageData_File)
+        ImageData_File.close()
+
+        # Check if EXIF data is valid
+        if(EXIF_Tags):
+
+            # Get the camera module name
+            ModelString = "%s" % EXIF_Tags['Image Model']
+
+            # Extract the module folder
+            match = re.match( r'EYESIS\sCHN\d(\d\d).*', ModelString)
+
+            # Check if regex is valid
+            if(match):
+
+                # Return result
+                return int(match.group(1).lstrip('0'))
+
+    return -1
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    -d --mount-point        Base mount directory
+    -m --mac-address        Camera MAC address
+    -t --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    -h --help               Show this message
+    -x --move               Move MOV files to correct folder
+
+    """ % sys.argv[0]
+
+# Program entry point function
+def main(argv):
+
+    # Arguments variables
+    __MountPoint__      = ""
+    __CameraMAC__       = ""
+    __MasterTimestamp__ = ""
+    __Move_Mode__       = 0
+
+    # Arguments parser
+    try:
+        opt, args = getopt.getopt(argv, "hxd:m:t:", ["help", "move", "mount-point=", "mac-address=", "master-timestamp="])
+        args = args
+    except getopt.GetoptError, err:
+        print str(err)
+        _usage()
+        sys.exit(2)
+    for o, a in opt:
+        if o in ("-h", "--help"):
+            _usage()
+            sys.exit()
+        elif o in ("-d", "--mount-point"):
+            __MountPoint__ = a.rstrip('/')
+        elif o in ("-m", "--mac-address"):
+            __CameraMAC__ = a
+        elif o in ("-t", "--master-timestamp"):
+            __MasterTimestamp__ = a
+        elif o in ("-x", "--move"):
+            __Move_Mode__ = 1
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Compute paths
+    BaseSyncFolder = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    CorrectionXML  = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+
+    # Get camera modules count
+    ModuleCount = GetCameraModules(CorrectionXML)
+
+    # List camera modules
+    CameraModules = [i for i in range(1, ModuleCount + 1)]
+
+    # Insert all MOV files into list
+    __MOV_List__  = []
+    __MOV_List_Len__ = 0
+
+    # Find all mov files
+    for mn in CameraModules:
+        for MOV in sorted(glob.glob("%s/mov/%s/*.mov" % (BaseSyncFolder, mn))):
+            __MOV_List__.append( MovFile(MOV, mn) )
+
+    # Determine MOV list length
+    __MOV_List_Len__ = len(__MOV_List__)
+
+    # Loop index
+    _Index = 1
+
+    # Iterate over MOV files
+    for MOV in __MOV_List__:
+
+        # Debug output
+        sys.stdout.write("Checking %d/%d\r" % (_Index, __MOV_List_Len__ - 1))
+        sys.stdout.flush()
+
+        # Retrieve module from MOV file
+        imageModule = getModuleFromMOV(MOV)
+
+        # Check if module is correct
+        if(imageModule != MOV.module):
+
+            # Debug output
+            print("ERROR with %s (JP4 %d != MOV %d)" % (MOV.path, imageModule, MOV.module))
+
+            # Check if moving is enabled and if module is correct
+            if(__Move_Mode__ == 1 and imageModule != -1):
+
+                # Determine destination MOV file
+                DestMOV = "%s/mov/%d/%s" % (BaseSyncFolder, imageModule, MOV.filename)
+
+                # If destination file exists remove it
+                if os.path.exists(DestMOV):
+                    os.remove(DestMOV)
+
+                # Move MOV file
+                shutil.move(MOV.path, DestMOV)
+
+        # Increment loop index
+        _Index = _Index + 1
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
