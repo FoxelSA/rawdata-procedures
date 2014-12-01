@@ -284,7 +284,7 @@ process() {
     done
 
     # Check intermediates removal #
-    if [ "$AS_KEEP" == "TRUE" ]; then
+    if [ "$AS_KEEP" == "FALSE" ]; then
 
         # Safe-remove #
         rm    --force                    $AS_SYNC/csps/recomposed/*
