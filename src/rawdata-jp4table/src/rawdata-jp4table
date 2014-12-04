@@ -187,10 +187,23 @@ def UsedSlots(Slots):
     # Return result
     return ret
 
-def indexMOV(InputFile, EXIFTrashFolder, tid=0):
+def TrashImage(EXIFTrashFolder, ImageData):
 
-    # Global variables
+    # Global variable
     global CORRUPTED_COUNT
+
+    # Create output trash dir if not exists
+    if not os.path.isdir(EXIFTrashFolder):
+        os.makedirs(EXIFTrashFolder)
+
+    # Save corrupted image
+    with open("%s/exif_fail_%d.jp4" % (EXIFTrashFolder, CORRUPTED_COUNT), 'w') as f:
+        f.write(ImageData)
+
+    # Increment index
+    CORRUPTED_COUNT += 1
+
+def indexMOV(InputFile, EXIFTrashFolder, tid=0):
 
     # Local variables
     JPEGHeader    = b'\xff\xd8\xff\xe1'
@@ -226,18 +239,11 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
         # Check EXIF integrity
         if not EXIF_Tags:
 
+            # Debug output
             ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
 
-            # Create output trash dir if not exists
-            if not os.path.isdir(EXIFTrashFolder):
-                os.makedirs(EXIFTrashFolder)
-
-            # Save corrupted image
-            with open("%s/exif_fail_%d.jp4" % (EXIFTrashFolder, CORRUPTED_COUNT), 'w') as f:
-                f.write(ImageData)
-
-            # Increment index
-            CORRUPTED_COUNT += 1
+            # Trash image
+            TrashImage(EXIFTrashFolder, ImageData)
 
         else:
 
@@ -248,19 +254,30 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
             Timestamp    = calendar.timegm(date_object.utctimetuple())
 
             # Get microseconds timestamp
-            Microseconds = str(EXIF_Tags["EXIF SubSecTimeOriginal"])
+            Microseconds_str = str(EXIF_Tags["EXIF SubSecTimeOriginal"])
 
-            # Convert microseconds timestamp to int
-            Microseconds = int(Microseconds)
+            # Check if timestamp is corrupted
+            if not Microseconds_str.isdigit():
 
-            # Append results to array
-            Result[0].append([
-                Timestamp,
-                Microseconds,
-                InputFile.timestamp,
-                InputFile.microtimestamp,
-                InputFile.module
-            ])
+                # Debug output
+                ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
+
+                # Trash image
+                TrashImage(EXIFTrashFolder, ImageData)
+
+            else:
+
+                # Convert microseconds timestamp to int
+                Microseconds = int(Microseconds_str)
+
+                # Append results to array
+                Result[0].append([
+                    Timestamp,
+                    Microseconds,
+                    InputFile.timestamp,
+                    InputFile.microtimestamp,
+                    InputFile.module
+                ])
 
     # Return results
     return Result
