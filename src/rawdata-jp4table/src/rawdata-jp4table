@@ -45,6 +45,7 @@ import struct
 import sys
 import Queue
 import time
+import re
 import threading
 import calendar
 from cStringIO import StringIO
@@ -203,6 +204,25 @@ def TrashImage(EXIFTrashFolder, ImageData):
     # Increment index
     CORRUPTED_COUNT += 1
 
+# Function to validate EXIF data contents
+def ValidateEXIFData(EXIFData):
+
+    # Check if EXIF data is present
+    if not EXIFData:
+        return False
+
+    # Verify micro timestamp
+    if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
+        return False
+
+    # Verify image date
+    _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
+    if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+        return False
+
+    # Return True if all tests passed
+    return True
+
 def indexMOV(InputFile, EXIFTrashFolder, tid=0):
 
     # Local variables
@@ -236,8 +256,8 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
         EXIF_Tags = exifread.process_file(ImageData_File)
         ImageData_File.close()
 
-        # Check EXIF integrity
-        if not EXIF_Tags:
+        # Verify EXIF data integrity
+        if not ValidateEXIFData(EXIF_Tags):
 
             # Debug output
             ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
@@ -254,30 +274,16 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
             Timestamp    = calendar.timegm(date_object.utctimetuple())
 
             # Get microseconds timestamp
-            Microseconds_str = str(EXIF_Tags["EXIF SubSecTimeOriginal"])
+            Microseconds = int( str(EXIF_Tags["EXIF SubSecTimeOriginal"]) )
 
-            # Check if timestamp is corrupted
-            if not Microseconds_str.isdigit():
-
-                # Debug output
-                ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
-
-                # Trash image
-                TrashImage(EXIFTrashFolder, ImageData)
-
-            else:
-
-                # Convert microseconds timestamp to int
-                Microseconds = int(Microseconds_str)
-
-                # Append results to array
-                Result[0].append([
-                    Timestamp,
-                    Microseconds,
-                    InputFile.timestamp,
-                    InputFile.microtimestamp,
-                    InputFile.module
-                ])
+            # Append results to array
+            Result[0].append([
+                Timestamp,
+                Microseconds,
+                InputFile.timestamp,
+                InputFile.microtimestamp,
+                InputFile.module
+            ])
 
     # Return results
     return Result
