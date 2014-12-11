@@ -81,220 +81,159 @@ arguments() {
 
 }
 
-# Camera device detection #
-device_detect() {
-
-    # Device detection from MAC  #
-    if   [ ${1^^} = "00-0E-64-08-1B-6E" ]; then
-        echo "elphel"
-    elif [ ${1^^} = "00-0E-64-08-1C-D2" ]; then
-        echo "elphel"
-    elif [ ${1^^} = "00-0E-64-08-1B-51" ]; then
-        echo "elphel"
-    elif [ ${1^^} = "00-0E-64-08-1C-EE" ]; then
-        echo "elphel"
-    fi
-
-}
-
-# Camera model detection #
-model_detect() {
-
-    # Model detection from MAC #
-    if   [ ${1^^} = "00-0E-64-08-1B-6E" ]; then
-        echo "eyesis4pi"
-    elif [ ${1^^} = "00-0E-64-08-1C-D2" ]; then
-        echo "eyesis4pi"
-    elif [ ${1^^} = "00-0E-64-08-1B-51" ]; then
-        echo "triclope"
-    elif [ ${1^^} = "00-0E-64-08-1C-EE" ]; then
-        echo "nc535l-369"
-    fi
-
-}
-
-# CSPS topology generation #
-topology() {
-
-    # Export CSPS topology #
-    echo "device cam" > $1
-    echo "    model EYESIS4PI" >> $1
-    echo "    tag eyesis4pi" >> $1
-    echo "    block 1024" >> $1
-    echo "end" >> $1
-    echo "device imu" >> $1
-    echo "    model ADIS16375" >> $1
-    echo "    tag adis16375" >> $1
-    echo "    block 1024" >> $1
-    echo "    downsampling-frequency 60" >> $1
-    echo "    initial-conditions-x-rotation +0.0" >> $1
-    echo "    initial-conditions-y-rotation +0.0" >> $1
-    echo "    initial-conditions-z-rotation -1.57079632679489655800" >> $1
-    echo "end" >> $1
-    echo "device gps" >> $1
-    echo "    model LS20031" >> $1
-    echo "    tag ls20031" >> $1
-    echo "    block 1024" >> $1
-    echo "end" >> $1
-    echo "module cam-mod-DSIDE" >> $1
-    echo "    eyesis4pi" >> $1
-    echo "end" >> $1
-    echo "module gps-mod-DSIDE" >> $1
-    echo "    ls20031" >> $1
-    echo "end" >> $1
-    echo "module gps-mod-SGNQF" >> $1
-    echo "    ls20031" >> $1
-    echo "    mod-DSIDE" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-DSIDE" >> $1
-    echo "    adis16375" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-SGSFR" >> $1
-    echo "    adis16375" >> $1
-    echo "    mod-DSIDE" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-SGNDN" >> $1
-    echo "    adis16375" >> $1
-    echo "    mod-SGSFR" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-IOBMA" >> $1
-    echo "    adis16375" >> $1
-    echo "    ls20031" >> $1
-    echo "    mod-SGNQF" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-IFICR" >> $1
-    echo "    adis16375" >> $1
-    echo "    mod-IOBMA" >> $1
-    echo "end" >> $1
-    echo "module imu-mod-IFETI" >> $1
-    echo "    adis16375" >> $1
-    echo "    mod-SGNDN" >> $1
-    echo "    mod-IFICR" >> $1
-    echo "end" >> $1
-
-}
-
 # Processing function #
 process() {
 
     # Creates CSPS/csps-suite sync-specific directories #
     >&2 echo "rawdata-autoseg : creating directories ..."
     mkdir -p $AS_SYNC/csps
+    mkdir -p $AS_SYNC/csps/dissolved
+    mkdir -p $AS_SYNC/csps/approved
+    mkdir -p $AS_SYNC/csps/merged
     mkdir -p $AS_SYNC/csps/decomposed
-    mkdir -p $AS_SYNC/csps/recomposed
     mkdir -p $AS_SYNC/csps/validated
 
-    # Perform audit on raw logs-files #
-    >&2 echo "rawdata-autoseg : audit raw logs-files ..."
-    csps-$(device_detect $AS_MACAD)-audit \
-        -p $AS_SYNC/mov/1/ \
-         > $AS_SYNC/csps/audit-raw.log
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/mov/1/ \
+    > $AS_SYNC/csps/audit-raw.log
+
+    # Perform logs-files dissolution #
+    >&2 echo "rawdata-autoseg : dissolving logs-files ..."
+    csps-elphel-decompose \
+    -s $AS_SYNC/mov/1/ \
+    -d $AS_SYNC/csps/dissolved \
+    -i 0.5 \
+    > $AS_SYNC/csps/logs-dissolved.log
+
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/csps/dissolved \
+    > $AS_SYNC/csps/audit-raw.log
+
+    # Perform logs-files approbation #
+    >&2 echo "rawdata-autoseg : approving logs-files ..."
+    csps-elphel-validate \
+    -s $AS_SYNC/csps/dissolved \
+    -d $AS_SYNC/csps/approved \
+    > $AS_SYNC/csps/logs-approved.log
+
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/csps/approved \
+    > $AS_SYNC/csps/audit-approved.log
+
+    # Perform logs-files merging #
+    >&2 echo "rawdata-autoseg : merging logs-files ..."
+    csps-elphel-merge \
+    -s $AS_SYNC/csps/approved \
+    -d $AS_SYNC/csps/merged \
+    > $AS_SYNC/csps/logs-megred.log
+
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/csps/merged \
+    > $AS_SYNC/csps/audit-merged.log
 
     # Perform logs-files decomposition #
     >&2 echo "rawdata-autoseg : decomposing logs-files ..."
-    csps-$(device_detect $AS_MACAD)-decompose \
-        -r $AS_SYNC/mov/1/ -d $AS_SYNC/csps/decomposed -i 1.0 \
-         > $AS_SYNC/csps/logs-decompose.log
+    csps-elphel-decompose \
+    -s $AS_SYNC/csps/merged \
+    -d $AS_SYNC/csps/decomposed \
+    -i 0.5 \
+    > $AS_SYNC/csps/logs-decomposed.log
 
-    # Perform audit on decomposed logs-files #
-    >&2 echo "rawdata-autoseg : audit decomposed logs-files ..."
-    csps-$(device_detect $AS_MACAD)-audit \
-        -p $AS_SYNC/csps/decomposed \
-         > $AS_SYNC/csps/audit-decompose.log
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/csps/decomposed \
+    > $AS_SYNC/csps/audit-decomposed.log
 
-    # Perform logs-files recomposition #
-    >&2 echo "rawdata-autoseg : recomposing logs-files ..."
-    csps-$(device_detect $AS_MACAD)-recompose \
-        -d $AS_SYNC/csps/decomposed -r $AS_SYNC/csps/recomposed -i 1.0 \
-         > $AS_SYNC/csps/logs-recompose.log
+    # Perform logs-files decimation #
+    >&2 echo "rawdata-autoseg : decimating logs-files ..."
+    csps-elphel-gps \
+    -s $AS_SYNC/csps/decomposed \
+    -d $AS_SYNC/csps/validated \
+    > $AS_SYNC/csps/logs-validated.log
 
-    # Perform audit on recomposed logs-files #
-    >&2 echo "rawdata-autoseg : audit recomposed logs-files ..."
-    csps-$(device_detect $AS_MACAD)-audit \
-        -p $AS_SYNC/csps/recomposed \
-         > $AS_SYNC/csps/audit-recompose.log
+    # Perform audit logs-files #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit \
+    -p $AS_SYNC/csps/validated \
+    > $AS_SYNC/csps/audit-validated.log
 
-    # Perform logs-files validation #
-    >&2 echo "rawdata-autoseg : validating logs-files ..."
-    csps-$(device_detect $AS_MACAD)-validate \
-        -r $AS_SYNC/csps/recomposed -v $AS_SYNC/csps/validated -i 5.0 \
-         > $AS_SYNC/csps/logs-validate.log
-
-    # Perform audit on validated logs-files #
-    >&2 echo "rawdata-autoseg : audit validated logs-files ..."
-    csps-$(device_detect $AS_MACAD)-audit \
-        -p $AS_SYNC/csps/validated \
-         > $AS_SYNC/csps/audit-validate.log
-
-    # Create CSPS/csps-suite segments-specific directories #
+    # Perform segment broadcasting #
     >&2 echo "rawdata-autoseg : broadcasting segments ..."
-    echo "Segments broadcasting : $AS_MACAD:$AS_TIMES :" \
-         > $AS_SYNC/csps/logs-broadcast.log
-    mkdir -p $AS_SEGM
+    echo "Broadcasting : $AS_MACAD:$AS_TIMES" > $AS_SYNC/csps/logs-broadcast.log
 
-    # Create segments directories #
+    # Create segment master allocation #
+    mkdir -p $AS_SEGM  
+
+    # Broadcasting loop #
     for AS_ENUM in $(ls $AS_SYNC/csps/validated); do
 
-        # Retrieve initial master timestamp #
-        MTS=$(csps-$(device_detect $AS_MACAD)-cat -l $AS_SYNC/csps/validated/$AS_ENUM -m)
-
-        # Create segment main directory #
-        mkdir -p $AS_SEGM/$MTS
+        # Retrieve segment timestamp marker #
+        MTS=$(csps-elphel-cat -l $AS_SYNC/csps/validated/$AS_ENUM -m)
 
         # Create segment CSPS/csps-suite sub-directories #
+        mkdir -p $AS_SEGM/$MTS
         mkdir -p $AS_SEGM/$MTS/csps
         mkdir -p $AS_SEGM/$MTS/csps/devices
-        mkdir -p $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)
+        mkdir -p $AS_SEGM/$MTS/csps/devices/eyesis4pi
         mkdir -p $AS_SEGM/$MTS/csps/streams
         mkdir -p $AS_SEGM/$MTS/info/rawdata-autoseg
 
-        # Create hard-link to logs-file in sync #
+        # Logs-file hard-linking #
         ln -f \
         $AS_SYNC/csps/validated/$AS_ENUM \
-        $AS_SEGM/$MTS/csps/devices/$(model_detect $AS_MACAD)/fpga-log.bin
+        $AS_SEGM/$MTS/csps/devices/eyesis4pi/fpga-log.bin
 
-        # Create CSPS processing topology file #
-        topology $AS_SEGM/$MTS/csps/topology
+        # Copy topology file #
+        cp -f \
+        $AS_MOUNT/camera/$AS_MACAD/info/rawdata-autoseg/csps-topology-gps \
+        $AS_SEGM/$MTS/csps/topology
 
-        # Processing CSPS #
+        # CSPS segment processing #
         csps-process \
-            -p $AS_SEGM/$MTS/csps \
-            -t $AS_SEGM/$MTS/csps/topology \
-             > /dev/null
+        -p $AS_SEGM/$MTS/csps \
+        -t $AS_SEGM/$MTS/csps/topology \
+        > /dev/null
 
-        # Check file #
+        # JSON file verification #
         if [ ! -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json ]; then
 
-            # Json-file generation #
             csps-export \
-                -p $AS_SEGM/$MTS/csps \
-                -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json \
-                -c eyesis4pi \
-                -m mod-DSIDE \
-                -g ls20031 \
-                -n mod-SGNQF \
-                 > /dev/null
+            -p $AS_SEGM/$MTS/csps \
+            -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json \
+            -c eyesis4pi \
+            -m mod-DSIDE \
+            -g ls20031 \
+            -n mod-SGNQF \
+             > /dev/null
 
         fi
 
-        # Logging segments broadcasting #
-        echo "Broadcast $AS_ENUM segment in $(basename $AS_SEGM/$MTS)" \
-             >> $AS_SYNC/csps/logs-broadcast.log
+        # Broadcasting logs #
+        echo "    $AS_ENUM -> $(basename $AS_SEGM/$MTS)" \
+        >> $AS_SYNC/csps/logs-broadcast.log
 
-    done
+    done  
 
-    # Check intermediates removal #
+    # Delete intermediates #
     if [ "$AS_KEEP" == "FALSE" ]; then
 
-        # Safe-remove #
-        rm    --force                    $AS_SYNC/csps/recomposed/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
-        rm    --force                    $AS_SYNC/csps/decomposed/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
+        rm -rf $AS_SYNC/csps/dissolved
+        rm -rf $AS_SYNC/csps/approved
+        rm -rf $AS_SYNC/csps/merged
+        rm -rf $AS_SYNC/csps/decomposed
 
     fi
 
-    # Create processed data marker #
+    # Processing end-flag #
     touch $AS_SYNC/csps/logs-processed.log
 
 }
@@ -302,46 +241,21 @@ process() {
 # Unprocessing function #
 unprocess() {
 
-    # Check directory #
-    if [ -d $AS_SYNC/csps ]; then
+    # Perform removal procedure #
+    >&2 echo "rawdata-autoseg : remove previous structure ..."
 
-        # Safe-remove #
-        >&2 echo "rawdata-autoseg : safe removing sync auto-segmentation directories ..."
-        rm    --force                    $AS_SYNC/csps/validated/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/validated
-        rm    --force                    $AS_SYNC/csps/recomposed/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/recomposed
-        rm    --force                    $AS_SYNC/csps/decomposed/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps/decomposed
-        rm    --force                    $AS_SYNC/csps/*
-        rmdir --ignore-fail-on-non-empty $AS_SYNC/csps
+    # Delete CSPS/csps-suite sync-specific directory #
+    rm -rf $AS_SYNC/csps
 
-    fi
-
-    # Check directory #
+    # Directory verification #
     if [ -d $AS_SEGM ]; then
 
-        # Safe-remove #
         for AS_ENUM in $(ls $AS_SEGM); do
 
-            # Check directory #
-            if [ -d $AS_SEGM/$AS_ENUM/csps ]; then
-
-                rm    --force                    $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)/*
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices/$(model_detect $AS_MACAD)
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/devices
-                rm    --force                    $AS_SEGM/$AS_ENUM/csps/streams/*
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps/streams
-                rm    --force                    $AS_SEGM/$AS_ENUM/csps/*
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM/csps
-                rmdir --ignore-fail-on-non-empty $AS_SEGM/$AS_ENUM
-
-            fi
+            # Delete CSPS/csps-suite segment-specific directory */
+            rm -rf $AS_SEGM/$AS_ENUM/csps
 
         done
-
-        # Safe-remove #
-        rmdir --ignore-fail-on-non-empty $AS_SEGM
 
     fi
 
@@ -354,55 +268,59 @@ arguments $@
 AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/sync/$AS_TIMES
 AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/segment/$AS_TIMES
 
-# Check directory #
+# Directory verification #
 if [ ! -d $AS_MOUNT/camera/$AS_MACAD/raw ]; then
 
     # Exit script #
     >&2 echo "rawdata-autoseg : unable to locate [raw] directory ..."
     exit 1
 
-else
-
-    # Check state #
-    if [ "$AS_DOWN" == "TRUE" ]; then
-
-        # Remove previous processing #
-        unprocess
-
-        # Process raw data #
-        process
-
-        # Processed flag #
-        echo "--auto-segmented"
-
-    elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
-
-        # Remove previous processing #
-        unprocess
-
-        # Process raw data #
-        process
-
-        # Processed flag #
-        echo "--auto-segmented"
-
-    elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
-
-        # Process raw data #
-        process
-
-        # Processed flag #
-        echo "--auto-segmented"
-
-    else
-
-        # Skip auto-segmentation #
-        >&2 echo "rawdata-autoseg : nothing to do ..."
-
-    fi
-
 fi
 
-# Exit point #
-exit 0
+# State verification #
+if [ "$AS_DOWN" == "TRUE" ]; then
+
+    # Processing functions #
+    unprocess
+    process
+
+    # Return processed flag #
+    echo "--auto-segmented"
+
+    # Exit script #
+    >&2 echo "rawdata-autoseg : done"
+    exit 0
+
+elif [ -d $AS_SYNC/csps ] && [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+
+    # Processing functions #
+    unprocess
+    process
+
+    # Return processed flag #
+    echo "--auto-segmented"
+
+    # Exit script #
+    >&2 echo "rawdata-autoseg : done"
+    exit 0
+
+elif [ ! -f $AS_SYNC/csps/logs-processed.log ]; then
+
+    # Processing functions #
+    process
+
+    # Return processed flag #
+    echo "--auto-segmented"
+
+    # Exit script #
+    >&2 echo "rawdata-autoseg : done"
+    exit 0
+
+else
+
+    # Exit script #
+    >&2 echo "rawdata-autoseg : nothing to do ..."
+    exit 0
+
+fi
 
