@@ -51,7 +51,8 @@ from xml.dom.minidom import parse
 # Static parameters
 CAMERA_ARRAY = {
     '00-0E-64-08-1B-6E': 1,
-    '00-0E-64-08-1C-D2': 2
+    '00-0E-64-08-1C-D2': 2,
+    '00-0E-64-08-1D-6B': 3
 }
 
 # Global variables
@@ -345,6 +346,33 @@ def StitchPano(_tilesdir, _output, _temp, _grayscale=0, _camera=2):
             os.system("convert -flip -flop %s %s" % (TopList[2], TopList[2]))
             os.system("convert -flip -flop %s %s" % (MidList[2], MidList[2]))
             os.system("convert -flip -flop %s %s" % (BotList[2], BotList[2]))
+
+    elif _camera == 3:
+
+        # Check presence of grayscale option
+        if _grayscale:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
+
+            # Flop images
+            for i in TopList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in MidList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+            for i in BotList[1::2]:
+                os.system("convert -flop %s %s" % (i, i))
+
+        else:
+
+            # Compute crowns
+            TopList = getSeq(List, [2, 0, 2, 0, 2, 0, 2, 0])
+            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
+            BotList = getSeq(List, [0, 2, 0, 2, 0, 2, 0, 2])
 
     # Generate 3 crowns (top, middle, bottom)
     os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
