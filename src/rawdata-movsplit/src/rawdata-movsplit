@@ -13,6 +13,11 @@
        Kevin Velickovic <k.velickovic@foxel.ch>
 
 
+  Contributor(s):
+
+       Alexandre Kraft <a.kraft@foxel.ch>
+
+
   This file is part of the FOXEL project <http://foxel.ch>.
 
   This program is free software: you can redistribute it and/or modify
@@ -52,10 +57,10 @@ import signal
 import sys
 import threading
 import time
+import ConfigParser
 from cStringIO import StringIO
 from datetime import datetime
 from functools import wraps
-from xml.dom.minidom import parse
 
 import exifread
 from pycheckjpeg import validate_jpeg_from_buffer
@@ -507,21 +512,18 @@ def UpdateJSON(JSONFile, Arranged_Images, CorruptedTimestamps):
         json.dump(json_data, outfile, sort_keys = True, indent = 4)
 
 
-# Function to get camera modules count by reading correction XML
+# Function to get camera modules count by reading FastCal calibration file
 @timed
-def GetCameraModules(CorrectionXMLPath):
+def GetCameraModules(FastCalKeyFilePath):
 
-    # Load XML file
-    dom = parse(CorrectionXMLPath)
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
 
-    # Iterate over XML entries
-    for i in dom.getElementsByTagName('entry'):
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
 
-        # Check if key is 'CAMERAS.cameraIPs.length'
-        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
-
-            # Return value
-            return int(i.childNodes[0].data)
+    # Return value
+    return config.getint('calibration', 'modules')
 
 # Function to merge threads results
 @timed
@@ -755,7 +757,7 @@ def main(argv):
     # Compute paths
     BaseSyncFolder     = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    CorrectionXML      = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+    FastCalKeyFile     = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
     StateDir           = "%s/info/rawdata-procedures" % BaseSyncFolder
 
     # Check if state dir exists, if not create it
@@ -763,7 +765,7 @@ def main(argv):
         os.makedirs(StateDir)
 
     # Get camera modules count
-    ModuleCount = GetCameraModules(CorrectionXML)
+    ModuleCount = GetCameraModules(FastCalKeyFile)
 
     # Get available segments
     if __SegmentTimestamp__:
