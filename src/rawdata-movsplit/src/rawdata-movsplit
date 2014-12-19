@@ -523,7 +523,7 @@ def GetCameraModules(FastCalKeyFilePath):
     config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
 
     # Return value
-    return config.getint('calibration', 'channels')
+    return config.getint('calibration', 'modules')
 
 # Function to merge threads results
 @timed
