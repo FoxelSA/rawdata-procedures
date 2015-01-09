@@ -1,5 +1,5 @@
 
-## rawdata-procedures<br />Camera raw data procedures (beta)
+## rawdata-procedures<br />Camera raw data procedures
 
 The rawdata-procedures scripts suite is dedicated to camera raw data processing. It allows to perform the necessary steps to download and prepare camera incoming data for more advanced processing. It includes raw data downloads from the device, the initial segmentation based on device logs and data pre-processing such as image extraction.
 
