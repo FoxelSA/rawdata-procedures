@@ -39,12 +39,12 @@
        Attribution" section of <http://foxel.ch/license>.
 """
 
+import ConfigParser
 import glob
 import json
 import struct
 import sys
 from datetime import datetime
-from xml.dom.minidom import parse
 
 # Global variables
 STD_OUTPUT = 0
@@ -106,20 +106,18 @@ def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
     if Halt:
         sys.exit()
 
-# Function to get camera modules count by reading correction XML
-def GetCameraModules(CorrectionXMLPath):
+# Function to get camera modules count by reading FastCal calibration file
+@timed
+def GetCameraModules(FastCalKeyFilePath):
 
-    # Load XML file
-    dom = parse(CorrectionXMLPath)
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
 
-    # Iterate over XML entries
-    for i in dom.getElementsByTagName('entry'):
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
 
-        # Check if key is 'CAMERAS.cameraIPs.length'
-        if i.getAttribute("key") == "CAMERAS.cameraIPs.length":
-
-            # Return value
-            return int(i.childNodes[0].data)
+    # Return value
+    return config.getint('calibration', 'modules')
 
 # Usage display function
 def _usage():
@@ -183,10 +181,10 @@ def main(argv):
     # Compute paths
     BaseSyncFolder    = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     InputFile         = "%s/info/rawdata-procedures/jp4table.bin" % (BaseSyncFolder)
-    CorrectionXML = "%s/camera/%s/info/imagej-elphel/prefs.xml" % (__MountPoint__, __CameraMAC__)
+    FastCalKeyFile    = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
 
     # Get camera modules count
-    ModuleCount = GetCameraModules(CorrectionXML)
+    ModuleCount = GetCameraModules(FastCalKeyFile)
 
     # Debug output
     ShowMessage("Loading jp4table.bin file...")
