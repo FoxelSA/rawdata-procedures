@@ -44,6 +44,7 @@ import glob
 import json
 import struct
 import sys
+from cStringIO import StringIO
 from datetime import datetime
 
 # Global variables
@@ -107,7 +108,6 @@ def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
         sys.exit()
 
 # Function to get camera modules count by reading FastCal calibration file
-@timed
 def GetCameraModules(FastCalKeyFilePath):
 
     # Instanciate ConfigParser

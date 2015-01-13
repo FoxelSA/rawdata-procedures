@@ -45,6 +45,7 @@ import glob
 import os
 import struct
 import sys
+from cStringIO import StringIO
 from datetime import datetime
 
 # Main binary file structure parameters
@@ -107,7 +108,6 @@ class MovFile:
         self.module = int(modulename)
 
 # Function to get camera modules count by reading FastCal calibration file
-@timed
 def GetCameraModules(FastCalKeyFilePath):
 
     # Instanciate ConfigParser

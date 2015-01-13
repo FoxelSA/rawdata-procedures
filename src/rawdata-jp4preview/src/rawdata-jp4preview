@@ -46,6 +46,7 @@ import json
 import os
 import signal
 import sys
+from cStringIO import StringIO
 from datetime import datetime
 
 # Static parameters
@@ -421,7 +422,6 @@ def GetCameraID(_MAC):
         ShowMessage("Invalid MAC address '%s'" % (_MAC), 2, 1)
 
 # Function to get camera modules count by reading FastCal calibration file
-@timed
 def GetCameraModules(FastCalKeyFilePath):
 
     # Instanciate ConfigParser

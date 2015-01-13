@@ -148,7 +148,6 @@ def find_all(a_str, sub):
         start += len(sub)
 
 # Function to get camera modules count by reading FastCal calibration file
-@timed
 def GetCameraModules(FastCalKeyFilePath):
 
     # Instanciate ConfigParser
