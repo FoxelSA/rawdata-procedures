@@ -49,13 +49,6 @@ import sys
 from cStringIO import StringIO
 from datetime import datetime
 
-# Static parameters
-CAMERA_ARRAY = {
-    '00-0E-64-08-1B-6E': 1,
-    '00-0E-64-08-1C-D2': 2,
-    '00-0E-64-08-1D-6B': 3
-}
-
 # Global variables
 STD_OUTPUT = 0
 NO_COLORS  = 0
@@ -79,6 +72,12 @@ class JP4Image:
         else:
             self.path = "%s_%s" % (timestamp, module)
             self.path_nomod = "%s_%s" % (timestamp)
+
+class imageCorrections:
+    def __init__(self):
+        self.vflips = []
+        self.hflips = []
+        self.rolls = []
 
 # Function to check presence of an executable in PATH
 def which(program):
@@ -178,23 +177,18 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         if _grayscale:
 
             # Convert image
-            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/%s.jpeg\n" % (path, _temp, FileName))
+            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
-            # Rotate image
-            os.system("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_output, FileName, _output, FileName))
         else:
 
             # Convert image to dng
-            os.system("movie2dng --dng --stdout %s 2> /dev/null > %s/%s.dng" % (path, _temp, FileName))
+            os.system("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
-            os.system("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg" % (_temp, FileName, _output, FileName))
-
-            # Rotate image
-            os.system("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_output, FileName, _output, FileName))
+            os.system("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
-            os.remove("%s/%s.dng" % (_temp, FileName))
+            os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
 
         # Increment counter index
         idx += 1
@@ -215,23 +209,18 @@ def JP4ToJPEG_Parallel(List, _output, _temp, _grayscale=0, _jobs=1):
         if _grayscale:
 
             # Convert image
-            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/%s.jpeg && " % (path, _temp, FileName))
+            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg\n" % (path, _temp, FileName))
 
-            # Rotate image
-            Commands += ("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg\n" % (_temp, FileName, _temp, FileName))
         else:
 
             # Convert image to dng
-            Commands += ("movie2dng --dng --stdout %s 2> /dev/null > %s/%s.dng && " % (path, _temp, FileName))
+            Commands += ("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng && " % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
-            Commands += ("dcraw -c %s/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/%s.jpeg && " % (_temp, FileName, _output, FileName))
-
-            # Rotate image
-            Commands += ("convert -rotate 90  %s/%s.jpeg %s/%s.jpeg && " % (_output, FileName, _output, FileName))
+            Commands += ("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg && " % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
-            Commands += ("rm %s/%s.dng\n" % (_temp, FileName))
+            Commands += ("rm %s/jpeg/%s.dng\n" % (_temp, FileName))
 
     # Write command to file
     with open("%s/.JP4ToJPEG.txt" % _temp, "w") as f:
@@ -250,135 +239,64 @@ def MakeTiles(_input, _output):
     FileName = os.path.splitext(os.path.basename(_input))[0]
 
     # Split image into 3 parts
-    os.system("convert -crop 33.3%%x100%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
+    os.system("convert -crop 100%%x33.3%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
+
+    # Arrange splitted images
+    os.system("mv %s/%s_0.jpeg %s/top/" % (_output, FileName, _output))
+    os.system("mv %s/%s_1.jpeg %s/mid/" % (_output, FileName, _output))
+    os.system("mv %s/%s_2.jpeg %s/bot/" % (_output, FileName, _output))
 
     # Remove the unnecessary third image
     if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
         os.remove("%s/%s_3.jpeg" % (_output, FileName))
 
-# Function to get a sequence of images
-def getSeq(List, _sequences):
-
-    # Local variables
-    Index = 0
-    Result = []
-
-    # Iterate over file list
-    for i in List:
-
-        # Split segments of file
-        parts = i.rstrip('.jpeg').split('_')
-
-        # Compute path
-        path = "%s_%s_%s_%s.jpeg " % (parts[0], parts[1], parts[2], _sequences[Index])
-
-        # Insert into list if not present
-        if not path in Result:
-            Result.append(path)
-
-        # Increment index
-        Index += 1
-
-    # Return result
-    return Result
-
 # Function to stitch a set of tiles
-def StitchPano(_tilesdir, _output, _temp, _grayscale=0, _camera=2):
+def StitchPano(_tilesdir, _output, ImagesCorr, _temp, _grayscale=0, _camera=2):
 
-    # Retrieve file list
-    List = sorted(glob.glob("%s/*_0.jpeg" % _tilesdir))
+    # Separate each tiles into lists
+    TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
+    MidList = sorted(glob.glob("%s/mid/*.jpeg" % _tilesdir))
+    BotList = sorted(glob.glob("%s/bot/*.jpeg" % _tilesdir))
 
-    # Camera 1 parameters
-    if _camera == 1:
+    # Build a global tile list in right order (Top, Middle, Bottom)
+    All_images = TopList + MidList + BotList
 
-        # Check presence of grayscale option
-        if _grayscale:
+    # Module index counter
+    _index = 0
 
-            # Compute crowns
-            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
+    # Iterate over images
+    for image in All_images:
 
-            # Flop images
-            for i in TopList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
+        # Check if image need to be flipped verticaly
+        if ImagesCorr.vflips[ _index ] == 1:
 
-            for i in MidList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
+            # Flip verticaly
+            os.system("convert -flip %s %s" % (image, image))
 
-            for i in BotList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
+        # Check if image need to be flipped horizontaly
+        if ImagesCorr.hflips[ _index ] == 1:
 
-        else:
+            # Flip horizontaly
+            os.system("convert -flop %s %s" % (image, image))
 
-            # Compute crowns
-            TopList = getSeq(List, [2, 0, 2, 0, 2, 0, 2, 0])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 2, 0, 2, 0, 2, 0, 2])
+        # Check which rotation direction need to be applyed
+        if ImagesCorr.rolls[ _index ] > 0:
 
-    elif _camera == 2:
+            # Rotate clockwise
+            os.system("convert -rotate 90 %s %s" % (image, image))
 
-        # Check presence of grayscale option
-        if _grayscale:
+        elif ImagesCorr.rolls[ _index ] < 0:
 
-            # Compute crowns
-            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
+            # Rotate counter clockwise
+            os.system("convert -rotate 270 %s %s" % (image, image))
 
-            # Flop images
-            for i in TopList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-            for i in MidList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-            for i in BotList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-        else:
-
-            # Compute crowns
-            TopList = getSeq(List, [2, 0, 0, 0, 2, 0, 2, 0])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 2, 2, 2, 0, 2, 0, 2])
-
-            # Flip images
-            os.system("convert -flip -flop %s %s" % (TopList[2], TopList[2]))
-            os.system("convert -flip -flop %s %s" % (MidList[2], MidList[2]))
-            os.system("convert -flip -flop %s %s" % (BotList[2], BotList[2]))
-
-    elif _camera == 3:
-
-        # Check presence of grayscale option
-        if _grayscale:
-
-            # Compute crowns
-            TopList = getSeq(List, [2, 2, 2, 2, 2, 2, 2, 2])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 0, 0, 0, 0, 0, 0, 0])
-
-            # Flop images
-            for i in TopList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-            for i in MidList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-            for i in BotList[1::2]:
-                os.system("convert -flop %s %s" % (i, i))
-
-        else:
-
-            # Compute crowns
-            TopList = getSeq(List, [2, 0, 2, 0, 2, 0, 2, 0])
-            MidList = getSeq(List, [1, 1, 1, 1, 1, 1, 1, 1])
-            BotList = getSeq(List, [0, 2, 0, 2, 0, 2, 0, 2])
+        # Increment module index counter
+        _index += 1
 
     # Generate 3 crowns (top, middle, bottom)
     os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
     os.system("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
-    os.system("montage -flip -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
+    os.system("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
 
     # Stitch crowns
     os.system("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
@@ -414,13 +332,6 @@ def UpdateJSON(JSONFile, __NoDebayer__):
     with open(JSONFile, 'w') as outfile:
         json.dump(json_data, outfile, sort_keys = True, indent = 4)
 
-# Function to get camera ID from is MAC address
-def GetCameraID(_MAC):
-    if _MAC in CAMERA_ARRAY:
-        return CAMERA_ARRAY[_MAC]
-    else:
-        ShowMessage("Invalid MAC address '%s'" % (_MAC), 2, 1)
-
 # Function to get camera modules count by reading FastCal calibration file
 def GetCameraModules(FastCalKeyFilePath):
 
@@ -432,6 +343,36 @@ def GetCameraModules(FastCalKeyFilePath):
 
     # Return value
     return config.getint('calibration', 'modules')
+
+# Function to get camera modules count by reading FastCal calibration file
+def GetImagesCorrections(FastCalKeyFilePath):
+
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
+
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
+
+    # Prepare a new imageCorrections container for output
+    Output = imageCorrections()
+
+    # Get channels count
+    Channels = config.getint('calibration', 'channels')
+
+    # Iterate over possible modules
+    for i in range(0, Channels):
+
+        # Append roll
+        Output.rolls.append( config.getfloat('calibration', 'roll_%02d' % i) )
+
+        # Append vertical flip
+        Output.vflips.append( config.getint('calibration', 'flip_ver_%02d' % i) )
+
+        # Append horizontal flip
+        Output.hflips.append( config.getint('calibration', 'flip_hor_%02d' % i) )
+
+    # Return value
+    return Output
 
 # Usage display function
 def _usage():
@@ -463,6 +404,17 @@ def main(argv):
     __Camera__     = 2
     __Temp_Base__  = "/tmp/rawdata-jp4preview"
     __Temp__       = "%s/%d" %  (__Temp_Base__, os.getpid())
+
+
+    # Check if temp folder exists
+    if not os.path.isdir(__Temp__):
+
+        # Create temp folder
+        os.system("mkdir -p %s/tiles/top" % __Temp__)
+        os.system("mkdir -p %s/tiles/mid" % __Temp__)
+        os.system("mkdir -p %s/tiles/bot" % __Temp__)
+
+        os.system("mkdir -p %s/jpeg" % __Temp__)
 
 
     # Parse arguments
@@ -541,8 +493,8 @@ def main(argv):
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)
 
-    # Get camera ID
-    __Camera__ = GetCameraID(__CameraMAC__)
+    # Get camera correction parameters
+    ImagesCorr = GetImagesCorrections( FastCalKeyFile )
 
     # Get available segments
     if __SegmentTimestamp__:
@@ -596,18 +548,13 @@ def main(argv):
 
         # Iterate over timestamps
         for image in __JP4_Images__:
-
+            
+            # Compute output folders
             __Output__   = "%s/%d" % (__Output_Base__, image.base_folder)
             __Output_Image__ = "%s/%s.jpeg" % (__Output__, image.timestamp)
 
             # Check if destination file already exists
             if not os.path.isfile(__Output_Image__):
-
-                # Check if temp folder exists
-                if not os.path.isdir(__Temp__):
-
-                    # Create temp folder
-                    os.system("mkdir -p %s/tiles" % __Temp__)
 
                 # Create output folder if not present
                 if not os.path.isdir(__Output__):
@@ -630,18 +577,21 @@ def main(argv):
                 else:
                     JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
 
+                if not __NoDebayer__:
+                    ShowMessage("Flipping images...")
+
                 # Debug output
                 ShowMessage("Extracting tiles")
 
                 # Create tiles for previously converted images
                 for i in range(1, ModuleCount):
-                    MakeTiles("%s/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
+                    MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
 
                 # Debug output
                 ShowMessage("Stitching panorama")
 
                 # Stitch panorama
-                StitchPano("%s/tiles" % __Temp__, __Output_Image__, __Temp__, __NoDebayer__, __Camera__)
+                StitchPano("%s/tiles" % __Temp__, __Output_Image__, ImagesCorr, __Temp__, __NoDebayer__, __Camera__)
 
                 # Remove temp files
                 os.system("rm -rf %s" % __Temp__)
