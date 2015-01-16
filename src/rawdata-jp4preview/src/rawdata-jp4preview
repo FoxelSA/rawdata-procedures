@@ -402,7 +402,7 @@ def main(argv):
     __JP4_Files__  = []
     __TimeStamps__ = []
     __Camera__     = 2
-    __Temp_Base__  = "/tmp/rawdata-jp4preview"
+    __Temp_Base__  = "/run/shm/rawdata-jp4preview"
     __Temp__       = "%s/%d" %  (__Temp_Base__, os.getpid())
 
 
