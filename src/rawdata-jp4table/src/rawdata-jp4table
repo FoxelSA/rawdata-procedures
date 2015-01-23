@@ -295,7 +295,7 @@ def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, tid):
 
 # MOV counting data collector
 # pylint: disable=W0602
-def WorkerThread_indexCollector(Source, Dest):
+def WorkerThread_indexCollector(Source, OutputFile):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -309,12 +309,19 @@ def WorkerThread_indexCollector(Source, Dest):
             # Retrieve the result
             Ret = Source.get()
 
+            # Sort indexes
+            Results = sorted(Ret[0], key=itemgetter(0))
+
             # Unlock thread slot
             QUEUE_Slots[Ret[1]] = 0
 
+            # Debug output
+            ShowMessage("Writing state file...")
+
             # Merge results
-            for i in Ret[0]:
-                Dest.append(i)
+            with open(OutputFile, "ab") as f:
+                for i in Results:
+                    f.write(MAIN_DATA.pack(*i))
 
             # Increment processed MOVs index
             QUEUE_Done  += 1
@@ -324,7 +331,7 @@ def WorkerThread_indexCollector(Source, Dest):
 
 # Main thread
 # pylint: disable=W0602
-def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Results__):
+def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Output_File):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -342,7 +349,7 @@ def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Res
     # Create collector thread
     CollectorThread = threading.Thread(
         target = WorkerThread_indexCollector,
-        args = (Threads, __Results__)
+        args = (Threads, __Output_File)
     )
 
     # Start collector thread
@@ -494,13 +501,10 @@ def main(argv):
         for MOV in sorted(glob.glob("%s/%s/*.mov" % (InputFolder, mn))):
             __MOV_List__.append( MovFile(MOV, mn) )
 
-    # Results container variable
-    Results = []
-
     #Create main thread
     MainThread = threading.Thread(
         target = WorkerThread,
-        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, len(__MOV_List__), Results)
+        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, len(__MOV_List__), OutputFile)
     )
 
     # Start main thread
@@ -510,17 +514,6 @@ def main(argv):
     # Wait until main thread finishes
     while MainThread.is_alive():
         time.sleep(0.5)
-
-    # Sort indexes
-    Results = sorted(Results, key=itemgetter(0))
-
-    # Debug output
-    ShowMessage("Writing state file...")
-
-    # Write indexes to file
-    with open(OutputFile, "wb") as f:
-        for i in Results:
-            f.write(MAIN_DATA.pack(*i))
 
     ShowMessage("Done")
 
