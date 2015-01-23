@@ -477,8 +477,8 @@ def main(argv):
         os.makedirs(OutputFolder)
 
     # Verifiy presence of prefs.xml
-    if not os.path.isfile(CorrectionXML):
-        ShowMessage("Preferences file '%s' does not exist" % CorrectionXML, 2, 1)
+    if not os.path.isfile(FastCalKeyFile):
+        ShowMessage("FastCal key file '%s' does not exist" % FastCalKeyFile, 2, 1)
 
     # Debug output
     ShowMessage("Imput MOV path: %s" % InputFolder)
