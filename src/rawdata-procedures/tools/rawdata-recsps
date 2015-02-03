@@ -55,13 +55,13 @@ csps-process -p $1/csps \
 
 # JSON file #
 echo "Backup JSON export file ..."
-rm -f $1/info/rawdata-autoseg/segment.json.backup
-cp    $1/info/rawdata-autoseg/segment.json $1/info/rawdata-autoseg/segment.json.backup
+rm -f $1/info/segment.json.backup
+cp    $1/info/segment.json $1/info/segment.json.backup
 
 # JSON export #
 echo "Export JSON file ..."
 csps-export -p $1/csps \
-            -e $1/info/rawdata-autoseg/segment.json \
+            -e $1/info/segment.json \
             -c eyesis4pi \
             -m mod-DSIDE \
             -g ls20031 \

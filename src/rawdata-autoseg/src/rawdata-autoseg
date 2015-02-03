@@ -185,7 +185,7 @@ process() {
         mkdir -p $AS_SEGM/$MTS/csps/devices
         mkdir -p $AS_SEGM/$MTS/csps/devices/eyesis4pi
         mkdir -p $AS_SEGM/$MTS/csps/streams
-        mkdir -p $AS_SEGM/$MTS/info/rawdata-autoseg
+        mkdir -p $AS_SEGM/$MTS/info/
 
         # Logs-file hard-linking #
         ln -f \
@@ -194,7 +194,7 @@ process() {
 
         # Copy topology file #
         cp -f \
-        $AS_MOUNT/camera/$AS_MACAD/info/rawdata-autoseg/csps-topology-gps \
+        $AS_MOUNT/camera/$AS_MACAD/info/rawdata-autoseg/csps-topology \
         $AS_SEGM/$MTS/csps/topology
 
         # CSPS segment processing #
@@ -203,19 +203,19 @@ process() {
         -t $AS_SEGM/$MTS/csps/topology \
         > /dev/null
 
-        # JSON file verification #
-        if [ ! -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json ]; then
-
-            csps-export \
-            -p $AS_SEGM/$MTS/csps \
-            -e $AS_SEGM/$MTS/info/rawdata-autoseg/segment.json \
-            -c eyesis4pi \
-            -m mod-DSIDE \
-            -g ls20031 \
-            -n mod-SGNQF \
-             > /dev/null
-
-        fi
+        # CSPS exportation #
+        csps-export \
+        -p $AS_SEGM/$MTS/csps \
+        -e $AS_SEGM/$MTS/info/segment.json \
+        -c eyesis4pi \
+        -m mod-DSIDE \
+        -g ls20031 \
+        -n mod-SGNQF \
+        -i adis16375 \
+        -s mod-IFETI \
+        -t adis16375 \
+        -k mod-ISRAD \
+         > /dev/null
 
         # Broadcasting logs #
         echo "    $AS_ENUM -> $(basename $AS_SEGM/$MTS)" \
@@ -265,8 +265,8 @@ unprocess() {
 arguments $@
 
 # Define working directories #
-AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/sync/$AS_TIMES
-AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/segment/$AS_TIMES
+AS_SYNC=$AS_MOUNT/camera/$AS_MACAD/raw/$AS_TIMES
+AS_SEGM=$AS_MOUNT/camera/$AS_MACAD/raw/$AS_TIMES/segment/
 
 # Directory verification #
 if [ ! -d $AS_MOUNT/camera/$AS_MACAD/raw ]; then
