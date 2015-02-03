@@ -111,7 +111,7 @@ process() {
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
     csps-elphel-audit \
     -p $AS_SYNC/csps/dissolved \
-    > $AS_SYNC/csps/audit-raw.log
+    > $AS_SYNC/csps/audit-dissolved.log
 
     # Perform logs-files approbation #
     >&2 echo "rawdata-autoseg : approving logs-files ..."
