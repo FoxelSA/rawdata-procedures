@@ -36,39 +36,31 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 # Usage :
-# rawdata-recsps path_to_segment_allocation (not master, not in synch)
+# rawdata-recsps path_to_auto-segment mac-address
 
 # Topology file #
-echo "Reseting topology file ..."
+echo "rawdata-recsps : Reseting topology file ..."
 rm -f $1/csps/topology
-cp $1/../../../../info/rawdata-autoseg/csps-topology $1/csps/topology
+cp $1/../../../../../../camera/$2/csps/csps-topology $1/csps/topology
 
 # Clear streams #
-echo "Clear streams ..."
+echo "rawdata-recsps : Clear streams ..."
 rm -f $1/csps/streams/*.bin
 
 # CSPS-process #
-echo "CSPS-processing ..."
+echo "rawdata-recsps : CSPS-processing ..."
 csps-process -p $1/csps \
              -t $1/csps/topology \
               > /dev/null
 
 # JSON file #
-echo "Backup JSON export file ..."
+echo "rawdata-recsps : Backup JSON export file ..."
 rm -f $1/info/segment.json.backup
 cp    $1/info/segment.json $1/info/segment.json.backup
 
 # JSON export #
-echo "Export JSON file ..."
-csps-export -p $1/csps \
-            -e $1/info/segment.json \
-            -c eyesis4pi \
-            -m mod-DSIDE \
-            -g ls20031 \
-            -n mod-SGNQF \
-            -i adis16375 \
-            -s mod-IFETI \
-            -t adis16375 \
-            -k mod-ISRAD \
-             > /dev/null
+echo "rawdata-recsps : Export JSON file ..."
+csps-export -p $1/csps -e $1/info/segment.json -c eyesis4pi \
+            -m mod-DSIDE -g ls20031 -n mod-SGNQF -i adis16375 \
+            -s mod-IFETI -t adis16375 -k mod-ISRAD > /dev/null
 
