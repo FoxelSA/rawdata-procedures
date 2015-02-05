@@ -159,11 +159,11 @@ MASTER_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER"
 SEGMENTS_DIR="$MASTER_DIR/segment"
 
 # Scripts paths
-PARALLEL_SCRIPT="$PARAM_MOUNT/system/bin/parallel"
-SPLIT_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-splitter"
-JSONUPDATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-jsonupdater"
-STATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-state"
-LIST_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-movlist"
+PARALLEL_SCRIPT="parallel"
+SPLIT_SCRIPT="rawdata-movsplit-splitter"
+JSONUPDATE_SCRIPT="rawdata-movsplit-jsonupdater"
+STATE_SCRIPT="rawdata-movsplit-state"
+LIST_SCRIPT="rawdata-movsplit-movlist"
 
 # Check if a segment is specified
 if [ -z "$PARAM_SEGMENT" ]; then
@@ -176,7 +176,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
         SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
 
         # Check if segment is already splitted
-        python $STATE_SCRIPT $PARAM_MOUNT \
+        $STATE_SCRIPT $PARAM_MOUNT \
         $PARAM_MAC \
         $PARAM_MASTER \
         $SEGMENT_TIMESTAMP
@@ -185,40 +185,49 @@ if [ -z "$PARAM_SEGMENT" ]; then
             echo "Segment $SEGMENT_TIMESTAMP already splitted, skipping"
         else
 
-            # Split segment
-            echo Splitting segment $SEGMENT_TIMESTAMP...
-
-            if [ -z "$PARAM_DISK_THREADS" ]; then
-                python $LIST_SCRIPT \
+            # Build MOV list
+            MOV_LIST="$(
+                $LIST_SCRIPT \
                 $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
-                $SEGMENT_TIMESTAMP | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $SPLIT_SCRIPT {} \
-                $PARAM_MOUNT \
+                $SEGMENT_TIMESTAMP | sort
+            )"
+
+            # Check MOV list length
+            if [ ${#MOV_LIST} -gt 0 ]; then
+
+                # Split segment
+                echo Splitting segment $SEGMENT_TIMESTAMP...
+
+                if [ -z "$PARAM_DISK_THREADS" ]; then
+                    echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
+                    $PARAM_MOUNT \
+                    $PARAM_MAC \
+                    $PARAM_MASTER \
+                    $SEGMENT_TIMESTAMP
+                else
+                    echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
+                    $PARAM_MOUNT \
+                    $PARAM_MAC \
+                    $PARAM_MASTER \
+                    $SEGMENT_TIMESTAMP
+                fi
+
+                # Loop break checker
+                if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                # Update JSON file
+                echo Updating segment JSON file...
+                $JSONUPDATE_SCRIPT $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $SEGMENT_TIMESTAMP
             else
-                python $LIST_SCRIPT \
-                $PARAM_MOUNT \
-                $PARAM_MAC \
-                $PARAM_MASTER \
-                $SEGMENT_TIMESTAMP | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $SPLIT_SCRIPT {} \
-                $PARAM_MOUNT \
-                $PARAM_MAC \
-                $PARAM_MASTER \
-                $SEGMENT_TIMESTAMP
+
+                # Display warning segment
+                echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
             fi
-
-            # Loop break checker
-            if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-            # Update JSON file
-            echo Updating segment JSON file...
-            python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
-            $PARAM_MAC \
-            $PARAM_MASTER \
-            $SEGMENT_TIMESTAMP
         fi
     done
 
@@ -228,7 +237,7 @@ else
     SEGMENT_FOLDER=$SEGMENTS_DIR/$PARAM_SEGMENT
 
     # Check if segment is already splitted
-    python $STATE_SCRIPT $PARAM_MOUNT \
+    $STATE_SCRIPT $PARAM_MOUNT \
     $PARAM_MAC \
     $PARAM_MASTER \
     $PARAM_SEGMENT
@@ -237,39 +246,50 @@ else
         echo "Segment $PARAM_SEGMENT already splitted, skipping"
     else
 
-        # Split segment
-        echo Splitting segment $PARAM_SEGMENT...
-        if [ -z "$PARAM_DISK_THREADS" ]; then
-            python $LIST_SCRIPT \
+        # Build MOV list
+        MOV_LIST="$(
+            $LIST_SCRIPT \
             $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
-            $PARAM_SEGMENT | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $SPLIT_SCRIPT {} \
-            $PARAM_MOUNT \
+            $PARAM_SEGMENT  | sort
+        )"
+
+        # Check MOV list length
+        if [ ${#MOV_LIST} -gt 0 ]; then
+
+            # Split segment
+            echo Splitting segment $PARAM_SEGMENT...
+
+            if [ -z "$PARAM_DISK_THREADS" ]; then
+                echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $PARAM_SEGMENT
+            else
+                echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $PARAM_SEGMENT
+            fi
+
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+
+            # Update JSON file
+            echo Updating segment JSON file...
+            $JSONUPDATE_SCRIPT $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
             $PARAM_SEGMENT
         else
-            python $LIST_SCRIPT \
-            $PARAM_MOUNT \
-            $PARAM_MAC \
-            $PARAM_MASTER \
-            $PARAM_SEGMENT | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $SPLIT_SCRIPT {} \
-            $PARAM_MOUNT \
-            $PARAM_MAC \
-            $PARAM_MASTER \
-            $PARAM_SEGMENT
+
+            # Display warning segment
+            echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
         fi
-
-        # Loop break checker
-        if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-        # Update JSON file
-        echo Updating segment JSON file...
-        python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
-        $PARAM_MAC \
-        $PARAM_MASTER \
-        $PARAM_SEGMENT
     fi
 
 fi

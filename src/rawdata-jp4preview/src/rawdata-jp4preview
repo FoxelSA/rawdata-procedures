@@ -162,11 +162,11 @@ SSH_CONFIG_FILE="$SSH_CONFIGS_DIR/rawdata-jp4preview.conf"
 SEGMENTS_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment"
 
 # Scripts paths
-PARALLEL_SCRIPT="$PARAM_MOUNT/system/bin/parallel"
-PREVIEW_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-generator"
-MOVIE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-moviegenerator"
-JSONUPDATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-jsonupdater"
-STATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-state"
+PARALLEL_SCRIPT="parallel"
+PREVIEW_SCRIPT="rawdata-jp4preview-generator"
+MOVIE_SCRIPT="$rawdata-jp4preview-moviegenerator"
+JSONUPDATE_SCRIPT="rawdata-jp4preview-jsonupdater"
+STATE_SCRIPT="rawdata-jp4preview-state"
 
 # Check if a segment is specified
 if [ -z "$PARAM_SEGMENT" ]; then
@@ -179,7 +179,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
         SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
 
         # Check if segment is already splitted
-        python $STATE_SCRIPT $PARAM_MOUNT \
+        $STATE_SCRIPT $PARAM_MOUNT \
         $PARAM_MAC \
         $PARAM_MASTER \
         $SEGMENT_TIMESTAMP \
@@ -193,14 +193,14 @@ if [ -z "$PARAM_SEGMENT" ]; then
             echo "Generating previews for segment $SEGMENT_TIMESTAMP..."
 
             if [ -z "$PARAM_DISK_THREADS" ]; then
-                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $PREVIEW_SCRIPT {} \
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MASTER \
                 $PARAM_MAC \
                 $SEGMENT_TIMESTAMP \
                 $PARAM_NO_DEBAYER
             else
-                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $PREVIEW_SCRIPT {} \
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MASTER \
                 $PARAM_MAC \
@@ -213,7 +213,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
 
             # Generate preview movie
             echo "Generating preview movie..."
-            python $MOVIE_SCRIPT $PARAM_MOUNT \
+            $MOVIE_SCRIPT $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
             $SEGMENT_TIMESTAMP \
@@ -224,7 +224,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
 
             # Update JSON file
             echo "Updating segment JSON file..."
-            python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+            $JSONUPDATE_SCRIPT $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
             $SEGMENT_TIMESTAMP \
@@ -238,7 +238,7 @@ else
     SEGMENT_FOLDER=$SEGMENTS_DIR/$PARAM_SEGMENT
 
     # Check if previews has been already generated for segment
-    python $STATE_SCRIPT $PARAM_MOUNT \
+    $STATE_SCRIPT $PARAM_MOUNT \
     $PARAM_MAC \
     $PARAM_MASTER \
     $PARAM_SEGMENT \
@@ -252,14 +252,14 @@ else
         echo "Generating previews for segment $PARAM_SEGMENT..."
 
         if [ -z "$PARAM_DISK_THREADS" ]; then
-            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $PREVIEW_SCRIPT {} \
+            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
             $PARAM_MOUNT \
             $PARAM_MASTER \
             $PARAM_MAC \
             $PARAM_SEGMENT \
             $PARAM_NO_DEBAYER
         else
-            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $PREVIEW_SCRIPT {} \
+            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $PREVIEW_SCRIPT {} \
             $PARAM_MOUNT \
             $PARAM_MASTER \
             $PARAM_MAC \
@@ -272,7 +272,7 @@ else
 
         # Generate preview movie
         echo "Generating preview movie..."
-        python $MOVIE_SCRIPT $PARAM_MOUNT \
+        $MOVIE_SCRIPT $PARAM_MOUNT \
         $PARAM_MAC \
         $PARAM_MASTER \
         $PARAM_SEGMENT \
@@ -283,7 +283,7 @@ else
 
         # Update JSON file
         echo "Updating segment JSON file..."
-        python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+        $JSONUPDATE_SCRIPT $PARAM_MOUNT \
         $PARAM_MAC \
         $PARAM_MASTER \
         $PARAM_SEGMENT \

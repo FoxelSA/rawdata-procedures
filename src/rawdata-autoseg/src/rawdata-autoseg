@@ -143,7 +143,6 @@ process() {
 
         # Retrieve auto-segment timestamp #
         MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
-        echo "    $AS_ENUM -> $MTS"
         echo "    $AS_ENUM -> $MTS" >> $AS_RAW/csps/logs-broadcast.log
 
         # Creates CSPS-specific directories #
@@ -168,7 +167,7 @@ process() {
         -c eyesis4pi -m mod-DSIDE -g ls20031   -n mod-SGNQF \
         -i adis16375 -s mod-IFETI -t adis16375 -k mod-ISRAD > /dev/null
 
-    done  
+    done
 
     # Delete intermediates #
     if [ "$AS_KEEP" == "FALSE" ]; then
@@ -262,4 +261,3 @@ else
     exit 0
 
 fi
-

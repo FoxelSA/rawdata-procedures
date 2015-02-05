@@ -248,7 +248,7 @@ def main(argv):
     ShowMessage("%d entries loaded" % Count)
 
     # Find all JSON files
-    JSON_Files = glob.glob("%s/camera/%s/raw/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
+    JSON_Files = glob.glob("%s/rawdata/%s/master/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
 
     # Debug output
     ShowMessage("Updating JSON files...")

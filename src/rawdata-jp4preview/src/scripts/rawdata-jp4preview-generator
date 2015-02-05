@@ -42,6 +42,7 @@
 import ConfigParser
 import sys
 import os
+import subprocess
 import glob
 
 from cStringIO import StringIO
@@ -68,6 +69,12 @@ class imageCorrections:
         self.vflips = []
         self.hflips = []
         self.rolls = []
+
+# Function to execute a system command
+def execCommand(command):
+
+    # Execute command
+    subprocess.call(command, shell=True)
 
 # Function to check presence of an executable in PATH
 def which(program):
@@ -197,15 +204,15 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         if _grayscale:
 
             # Convert image
-            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+            execCommand("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
         else:
 
             # Convert image to dng
-            os.system("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            execCommand("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
-            os.system("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+            execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
@@ -217,12 +224,12 @@ def MakeTiles(_input, _output):
     FileName = os.path.splitext(os.path.basename(_input))[0]
 
     # Split image into 3 parts
-    os.system("convert -crop 100%%x33.3%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
+    execCommand("convert -crop 100%%x33.3%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
 
     # Arrange splitted images
-    os.system("mv %s/%s_0.jpeg %s/top/" % (_output, FileName, _output))
-    os.system("mv %s/%s_1.jpeg %s/mid/" % (_output, FileName, _output))
-    os.system("mv %s/%s_2.jpeg %s/bot/" % (_output, FileName, _output))
+    execCommand("mv %s/%s_0.jpeg %s/top/" % (_output, FileName, _output))
+    execCommand("mv %s/%s_1.jpeg %s/mid/" % (_output, FileName, _output))
+    execCommand("mv %s/%s_2.jpeg %s/bot/" % (_output, FileName, _output))
 
     # Remove the unnecessary third image
     if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
@@ -249,35 +256,35 @@ def StitchPano(_tilesdir, _output, ImagesCorr, _temp):
         if ImagesCorr.vflips[ _index ] == 1:
 
             # Flip verticaly
-            os.system("convert -flip %s %s" % (image, image))
+            execCommand("convert -flip %s %s" % (image, image))
 
         # Check if image need to be flipped horizontaly
         if ImagesCorr.hflips[ _index ] == 1:
 
             # Flip horizontaly
-            os.system("convert -flop %s %s" % (image, image))
+            execCommand("convert -flop %s %s" % (image, image))
 
         # Check which rotation direction need to be applyed
         if ImagesCorr.rolls[ _index ] > 0:
 
             # Rotate clockwise
-            os.system("convert -rotate 90 %s %s" % (image, image))
+            execCommand("convert -rotate 90 %s %s" % (image, image))
 
         elif ImagesCorr.rolls[ _index ] < 0:
 
             # Rotate counter clockwise
-            os.system("convert -rotate 270 %s %s" % (image, image))
+            execCommand("convert -rotate 270 %s %s" % (image, image))
 
         # Increment module index counter
         _index += 1
 
     # Generate 3 crowns (top, middle, bottom)
-    os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
-    os.system("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
-    os.system("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
 
     # Stitch crowns
-    os.system("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
+    execCommand("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
 
     # Remove temporary files
     os.remove("%s/top.jpeg" % _temp)
@@ -313,11 +320,11 @@ def main(argv):
     if not os.path.isdir(__Temp__):
 
         # Create temp folder
-        os.system("mkdir -p %s/tiles/top" % __Temp__)
-        os.system("mkdir -p %s/tiles/mid" % __Temp__)
-        os.system("mkdir -p %s/tiles/bot" % __Temp__)
+        execCommand("mkdir -p %s/tiles/top" % __Temp__)
+        execCommand("mkdir -p %s/tiles/mid" % __Temp__)
+        execCommand("mkdir -p %s/tiles/bot" % __Temp__)
 
-        os.system("mkdir -p %s/jpeg" % __Temp__)
+        execCommand("mkdir -p %s/jpeg" % __Temp__)
 
     # Check if all tools are present
     Error = 0
@@ -402,7 +409,7 @@ def main(argv):
         StitchPano("%s/tiles" % __Temp__, __Output_Image__, ImagesCorr, __Temp__)
 
     # Remove temp files
-    os.system("rm -rf %s" % __Temp__)
+    execCommand("rm -rf %s" % __Temp__)
 
 # Program entry point
 if __name__ == "__main__":

@@ -142,7 +142,7 @@ if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
 fi
 
 # Check execution consistency #
-if [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/sync/$PARAM_MASTER" ]; then
+if [ ! -d "$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER" ]; then
 
     # Exit script #
     echo "Error : cannot access master allocation"
@@ -151,7 +151,7 @@ if [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/sync/$PARAM_MASTER" ]; then
 fi
 
 # Check execution consistency #
-if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/camera/$PARAM_MAC/raw/segment/$PARAM_MASTER/$PARAM_SEGMENT" ]; then
+if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment/$PARAM_SEGMENT" ]; then
 
     # Exit script #
     echo "Error : cannot access segment allocation"
@@ -178,10 +178,6 @@ echo "[$(date '+%F %R')] rawdata-procedures : creating table of jp4 files ..."
 rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
 # Run procedure #
-echo "[$(date '+%F %R')] rawdata-procedures : hard-linking mov files ..."
-rawdata-hardlink --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
-
-# Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : creating table of trashed jp4 files ..."
 rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
@@ -198,4 +194,3 @@ if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : generating image previews ..."
 rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
-
