@@ -164,7 +164,7 @@ SEGMENTS_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment"
 # Scripts paths
 PARALLEL_SCRIPT="parallel"
 PREVIEW_SCRIPT="rawdata-jp4preview-generator"
-MOVIE_SCRIPT="$rawdata-jp4preview-moviegenerator"
+MOVIE_SCRIPT="rawdata-jp4preview-moviegenerator"
 JSONUPDATE_SCRIPT="rawdata-jp4preview-jsonupdater"
 STATE_SCRIPT="rawdata-jp4preview-state"
 
