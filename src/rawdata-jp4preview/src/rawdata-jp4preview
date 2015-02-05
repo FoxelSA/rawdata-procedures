@@ -1,631 +1,293 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-  rawdata-procedures - Camera raw data procedures
-
-  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
-  Please read <http://foxel.ch/license> for more information.
-
-
-  Author(s):
-
-       Kevin Velickovic <k.velickovic@foxel.ch>
-
-
-  This file is part of the FOXEL project <http://foxel.ch>.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-  Additional Terms:
-
-       You are required to preserve legal notices and author attributions in
-       that material or in the Appropriate Legal Notices displayed by works
-       containing it.
-
-       You are required to attribute the work as explained in the "Usage and
-       Attribution" section of <http://foxel.ch/license>.
-"""
-
-# Imports
-import ConfigParser
-import glob
-import json
-import os
-import signal
-import sys
-from cStringIO import StringIO
-from datetime import datetime
-
-# Global variables
-STD_OUTPUT = 0
-NO_COLORS  = 0
-
-# Function to catch CTRL-C
-def signal_handler(_signal, _frame):
-    sys.exit(0)
-signal.signal(signal.SIGINT, signal_handler)
-
-# JP4 file container class
-class JP4Image:
-    def __init__(self, timestamp, module, base_folder=-1):
-        self.timestamp = timestamp
-        self.module = int(module)
-        self.base_folder = int(base_folder)
-
-        # Compute default path
-        if self.base_folder != -1:
-            self.path = "%s/%s_%s" % (base_folder, timestamp, module)
-            self.path_nomod = "%s/%s" % (base_folder, timestamp)
-        else:
-            self.path = "%s_%s" % (timestamp, module)
-            self.path_nomod = "%s_%s" % (timestamp)
-
-class imageCorrections:
-    def __init__(self):
-        self.vflips = []
-        self.hflips = []
-        self.rolls = []
-
-# Function to check presence of an executable in PATH
-def which(program):
-
-    # Check if file is executable
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    # Split path
-    fpath, _ = os.path.split(program)
-
-    # Check if file exists
-    if fpath:
-
-        # Check if file exists
-        if is_exe(program):
-            return program
-    else:
-
-        # Walk over PATHS to check if file exists
-        for path in os.environ["PATH"].split(os.pathsep):
-
-            # Remove quotes from path
-            path = path.strip('"')
-
-            # Build file name
-            exe_file = os.path.join(path, program)
-
-            # Check if file exists
-            if is_exe(exe_file):
-                return exe_file
-
-    # Return result
-    return None
-
-# Function to print debug messages
-# pylint: disable=W0603
-def ShowMessage(Message, Type=0, Halt=0, force_output=0):
-
-    if not STD_OUTPUT and not force_output:
-        return
-
-    # Flush stdout
-    sys.stdout.flush()
-
-    # Get current date
-    DateNow = datetime.now().strftime("%H:%M:%S")
-
-    # Display proper message
-    if Type == 0:
-        if NO_COLORS:
-            sys.stdout.write("%s [INFO] %s\n" % (DateNow, Message))
-        else:
-            sys.stdout.write("%s \033[32m[INFO]\033[39m %s\n" % (DateNow, Message))
-    elif Type == 1:
-        if NO_COLORS:
-            sys.stdout.write("%s [WARNING] %s\n" % (DateNow, Message))
-        else:
-            sys.stdout.write("%s \033[33m[WARNING]\033[39m %s\n" % (DateNow, Message))
-    elif Type == 2:
-        if NO_COLORS:
-            sys.stdout.write("%s [ERROR] %s\n" % (DateNow, Message))
-        else:
-            sys.stdout.write("%s \033[31m[ERROR]\033[39m %s\n" % (DateNow, Message))
-    elif Type == 3:
-        if NO_COLORS:
-            sys.stdout.write("%s [DEBUG] %s\n" % (DateNow, Message))
-        else:
-            sys.stdout.write("%s \033[34m[DEBUG]\033[39m %s\n" % (DateNow, Message))
-
-    # Flush stdout
-    sys.stdout.flush()
-
-    # Halt program if requested
-    if Halt:
-        sys.exit()
-
-# Function to convert a JP4 file into JPEG
-def JP4ToJPEG(List, _output, _temp, _grayscale=0):
-
-    # Local counter index
-    idx = 1
-
-    # Itertate over paths
-    for path in List:
-
-        # Extract filename
-        FileName = os.path.splitext(os.path.basename(path))[0]
-
-        # Debug output
-        if STD_OUTPUT:
-            sys.stdout.flush()
-            sys.stdout.write("Processing %d/%d...\r" % (idx, len(List)))
-            sys.stdout.flush()
-
-        # Check presence of grayscale option
-        if _grayscale:
-
-            # Convert image
-            os.system("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
-
-        else:
-
-            # Convert image to dng
-            os.system("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
-
-            # Debay dng file and convert it into jpeg
-            os.system("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
-
-            # Remove temporary dng file
-            os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
-
-        # Increment counter index
-        idx += 1
-
-# Function to convert a JP4 file into JPEG (parallelized)
-def JP4ToJPEG_Parallel(List, _output, _temp, _grayscale=0, _jobs=1):
-
-    # Local command container
-    Commands = ""
-
-    # Itertate over paths
-    for path in List:
-
-        # Extract filename
-        FileName = os.path.splitext(os.path.basename(path))[0]
-
-        # Check presence of grayscale option
-        if _grayscale:
-
-            # Convert image
-            Commands += ("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg\n" % (path, _temp, FileName))
-
-        else:
-
-            # Convert image to dng
-            Commands += ("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng && " % (path, _temp, FileName))
-
-            # Debay dng file and convert it into jpeg
-            Commands += ("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg && " % (_temp, FileName, _output, FileName))
-
-            # Remove temporary dng file
-            Commands += ("rm %s/jpeg/%s.dng\n" % (_temp, FileName))
-
-    # Write command to file
-    with open("%s/.JP4ToJPEG.txt" % _temp, "w") as f:
-        f.write(Commands)
-
-    # Run GNU parallel
-    os.system("cat %s/.JP4ToJPEG.txt | parallel -j%d sh -c '{}'" % (_temp, _jobs))
-
-    # Remove temporary command file
-    os.system("rm %s/.JP4ToJPEG.txt" % _temp)
-
-# Function to generate tiles form a crow
-def MakeTiles(_input, _output):
-
-    # Extract filename
-    FileName = os.path.splitext(os.path.basename(_input))[0]
-
-    # Split image into 3 parts
-    os.system("convert -crop 100%%x33.3%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
-
-    # Arrange splitted images
-    os.system("mv %s/%s_0.jpeg %s/top/" % (_output, FileName, _output))
-    os.system("mv %s/%s_1.jpeg %s/mid/" % (_output, FileName, _output))
-    os.system("mv %s/%s_2.jpeg %s/bot/" % (_output, FileName, _output))
-
-    # Remove the unnecessary third image
-    if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
-        os.remove("%s/%s_3.jpeg" % (_output, FileName))
-
-# Function to stitch a set of tiles
-def StitchPano(_tilesdir, _output, ImagesCorr, _temp, _grayscale=0, _camera=2):
-
-    # Separate each tiles into lists
-    TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
-    MidList = sorted(glob.glob("%s/mid/*.jpeg" % _tilesdir))
-    BotList = sorted(glob.glob("%s/bot/*.jpeg" % _tilesdir))
-
-    # Build a global tile list in right order (Top, Middle, Bottom)
-    All_images = TopList + MidList + BotList
-
-    # Module index counter
-    _index = 0
-
-    # Iterate over images
-    for image in All_images:
-
-        # Check if image need to be flipped verticaly
-        if ImagesCorr.vflips[ _index ] == 1:
-
-            # Flip verticaly
-            os.system("convert -flip %s %s" % (image, image))
-
-        # Check if image need to be flipped horizontaly
-        if ImagesCorr.hflips[ _index ] == 1:
-
-            # Flip horizontaly
-            os.system("convert -flop %s %s" % (image, image))
-
-        # Check which rotation direction need to be applyed
-        if ImagesCorr.rolls[ _index ] > 0:
-
-            # Rotate clockwise
-            os.system("convert -rotate 90 %s %s" % (image, image))
-
-        elif ImagesCorr.rolls[ _index ] < 0:
-
-            # Rotate counter clockwise
-            os.system("convert -rotate 270 %s %s" % (image, image))
-
-        # Increment module index counter
-        _index += 1
-
-    # Generate 3 crowns (top, middle, bottom)
-    os.system("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
-    os.system("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
-    os.system("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
-
-    # Stitch crowns
-    os.system("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
-
-    # Remove temporary files
-    os.remove("%s/top.jpeg" % _temp)
-    os.remove("%s/mid.jpeg" % _temp)
-    os.remove("%s/bot.jpeg" % _temp)
-
-# Function to update JSON file flags
-def UpdateJSON(JSONFile, __NoDebayer__):
-
-    # Open file
-    SourceJSON = open(JSONFile, 'r')
-
-    # Load JSON file
-    json_data = json.load(SourceJSON)
-
-    # Close JSON file
-    SourceJSON.close()
-
-    # Determine state
-    State = "no-debayer" if __NoDebayer__ else "debayer"
-
-    # Set apropriate state
-    if json_data['preview']:
-        if 'no-debayer' in json_data['preview']:
-            json_data['preview'] = State
-    else:
-        json_data['preview'] = State
-
-    # Write validated JSON file
-    with open(JSONFile, 'w') as outfile:
-        json.dump(json_data, outfile, sort_keys = True, indent = 4)
-
-# Function to get camera modules count by reading FastCal calibration file
-def GetCameraModules(FastCalKeyFilePath):
-
-    # Instanciate ConfigParser
-    config = ConfigParser.RawConfigParser()
-
-    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
-    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
-
-    # Return value
-    return config.getint('calibration', 'modules')
-
-# Function to get camera modules count by reading FastCal calibration file
-def GetImagesCorrections(FastCalKeyFilePath):
-
-    # Instanciate ConfigParser
-    config = ConfigParser.RawConfigParser()
-
-    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
-    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
-
-    # Prepare a new imageCorrections container for output
-    Output = imageCorrections()
-
-    # Get channels count
-    Channels = config.getint('calibration', 'channels')
-
-    # Iterate over possible modules
-    for i in range(0, Channels):
-
-        # Append roll
-        Output.rolls.append( config.getfloat('calibration', 'roll_%02d' % i) )
-
-        # Append vertical flip
-        Output.vflips.append( config.getint('calibration', 'flip_ver_%02d' % i) )
-
-        # Append horizontal flip
-        Output.hflips.append( config.getint('calibration', 'flip_hor_%02d' % i) )
-
-    # Return value
-    return Output
-
-# Usage display function
-def _usage():
-    print """
-    Usage: %s [OPTIONS]
+#!/bin/bash
+# rawdata-procedures - Camera raw data procedures
+#
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Kevin Velickovic <k.velickovic@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+# Script parameters #
+PARAM_MOUNT="/data/"
+PARAM_MAC=""
+PARAM_MASTER=""
+PARAM_SEGMENT=""
+PARAM_DISK_THREADS=""
+PARAM_NO_DEBAYER="0"
+
+# Loop breaker
+LOOP_BREAK="0"
+
+# Help function #
+_help() {
+    echo """
+    Usage: $(basename $0) [OPTIONS]
 
     [Required arguments]
-    --mount-point        Base mount directory
-    --mac-address        Camera MAC address
-    --master-timestamp   Master timestamp
+    --mount-point       Base mount directory
+    --mac-address       Camera MAC address
+    --master-timestamp  Master timestamp
 
     [Optional arguments]
-    --segment-timestamp  Segment timestamp
-    --no-split           Exit program
-    --no-debayer         Write grayscale images (without debayer)
+    --segment-timestamp Segment timestamp
+    --no-split          Exit program
+    --no-debayer        Write grayscale images (without debayer)
+    --disk-threads      Process localy with specified number of threads
+    --help              Show this message
+    """
+}
 
-    """ % sys.argv[0]
+# Trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
 
-# Program entry point function
-# pylint: disable=W0603
-def main(argv):
+# CTRL-C handler function
+function ctrl_c() {
 
-    global STD_OUTPUT
+    # Set loop break flag
+    LOOP_BREAK="1"
+}
 
-    # Scope variables initialisation
-    __Segments__   = []
-    __JP4_Files__  = []
-    __TimeStamps__ = []
-    __Camera__     = 2
-    __Temp_Base__  = "/run/shm/rawdata-jp4preview"
-    __Temp__       = "%s/%d" %  (__Temp_Base__, os.getpid())
+# Arguments and parameters parser #
+arguments() {
 
+    # Search in arguments #
+    while [[ $# > 0 ]]; do
 
-    # Check if temp folder exists
-    if not os.path.isdir(__Temp__):
+        args="$1"
+        shift
+        case $args in
+            --no-debayer)
+                PARAM_NO_DEBAYER="1"
+            ;;
+            --no-split)
+                echo "--no-split given exiting..."
+                exit
+            ;;
+            --mount-point)
+                PARAM_MOUNT="$1"
+                shift
+            ;;
+            --mac-address)
+                PARAM_MAC="$1"
+                shift
+            ;;
+            --master-timestamp)
+                PARAM_MASTER="$1"
+                shift
+            ;;
+            --segment-timestamp)
+                PARAM_SEGMENT="$1"
+                shift
+            ;;
+            --disk-threads)
+                if [ -z "$1" ]; then
+                    PARAM_DISK_THREADS="+0"
+                else
+                    PARAM_DISK_THREADS="$1"
+                fi
+                shift
+            ;;
+            --help | -h)
+                _help
+                exit
+            ;;
+        esac
 
-        # Create temp folder
-        os.system("mkdir -p %s/tiles/top" % __Temp__)
-        os.system("mkdir -p %s/tiles/mid" % __Temp__)
-        os.system("mkdir -p %s/tiles/bot" % __Temp__)
+    done
 
-        os.system("mkdir -p %s/jpeg" % __Temp__)
+}
 
+# Display help if needed #
+if [ $# -eq 0 ]; then
+    _help
+    exit
+fi
 
-    # Parse arguments
-    Arguments = {}
-    Argv_Concat = ' '.join(argv)
-    Argv_Flags = Argv_Concat.split('--')
+# Argument and parameters #
+arguments $@
 
-    # Iterate over source args
-    for i in Argv_Flags:
+# Check execution consistency #
+if [ -z "$PARAM_MOUNT" ] || [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
 
-        # Check length
-        if len(i) > 0:
+    # Exit script #
+    echo "Error : cannot continue execution without --mount-point/--mac-address/--master-timestamp parameters"
+    exit 1
 
-            # Split by first space
-            splited = i.split(' ', 1)
+fi
 
-            # Check if argument contains value
-            if len(splited) > 1:
-                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
-            else:
-                Arguments[splited[0]] =  None
+# Check execution consistency #
+if [ ! -d $PARAM_MOUNT/camera ]; then
 
-    # Arguments variables initialisation
-    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
-    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
-    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
-    __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __NoDebayer__        = (0 if not 'no-debayer' in Arguments else 1)
-    STD_OUTPUT           = (1 if 'output' in Arguments else 0)
-    __Jobs__             = 1
+    # Exit script #
+    echo "Error : unable to access standard directory with specified mount point"
+    exit 1
 
-    if 'no-split' in Arguments:
-        print >> sys.stderr, '--no-split argument given, exiting...'
-        sys.exit(0)
+fi
 
-    # Arguments check
-    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
-        _usage()
-        sys.exit(0)
+# SSH configs cirectory
+SSH_CONFIGS_DIR="$PARAM_MOUNT/system/etc/ssh-configs/rawdata-procedures"
 
-    # Check required programs
-    Error = 0
+# SSH config file
+SSH_CONFIG_FILE="$SSH_CONFIGS_DIR/rawdata-jp4preview.conf"
 
-    # Check presence of ImageMagick
-    if not which("convert"):
-        ShowMessage("ImageMagick not installed, install it with 'sudo apt-get install imagemagick'", 2, 0)
-        Error = 1
+# Segments base folder
+SEGMENTS_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment"
 
-    # Check presence of dcraw
-    if not which("cjpeg"):
-        ShowMessage("cjpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
-        Error = 1
+# Scripts paths
+PARALLEL_SCRIPT="$PARAM_MOUNT/system/bin/parallel"
+PREVIEW_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-generator"
+MOVIE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-moviegenerator"
+JSONUPDATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-jsonupdater"
+STATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-jp4preview-state"
 
-    # Check presence of dcraw
-    if not which("djpeg"):
-        ShowMessage("djpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
-        Error = 1
+# Check if a segment is specified
+if [ -z "$PARAM_SEGMENT" ]; then
 
-    # Check presence of dcraw
-    if not which("dcraw"):
-        ShowMessage("dcraw not installed, install it with 'sudo apt-get install dcraw'", 2, 0)
-        Error = 1
+    # Iterate over segments
+    for d in $SEGMENTS_DIR/* ; do
 
-    # Check presence of movie2dng
-    if not which("movie2dng"):
-        ShowMessage("movie2dng not installed, see http://wiki.elphel.com/index.php?title=Movie2dng", 2, 0)
-        Error = 1
+        # Determine segment folder
+        SEGMENT_TIMESTAMP=$(basename $d)
+        SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
 
-    # Exif if dependencies are not installed
-    if Error: return
+        # Check if segment is already splitted
+        python $STATE_SCRIPT $PARAM_MOUNT \
+        $PARAM_MAC \
+        $PARAM_MASTER \
+        $SEGMENT_TIMESTAMP \
+        $PARAM_NO_DEBAYER
 
-    # Compute paths
-    BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    FastCalKeyFile     = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+        if [ $? -eq 1 ]; then
+            echo "Previews already generated for segment $SEGMENT_TIMESTAMP, skipping"
+        else
 
-    # Get camera modules count
-    ModuleCount = GetCameraModules(FastCalKeyFile)
+            # Generate previews for segment
+            echo "Generating previews for segment $SEGMENT_TIMESTAMP..."
 
-    # Get camera correction parameters
-    ImagesCorr = GetImagesCorrections( FastCalKeyFile )
+            if [ -z "$PARAM_DISK_THREADS" ]; then
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $PREVIEW_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MASTER \
+                $PARAM_MAC \
+                $SEGMENT_TIMESTAMP \
+                $PARAM_NO_DEBAYER
+            else
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $PREVIEW_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MASTER \
+                $PARAM_MAC \
+                $SEGMENT_TIMESTAMP \
+                $PARAM_NO_DEBAYER
+            fi
 
-    # Get available segments
-    if __SegmentTimestamp__:
-        __Segments__.append(__SegmentTimestamp__)
-    else:
-        __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
-    # Counter index
-    Index = 1
+            # Generate preview movie
+            echo "Generating preview movie..."
+            python $MOVIE_SCRIPT $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $SEGMENT_TIMESTAMP \
+            $PARAM_NO_DEBAYER
 
-    for Segment in __Segments__:
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
-        # Debug output
-        print >> sys.stderr, "Processing segment %s %d/%d" % (Segment, Index, len(__Segments__))
+            # Update JSON file
+            echo "Updating segment JSON file..."
+            python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $SEGMENT_TIMESTAMP \
+            $PARAM_NO_DEBAYER
+        fi
+    done
 
-        # Compute jp4 path
-        __Input__    = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
+else
 
-        # Retrieve list of filenames (only module 1)
-        __JP4_Files__  = sorted(glob.glob("%s/*/*_1.jp4" % __Input__))
-        __JP4_Images__ = []
+    # Determine segment folder
+    SEGMENT_FOLDER=$SEGMENTS_DIR/$PARAM_SEGMENT
 
-        # Build images list
-        for i in __JP4_Files__:
+    # Check if previews has been already generated for segment
+    python $STATE_SCRIPT $PARAM_MOUNT \
+    $PARAM_MAC \
+    $PARAM_MASTER \
+    $PARAM_SEGMENT \
+    $PARAM_NO_DEBAYER
 
-            # Split segments of file
-            parts = i.split('/')
-            timestamps = parts[-1].rstrip('.jp4').split('_')
-            basefolder = parts[-2]
+    if [ $? -eq 1 ]; then
+        echo "Previews already generated for segment $PARAM_SEGMENT, skipping"
+    else
 
-            # Compute timestamp
-            ts = "%s_%s" % (timestamps[0], timestamps[1])
+        # Generate previews for segment
+        echo "Generating previews for segment $PARAM_SEGMENT..."
 
-            # Insert into list if not present
-            if not ts in __TimeStamps__:
-                __JP4_Images__.append(JP4Image(ts, 1, basefolder))
+        if [ -z "$PARAM_DISK_THREADS" ]; then
+            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $PREVIEW_SCRIPT {} \
+            $PARAM_MOUNT \
+            $PARAM_MASTER \
+            $PARAM_MAC \
+            $PARAM_SEGMENT \
+            $PARAM_NO_DEBAYER
+        else
+            find $SEGMENT_FOLDER/jp4 -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $PREVIEW_SCRIPT {} \
+            $PARAM_MOUNT \
+            $PARAM_MASTER \
+            $PARAM_MAC \
+            $PARAM_SEGMENT \
+            $PARAM_NO_DEBAYER
+        fi
 
-        # Sort timestamps
-        __JP4_Images__ = sorted(__JP4_Images__, key=lambda item: item.timestamp)
+        # Loop break checker
+        if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
-        # Initialize counter index
-        idx = 1
+        # Generate preview movie
+        echo "Generating preview movie..."
+        python $MOVIE_SCRIPT $PARAM_MOUNT \
+        $PARAM_MAC \
+        $PARAM_MASTER \
+        $PARAM_SEGMENT \
+        $PARAM_NO_DEBAYER
 
-        # Determine output paths
-        DebayFolder = "debayer"
-
-        if __NoDebayer__:
-            DebayFolder = "no-debayer"
-
-        __Output_Base__   = "%s/%s/preview/%s" % (BaseSegmentsFolder, Segment, DebayFolder)
-
-        # Iterate over timestamps
-        for image in __JP4_Images__:
-            
-            # Compute output folders
-            __Output__   = "%s/%d" % (__Output_Base__, image.base_folder)
-            __Output_Image__ = "%s/%s.jpeg" % (__Output__, image.timestamp)
-
-            # Check if destination file already exists
-            if not os.path.isfile(__Output_Image__):
-
-                # Create output folder if not present
-                if not os.path.isdir(__Output__):
-                    os.makedirs(__Output__)
-
-                # Debug output
-                ShowMessage("%d/%d processing %s..." % (idx, len(__JP4_Images__), image.timestamp))
-
-                # Debug output
-                ShowMessage("Converting modules to jpeg")
-
-                # Build list of images to be converted
-                JP4ToJPEG_List = []
-                for i in range(1, ModuleCount):
-                    JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, image.path_nomod, i))
-
-                # Check presence of parallel option and start conversion
-                if __Jobs__ != 1:
-                    JP4ToJPEG_Parallel(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __Jobs__)
-                else:
-                    JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
-
-                if not __NoDebayer__:
-                    ShowMessage("Flipping images...")
-
-                # Debug output
-                ShowMessage("Extracting tiles")
-
-                # Create tiles for previously converted images
-                for i in range(1, ModuleCount):
-                    MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, image.timestamp, i), "%s/tiles" % __Temp__)
-
-                # Debug output
-                ShowMessage("Stitching panorama")
-
-                # Stitch panorama
-                StitchPano("%s/tiles" % __Temp__, __Output_Image__, ImagesCorr, __Temp__, __NoDebayer__, __Camera__)
-
-                # Remove temp files
-                os.system("rm -rf %s" % __Temp__)
-
-                # Increment counter index
-                idx += 1
-
-            else:
-
-                # Debug output
-                ShowMessage("Skipping %s, already generated" % __Output_Image__, 1)
-
-                # Increment counter index
-                idx += 1
-
-        # Debug output
-        ShowMessage("Updating JSON file...")
-
-        # Compute JSON file path
-        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
+        # Loop break checker
+        if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
         # Update JSON file
-        UpdateJSON(__JSONFile__, __NoDebayer__)
+        echo "Updating segment JSON file..."
+        python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+        $PARAM_MAC \
+        $PARAM_MASTER \
+        $PARAM_SEGMENT \
+        $PARAM_NO_DEBAYER
+    fi
 
-        # Debug output
-        ShowMessage("Generating previews movie...")
-
-        # Create previews movie if not exists
-        if not os.path.isfile("%s/segment.webm" % __Output_Base__):
-            os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:w=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/segment.webm > /dev/null 2>&1' % (__Output_Base__, __Output_Base__))
-
-        # Increment index
-        Index += 1
-
-# Program entry point
-if __name__ == "__main__":
-    main(sys.argv[1:])
+fi

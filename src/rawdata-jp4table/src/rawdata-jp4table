@@ -49,6 +49,7 @@ import time
 import re
 import threading
 import calendar
+import socket
 from cStringIO import StringIO
 from datetime import datetime
 from operator import itemgetter
@@ -158,6 +159,33 @@ def GetCameraModules(FastCalKeyFilePath):
 
     # Return value
     return config.getint('calibration', 'modules')
+
+# Function to get cores settings
+def GetCores(ParallelConfigFile):
+
+    # Get local machine hostname
+    hostName = socket.gethostname()
+
+    # Open config file
+    with open(ParallelConfigFile, 'r') as configFile:
+
+        # Iterate over file lines
+        for line in configFile:
+
+            # Exclude comments
+            if not '#' in line[0]:
+
+                # Extract entry
+                entry = re.search( r'(\d+)/(.*)\@(.*)', line)
+
+                # Check if username corresponds
+                if hostName in entry.group( 3 ):
+
+                    # Return result
+                    return int( entry.group( 1 ) )
+
+    # Default value
+    return 1
 
 # Function to get first available slot
 def GetSlot(Slots):
@@ -284,6 +312,48 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
 
     # Return results
     return Result
+
+# Function to sort a JP4Table file
+def sortTable( tableFile ):
+
+    # Open file
+    bin_file = open(tableFile, "rb")
+
+    # Read file
+    BINARY_DATA = bin_file.read()
+
+    # Close file
+    bin_file.close()
+
+    # Determine data length
+    Len = len(BINARY_DATA)
+
+    # Determine entries count
+    Count = Len / MAIN_SIZE
+
+    # Initialize variables
+    Offset = MAIN_SIZE
+
+    # Iterate over entries count
+    TEMP_LIST = []
+    for i in range(0, Count):
+
+        # Unpack binary values
+        Unpacked = MAIN_DATA.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
+
+        # Append element
+        TEMP_LIST.append( Unpacked )
+
+        # Increment offset
+        Offset += MAIN_SIZE
+
+    # Sort elements
+    Sorted = sorted(TEMP_LIST, key=itemgetter(0))
+
+    # Save sorted elements
+    with open(tableFile, "wb") as f:
+        for i in Sorted:
+            f.write(MAIN_DATA.pack(*i))
 
 # Thread function to index MOV files
 def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, tid):
@@ -453,7 +523,6 @@ def main(argv):
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
     STD_OUTPUT          = (1 if 'output' in Arguments else 0)
-    __Jobs__            = 1
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
@@ -466,11 +535,19 @@ def main(argv):
         return
 
     # Compute paths
-    InputFolder     = "%s/camera/%s/raw/sync/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFolder    = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFile      = "%s/jp4table.bin" % (OutputFolder)
-    FastCalKeyFile  = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
-    EXIFTrashFolder = "%s/camera/%s/raw/sync/%s/info/corrupted/jp4/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    InputFolder         = "%s/rawdata/%s/master/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFolder        = "%s/rawdata/%s/master/%s/info/raw" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFile          = "%s/jp4table.bin" % (OutputFolder)
+    EXIFTrashFolder     = "%s/rawdata/%s/master/%s/info/raw/corrupted/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    FastCalKeyFile      = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    ParallelConfigFile  = "%s/system/etc/ssh-configs/rawdata-procedures/rawdata-jp4table.conf" % (__MountPoint__)
+
+    # Get local jobs count from config file
+    __Jobs__ = GetCores( ParallelConfigFile )
+
+    # Delete table file if present
+    if os.path.isfile( OutputFile ):
+        os.remove( OutputFile )
 
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)
@@ -514,6 +591,12 @@ def main(argv):
     # Wait until main thread finishes
     while MainThread.is_alive():
         time.sleep(0.5)
+
+    # Debug output
+    ShowMessage("Sorting table...")
+
+    # Sort table
+    sortTable( OutputFile )
 
     ShowMessage("Done")
 

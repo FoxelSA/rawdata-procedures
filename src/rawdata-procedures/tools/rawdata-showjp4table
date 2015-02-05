@@ -98,7 +98,7 @@ def main(argv):
         sys.exit(0)
 
     # Compute state file path
-    InputFile = "%s/camera/%s/raw/sync/%s/info/rawdata-procedures/jp4table.bin" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    InputFile = "%s/rawdata/%s/master/%s/info/raw/jp4table.bin" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
 
     # Read state file
     BINARY_DATA = open(InputFile, "rb").read()

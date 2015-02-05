@@ -1,919 +1,275 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-  rawdata-procedures - Camera raw data procedures
-
-  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
-  Please read <http://foxel.ch/license> for more information.
-
-
-  Author(s):
-
-       Kevin Velickovic <k.velickovic@foxel.ch>
-
-
-  Contributor(s):
-
-       Alexandre Kraft <a.kraft@foxel.ch>
-
-
-  This file is part of the FOXEL project <http://foxel.ch>.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-  Additional Terms:
-
-       You are required to preserve legal notices and author attributions in
-       that material or in the Appropriate Legal Notices displayed by works
-       containing it.
-
-       You are required to attribute the work as explained in the "Usage and
-       Attribution" section of <http://foxel.ch/license>.
-"""
-
-# Imports
-import calendar
-import datetime
-import glob
-import json
-import os
-import Queue
-import re
-import shutil
-import signal
-import sys
-import threading
-import time
-import ConfigParser
-from cStringIO import StringIO
-from datetime import datetime
-from functools import wraps
-
-import exifread
-from pycheckjpeg import validate_jpeg_from_buffer
-
-# Global variables
-QUEUE_Done     = 0
-QUEUE_Count    = 0
-QUEUE_Slots    = []
-
-# Config variables
-STD_OUTPUT = 0
-DEBUG_MODE = 0
-NO_COLORS  = 0
-QUIET_MODE = 0
-LOG_FILE   = ""
-
-# MOV file container class
-class MovFile:
-    def __init__(self, path, modulename):
-        self.path = path
-        self.module = int(modulename)
-
-# JP4 file container class
-class JP4Image:
-    def __init__(self, timestamp, module, base_folder=-1, threadid=-1):
-        self.timestamp = timestamp
-        self.module = int(module)
-        self.base_folder = int(base_folder)
-        self.threadid = threadid
-
-        # Compute default path
-        if self.base_folder != -1:
-            if threadid != -1:
-                self.path = "t%s/%s/%s_%s" % (threadid, base_folder, timestamp, module)
-            else:
-                self.path = "%s/%s_%s" % (base_folder, timestamp, module)
-        else:
-            if threadid != -1:
-                self.path = "t%s/%s_%s" % (threadid, timestamp, module)
-            else:
-                self.path = "%s_%s" % (timestamp, module)
-
-# Function to print debug messages
-def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
-
-    # Global variables
-    global STD_OUTPUT
-
-    # Check if output is enabled
-    if not STD_OUTPUT:
-        return
-
-    # Flush stdout
-    sys.stdout.flush()
-
-    # Get current date
-    DateNow = datetime.now().strftime("%H:%M:%S")
-
-    # Display proper message
-    Prepend = ""
-
-    if ThreadID != -1:
-        Prepend = "[Thread %d]" % (ThreadID+1)
-
-    # Write to log file
-    if len(LOG_FILE) > 0:
-        with open(LOG_FILE, "a+") as logFile:
-            logFile.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
-
-    if Type == 0:
-        if NO_COLORS:
-            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
-        else:
-            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
-    elif Type == 1:
-        if NO_COLORS:
-            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
-        else:
-            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
-    elif Type == 2:
-        if NO_COLORS:
-            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
-        else:
-            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
-    elif Type == 3:
-        if NO_COLORS:
-            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
-        else:
-            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
-
-    # Flush stdout
-    sys.stdout.flush()
-
-    # Halt program if requested
-    if Halt:
-        sys.exit()
-
-# Function to catch CTRL-C
-def signal_handler(_signal, _frame):
-    del _signal
-    del _frame
-
-    ShowMessage("Interrupted!", 2, 1)
-    sys.exit(0)
-signal.signal(signal.SIGINT, signal_handler)
-
-# Function to moditor execution time of functions
-def timed(f):
-    @wraps(f)
-    def wrapper(*args, **kwds):
-
-        # Start timer initialization
-        if DEBUG_MODE:
-            start = time.time()
-
-        # Call original function
-        result = f(*args, **kwds)
-
-        # Show final result
-        if DEBUG_MODE:
-            elapsed = time.time() - start
-            ShowMessage("%s took %ds to finish" % (f.__name__, elapsed), 3)
-
-        return result
-    return wrapper
-
-# Function to determine if quiet mode is enabled
-def quietEnabled():
-    return QUIET_MODE
-
-# Function to find all occurences of a given input
-@timed
-def find_all(a_str, sub):
-    start = 0
-    while True:
-        # Find first element
-        start = a_str.find(sub, start)
-
-        # If no match found exit function
-        if start == -1: return
-
-        # If there is a match return it and process the next element
-        yield start
-
-        # Move pointer to next occurence
-        start += len(sub)
-
-# Function to validate EXIF data contents
-def ValidateEXIFData(EXIFData):
-
-    # Check if EXIF data is present
-    if not EXIFData:
-        return False
-
-    # Verify micro timestamp
-    if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
-        return False
-
-    # Verify image date
-    _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
-    if not _Exp.match( str(EXIFData["Image DateTime"]) ):
-        return False
-
-    # Return True if all tests passed
-    return True
-
-# Function to extract JPEG images inside a MOV file
-@timed
-def extractMOV(tid, InputFile, OutputFolder, TrashFolder, ModuleName, Results_back, Valid_Timestamps):
-
-    # Local variables
-    JPEGHeader    = b'\xff\xd8\xff\xe1'
-    Results       = [0, []]
-
-    mov = open(InputFile, 'rb')
-    mov_data = mov.read()
-    mov.close()
-
-    # Initialize results counter
-    Results = Results_back
-    Results[1] = []
-    Results[2] = []
-    Results[8] = []
-
-    # Search all JPEG files inside the MOV file
-    JPEG_Offsets     = list(find_all(mov_data, JPEGHeader))
-    JPEG_Offsets_len = len(JPEG_Offsets)
-
-    # Display message when no headers are found inside the MOV file
-    if JPEG_Offsets_len == 0:
-        ShowMessage("No JPEG headers found in MOV file %s" % InputFile, 1)
-
-    if Results[4] != 0:
-        if not os.path.isdir("%s/0" % OutputFolder):
-            os.makedirs("%s/0" % OutputFolder)
-
-    # Walk over JPEG files positions
-    for _Index, _Offset in enumerate(JPEG_Offsets):
-
-        # Calculate the filesize for extraction
-        if (_Index >= len(JPEG_Offsets) - 1):
-            Size = len(mov_data) - _Offset
-        else:
-            Size = (JPEG_Offsets[_Index+1] - _Offset)
-
-        # Extract JPEG from MOV file
-        ImageData = mov_data[_Offset:(Size + _Offset if Size is not None else None)]
-
-        # Extract EXIF data from JPEG file
-        ImageData_File = StringIO(ImageData)
-        EXIF_Tags = exifread.process_file(ImageData_File)
-        EXIF_Valid = ValidateEXIFData(EXIF_Tags)
-
-        # Output file variables
-        timestamp = ""
-        Output_Name = ""
-        Output_Image = None
-
-        # Verify EXIF data integrity
-        if EXIF_Valid:
-
-            # Calculate the output filename
-            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
-            epoch = calendar.timegm(date_object.utctimetuple())
-            timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
-            Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
-
-        # Check if timestamp is valid
-        if EXIF_Valid and (timestamp in Valid_Timestamps):
-
-            # Chceck image integrity
-            jpeg_messages = validate_jpeg_from_buffer(ImageData)
-
-            # Check presence of error or warning messages
-            if jpeg_messages[0] or jpeg_messages[1]:
-
-                # Debug output
-                ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
-
-                # Create output trash dir if not exists
-                if not os.path.isdir(TrashFolder):
-                    os.makedirs(TrashFolder)
-
-                # Open output file
-                Output_Image = open('%s/%s.jp4' % (TrashFolder, Output_Name), 'wb')
-
-                # Add corruped timestamp to list
-                if not timestamp in Results[8]:
-                    Results[8].append(timestamp)
-
-            else:
-
-                # Increment extracted files count
-                Results[3] += 1
-
-                # Save output folder
-                OutDir = OutputFolder
-
-                # Check if max files option is specified
-                if Results[4] != 0:
-
-                    # Initialize base folder (0)
-                    OutDir = "%s/%s" % (OutputFolder, Results[6])
-
-                    # Check if extracted files exceed limit
-                    if Results[3] > Results[5]:
-
-                        # Increment folder index
-                        Results[6] += 1
-
-                        # Increment actual limit by max files
-                        Results[5] += Results[4]
-
-                        # Determine output folder
-                        OutDir = "%s/%s" % (OutputFolder, Results[6])
-
-                        # Notify user about directory change
-                        ShowMessage("Directory changed to %s due to files limit" % (OutDir), 0, 0, tid)
-
-                        # Create directory if not exists
-                        if not os.path.isdir(OutDir):
-                            os.makedirs(OutDir)
-
-                # Add timestamp to list
-                Results[1].append(JP4Image("%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"]), ModuleName, Results[6], Results[7]))
-
-                # Open output file
-                Output_Image = open('%s/%s.jp4' % (OutDir, Output_Name), 'wb')
-
-        # write the file
-        if Output_Image:
-            Output_Image.write(ImageData)
-            Output_Image.close()
-
-        # Close StringIO image stream
-        ImageData_File.close()
-
-    return Results
-
-# Thread function to extract MOV files
-@timed
-def extractMOV_Thread(tid, Threads, InputFile, OutputFolder, TrashFolder, ModuleName, Results_back, Valid_Timestamps):
-
-    # Add action to queue
-    Threads.put(
-        extractMOV(
-            tid,
-            InputFile,
-            OutputFolder,
-            TrashFolder,
-            ModuleName,
-            Results_back,
-            Valid_Timestamps
-        )
-    )
-
-# Function to rearange images into full modules sets
-@timed
-def rearrangeImages(Folder, Images, CorruptedOEF, Output, Limit, ModuleCount):
-
-    # Scope variables
-    Counter = 0
-    Folder_Index = 0
-    Limit_Counter = Limit
-    Arranged_List = []
-
-    for image in Images:
-
-        # Compute output directory
-        OutDir = '%s/../%s' % (Output, Folder_Index)
-
-        # Create output directory if not exists
-        if not os.path.isdir(OutDir):
-            os.makedirs(OutDir)
-
-        # Check if sequence is not corrupted
-        if image.timestamp not in CorruptedOEF:
-
-            # Compute source file name
-            SourceFile = '%s/%s.jp4' % (Folder, image.path)
-
-            # If file exists move it
-            if os.path.isfile(SourceFile):
-                shutil.move(SourceFile, '%s/%s_%d.jp4' % (OutDir, image.timestamp, image.module))
-                Arranged_List.append( JP4Image(image.timestamp, image.module, Folder_Index, -1) )
-
-        # Increment index
-        Counter += 1
-
-        # Check file limit
-        if Counter > Limit_Counter and (Counter % ModuleCount == 0):
-            Limit_Counter += Limit
-            Folder_Index += 1
-
-    # Return result
-    return Arranged_List
-
-# Function to check if a segment is already extracted
-@timed
-def SegmentFinished(JSONFile):
-
-    # Open file
-    SourceJSON = open(JSONFile, 'r')
-
-    # Load JSON file
-    json_data = json.load(SourceJSON)
-
-    # Close file
-    SourceJSON.close()
-
-    # Check if segment is already extracted
-    if json_data['split']:
-        return True
-    else:
-        return False
-
-# Function to load validated timestamps from CSPS JSON file
-@timed
-def LoadTimestampsFromJSON(JSONFile):
-
-    # Results variable
-    Results = []
-
-    # Open file
-    SourceJSON = open(JSONFile, 'r')
-
-    # Load JSON file
-    json_data = json.load(SourceJSON)
-
-    # Close file
-    SourceJSON.close()
-
-    # Get pose sections
-    poses = json_data['pose']
-
-    # Iterate over pose sections
-    for j in poses:
-
-        # Check if status is unknown
-        if j['status'] == 'validated':
-
-            # Append result
-            Results.append("%d_%06d" % (j['sec'], j['usc']))
-
-    # Return result
-    return sorted(Results)
-
-# Function to update JSON file flags
-@timed
-def UpdateJSON(JSONFile, Arranged_Images, CorruptedTimestamps):
-
-    # Open file
-    SourceJSON = open(JSONFile, 'r')
-
-    # Load JSON file
-    json_data = json.load(SourceJSON)
-
-    # Close JSON file
-    SourceJSON.close()
-
-    # Set 'split' tag to true
-    json_data['split'] = True
-
-    # Create base folder reference table
-    BASE_REF = {}
-
-    for image in Arranged_Images:
-        BASE_REF[image.timestamp] = image.base_folder
-
-    # Get pose sections
-    poses = json_data['pose']
-
-    # Iterate over poses
-    for pose in poses:
-
-        # Compute timestamp
-        timestamp = "%d_%06d" % (pose['sec'], pose['usc'])
-
-        # Assign apropriate base folder to image
-        if timestamp in BASE_REF:
-            pose['folder'] = BASE_REF[timestamp]
-
-        # Assing corrupted tag if image is corrupted
-        if timestamp in CorruptedTimestamps:
-            pose['status'] = "corrupted"
-
-    # Write validated JSON file
-    with open(JSONFile, 'w') as outfile:
-        json.dump(json_data, outfile, sort_keys = True, indent = 4)
-
-
-# Function to get camera modules count by reading FastCal calibration file
-@timed
-def GetCameraModules(FastCalKeyFilePath):
-
-    # Instanciate ConfigParser
-    config = ConfigParser.RawConfigParser()
-
-    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
-    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
-
-    # Return value
-    return config.getint('calibration', 'modules')
-
-# Function to merge threads results
-@timed
-def mergeResults(Source, Dest):
-
-    # Merge Fail counter
-    Dest[0] += Source[0]
-
-    # Merge extracted files
-    for i in Source[1]:
-        Dest[2].append(i)
-
-    # Merge Extracted files count
-    Dest[3] += len(Source[1])
-
-    # Merge file limit counter
-    Dest[5] += Source[5]
-
-    # Merge file limit dir index
-    Dest[6] = Source[6]
-
-    # Merge corruped timestamps
-    for i in Source[8]:
-        Dest[8].append(i)
-
-# Function to get first available slot
-def GetSlot(Slots):
-
-    # Iterate over slots
-    for i in range(0, len(Slots)):
-
-        # If slot is not used return it
-        if Slots[i] == 0:
-            return i
-
-# Function to count used slots
-def UsedSlots(Slots):
-
-    # Local result variable
-    ret = 0
-
-    # Iterate over slots
-    for i in range(0, len(Slots)):
-
-        # If slot is used increment result
-        if Slots[i] == 1:
-            ret += 1
-
-    # Return result
-    return ret
-
-# MOV extraction data collector
-# pylint: disable=W0602
-@timed
-def WorkerThread_MOVCollector(Source, Dest):
-
-    # Global variables
-    global QUEUE_Done, QUEUE_Slots
-
-    # Infinite while
-    while QUEUE_Done != -1:
-
-        # Check if results queue is not empty
-        if not Source.empty():
-
-            # Retrieve the result
-            Ret = Source.get()
-
-            # Unlock thread slot
-            QUEUE_Slots[Ret[7]] = 0
-
-            # Merge results
-            mergeResults(Ret, Dest)
-
-            # Increment processed MOVs index
-            QUEUE_Done  += 1
-
-        # Wait 200ms
-        time.sleep(0.2)
-
-# Main thread
-# pylint: disable=W0602
-@timed
-def WorkerThread(__extractMOV_Results__, __extractMOV_Results_Template__, __Jobs__, __Total_Files__, __MOV_List_Optimized__, __Output__, __Trash__, Valid_Timestamps):
-
-    # Global variables
-    global QUEUE_Done, QUEUE_Slots
-
-    # Local variables
-    __Processed_Files__ = 1
-    Threads = Queue.Queue()
-    Threads_Results = []
-
-    # Initialize default threads results containers
-    for _ in range(0, __Jobs__):
-        Threads_Results.append(__extractMOV_Results_Template__[:])
-        QUEUE_Slots.append(0)
-
-    # Create collector thread
-    CollectorThread = threading.Thread(
-        target = WorkerThread_MOVCollector,
-        args = (Threads, __extractMOV_Results__)
-    )
-
-    # Start collector thread
-    CollectorThread.setDaemon(True)
-    CollectorThread.start()
-
-    # Loop until all MOVS are extracted
-    while QUEUE_Done < __Total_Files__:
-
-        # Insert a new item to the queue if not full
-        if (UsedSlots(QUEUE_Slots) < __Jobs__) and (len(__MOV_List_Optimized__) > 0):
-
-            # Get an available thread slot
-            Index = GetSlot(QUEUE_Slots)
-
-            # Pick one MOV file
-            MOV = __MOV_List_Optimized__[0]
-
-            # Debug output
-            ShowMessage("Extracting (%d/%d): %s..." % (__Processed_Files__, __Total_Files__, MOV.path))
-
-            # Issue 7980 fix
-            datetime.strptime('', '')
-
-            # Assign thread id
-            Threads_Results[Index][7] = Index
-
-            # Lock thread slot
-            QUEUE_Slots[Index] = 1
-
-            # Compute output folder
-            Output = "%s/t%d" % (__Output__, Index)
-
-            # Create dir if not exists
-            if not os.path.isdir(Output):
-                os.makedirs(Output)
-
-            # Create thread
-            ThreadJob = threading.Thread(
-                target = extractMOV_Thread,
-                args = (Index, Threads, MOV.path, Output, __Trash__, MOV.module, Threads_Results[Index], Valid_Timestamps)
-            )
-
-            # Start thread
-            ThreadJob.setDaemon(True)
-            ThreadJob.start()
-
-            # Increment index
-            __Processed_Files__ += 1
-
-            # Remove processed MOV file from list
-            __MOV_List_Optimized__.pop(0)
-
-        else:
-
-            # Wait 200ms
-            time.sleep(0.2)
-
-    # Exit threads
-    QUEUE_Done = -1
-
-
-# Usage display function
-def _usage():
-    print """
-    Usage: %s [OPTIONS]
+#!/bin/bash
+# rawdata-procedures - Camera raw data procedures
+#
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Kevin Velickovic <k.velickovic@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+# Script parameters #
+PARAM_MOUNT="/data/"
+PARAM_MAC=""
+PARAM_MASTER=""
+PARAM_SEGMENT=""
+PARAM_DISK_THREADS=""
+
+# Loop breaker
+LOOP_BREAK="0"
+
+# Help function
+_help() {
+    echo """
+    Usage: $(basename $0) [OPTIONS]
 
     [Required arguments]
-    --mount-point        Base mount directory
-    --mac-address        Camera MAC address
-    --master-timestamp   Master timestamp
+    --mount-point       Base mount directory
+    --mac-address       Camera MAC address
+    --master-timestamp  Master timestamp
 
     [Optional arguments]
-    --segment-timestamp  Segment timestamp
-    --output             Show STDOUT logs
-    --no-split           Exit program
+    --segment-timestamp Segment timestamp
+    --no-split          Exit program
+    --disk-threads      Process localy with specified number of threads
+    --help              Show this message
+    """
+}
 
-    """ % sys.argv[0]
+# Trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
 
-# Program entry point function
-# pylint: disable=W0603
-def main(argv):
+# CTRL-C handler function
+function ctrl_c() {
 
-    # Global variables
-    global STD_OUTPUT, QUEUE_Done
+    # Set loop break flag
+    LOOP_BREAK="1"
+}
 
-    # Scope variables initialisation
-    __Segments__   = []
-    __Exec_Timer__ = time.clock()
-    __Max_Files__  = 90000
+# Arguments and parameters parser
+arguments() {
 
-    # Parse arguments
-    Arguments = {}
-    Argv_Concat = ' '.join(argv)
-    Argv_Flags = Argv_Concat.split('--')
+    # Search in arguments
+    while [[ $# > 0 ]]; do
 
-    # Iterate over source args
-    for i in Argv_Flags:
+        args="$1"
+        shift
+        case $args in
+            --no-split)
+                echo --no-split given exiting...
+                exit
+            ;;
+            --mount-point)
+                PARAM_MOUNT="$1"
+                shift
+            ;;
+            --mac-address)
+                PARAM_MAC="$1"
+                shift
+            ;;
+            --master-timestamp)
+                PARAM_MASTER="$1"
+                shift
+            ;;
+            --segment-timestamp)
+                PARAM_SEGMENT="$1"
+                shift
+            ;;
+            --disk-threads)
+                if [ -z "$1" ]; then
+                    PARAM_DISK_THREADS="+0"
+                else
+                    PARAM_DISK_THREADS="$1"
+                fi
+                shift
+            ;;
+            --help | -h)
+                _help
+                exit
+            ;;
+        esac
 
-        # Check length
-        if len(i) > 0:
+    done
 
-            # Split by first space
-            splited = i.split(' ', 1)
+}
 
-            # Check if argument contains value
-            if len(splited) > 1:
-                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
-            else:
-                Arguments[splited[0]] =  None
+if [ $# -eq 0 ]; then
+    _help
+    exit
+fi
 
-    # Arguments variables initialisation
-    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
-    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
-    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
-    __SegmentTimestamp__ = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    STD_OUTPUT           = (1 if 'output' in Arguments else 0)
-    __Jobs__             = 1
+# Argument and parameters #
+arguments $@
 
-    # Arguments check
-    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
-        _usage()
-        sys.exit(0)
+# Check execution consistency #
+if [ -z "$PARAM_MOUNT" ] || [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
 
-    if 'no-split' in Arguments:
-        print >> sys.stderr, '--no-split argument given, exiting...'
-        sys.exit(0)
+    # Exit script #
+    echo "Error : cannot continue execution without --mount-point/--mac-address/--master-timestamp parameters"
+    exit 1
 
-    # Compute paths
-    BaseSyncFolder     = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    FastCalKeyFile     = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
-    StateDir           = "%s/info/rawdata-procedures" % BaseSyncFolder
+fi
 
-    # Check if state dir exists, if not create it
-    if not os.path.isdir(StateDir):
-        os.makedirs(StateDir)
+# Check execution consistency #
+if [ ! -d $PARAM_MOUNT/camera ]; then
 
-    # Get camera modules count
-    ModuleCount = GetCameraModules(FastCalKeyFile)
+    # Exit script #
+    echo "Error : unable to access standard directory with specified mount point"
+    exit 1
 
-    # Get available segments
-    if __SegmentTimestamp__:
-        __Segments__.append(__SegmentTimestamp__)
-    else:
-        __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
+fi
+
+# SSH configs cirectory
+SSH_CONFIGS_DIR="$PARAM_MOUNT/system/etc/ssh-configs/rawdata-procedures"
+
+# SSH config file
+SSH_CONFIG_FILE="$SSH_CONFIGS_DIR/rawdata-movsplit.conf"
+
+# Segments base folder
+MASTER_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER"
+
+# Segments base folder
+SEGMENTS_DIR="$MASTER_DIR/segment"
+
+# Scripts paths
+PARALLEL_SCRIPT="$PARAM_MOUNT/system/bin/parallel"
+SPLIT_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-splitter"
+JSONUPDATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-jsonupdater"
+STATE_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-state"
+LIST_SCRIPT="$PARAM_MOUNT/system/bin/rawdata-movsplit-movlist"
+
+# Check if a segment is specified
+if [ -z "$PARAM_SEGMENT" ]; then
 
     # Iterate over segments
+    for d in $SEGMENTS_DIR/* ; do
 
-    # Counter index
-    Index = 1
+        # Determine segment folder
+        SEGMENT_TIMESTAMP=$(basename $d)
+        SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
 
-    for Segment in __Segments__:
+        # Check if segment is already splitted
+        python $STATE_SCRIPT $PARAM_MOUNT \
+        $PARAM_MAC \
+        $PARAM_MASTER \
+        $SEGMENT_TIMESTAMP
 
-        # Compute JSON file path
-        __JSONFile__ = "%s/%s/info/rawdata-autoseg/segment.json" % (BaseSegmentsFolder, Segment)
+        if [ $? -eq 1 ]; then
+            echo "Segment $SEGMENT_TIMESTAMP already splitted, skipping"
+        else
 
-        # Check if segment is already extracted
-        if not SegmentFinished(__JSONFile__):
+            # Split segment
+            echo Splitting segment $SEGMENT_TIMESTAMP...
 
-            # Scope variables
-            __extractMOV_Results_Template__ = [
-                0,  # Fail counter
-                [], # Last extracted files timestamps
-                [], # Extracted files
-                0,  # Extracted files count
-                __Max_Files__,  # File limit value
-                __Max_Files__,  # File limit counter
-                0,  # File limit dir index
-                0,  # Thread id
-                []  # Corruped timestamps
-            ]
-            __extractMOV_Results__ = __extractMOV_Results_Template__[:]
-            __MOV_List__           = []
-            __MOV_List_Optimized__ = []
-            __Total_Files__        = 0
-            QUEUE_Done             = 0
+            if [ -z "$PARAM_DISK_THREADS" ]; then
+                python $LIST_SCRIPT \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $SEGMENT_TIMESTAMP | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $SPLIT_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $SEGMENT_TIMESTAMP
+            else
+                python $LIST_SCRIPT \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $SEGMENT_TIMESTAMP | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $SPLIT_SCRIPT {} \
+                $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $SEGMENT_TIMESTAMP
+            fi
 
-            # Debug output
-            print >> sys.stderr, "Processing segment %s %d/%d" % (Segment, Index, len(__Segments__))
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
-            # Compute paths
-            __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
-            __Output__   = "%s/%s/jp4" % (BaseSegmentsFolder, Segment)
-            __Trash__    = "%s/%s/info/corrupted/jp4" % (BaseSegmentsFolder, Segment)
+            # Update JSON file
+            echo Updating segment JSON file...
+            python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $SEGMENT_TIMESTAMP
+        fi
+    done
 
-            # Append temp folder to output path
-            __Output__ = ("%s/temp" % __Output__)
+else
 
-            # Create default directories
-            if __Output__ and not os.path.isdir(__Output__):
-                os.makedirs(__Output__)
+    # Determine segment folder
+    SEGMENT_FOLDER=$SEGMENTS_DIR/$PARAM_SEGMENT
 
-            # Insert all MOV files into a temporary array
-            for mn in range(1, ModuleCount + 1):
-                Movs = []
-                for MOV in sorted(glob.glob("%s/%s/*.mov" % (__Input__, mn))):
-                    Movs.append( MovFile(MOV, mn) )
-                __MOV_List__.append(Movs)
+    # Check if segment is already splitted
+    python $STATE_SCRIPT $PARAM_MOUNT \
+    $PARAM_MAC \
+    $PARAM_MASTER \
+    $PARAM_SEGMENT
 
-            # Sort MOV files
-            while len(__MOV_List__) > 0:
-                for MovArray in __MOV_List__:
-                    for MOV in MovArray:
-                        __MOV_List_Optimized__.append(MOV)
-                        __Total_Files__ += 1
-                        MovArray.pop(0)
-                        break
-                if len(__MOV_List__[0]) <= 0:
-                    __MOV_List__.pop(0)
+    if [ $? -eq 1 ]; then
+        echo "Segment $PARAM_SEGMENT already splitted, skipping"
+    else
 
-            # Debug output
-            if not quietEnabled():
-                ShowMessage("Extracting MOV files...")
+        # Split segment
+        echo Splitting segment $PARAM_SEGMENT...
+        if [ -z "$PARAM_DISK_THREADS" ]; then
+            python $LIST_SCRIPT \
+            $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $PARAM_SEGMENT | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE python $SPLIT_SCRIPT {} \
+            $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $PARAM_SEGMENT
+        else
+            python $LIST_SCRIPT \
+            $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $PARAM_SEGMENT | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS python $SPLIT_SCRIPT {} \
+            $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $PARAM_SEGMENT
+        fi
 
-            # Error handling
-            if __Total_Files__ == 0:
-                ShowMessage("No MOV files", 2)
+        # Loop break checker
+        if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
-            # Debug output
-            if not quietEnabled():
-                ShowMessage("Loading segment.json...")
+        # Update JSON file
+        echo Updating segment JSON file...
+        python $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+        $PARAM_MAC \
+        $PARAM_MASTER \
+        $PARAM_SEGMENT
+    fi
 
-            # Load valid timestamps list
-            Valid_Timestamps = LoadTimestampsFromJSON(__JSONFile__)
-
-            #Create main thread
-            MainThread = threading.Thread(
-                target = WorkerThread,
-                args = (__extractMOV_Results__, __extractMOV_Results_Template__, __Jobs__, __Total_Files__, __MOV_List_Optimized__, __Output__, __Trash__, Valid_Timestamps)
-            )
-
-            # Start main thread
-            MainThread.setDaemon(True)
-            MainThread.start()
-
-            # Wait until main thread finishes
-            while MainThread.is_alive():
-                time.sleep(0.5)
-
-            # Debug output
-            if not quietEnabled():
-                ShowMessage("Sorting results...")
-
-            # Sort image list
-            __extractMOV_Results__[2] = sorted(__extractMOV_Results__[2], key=lambda item: item.timestamp)
-
-            # Clamp max files to module count
-            if __Max_Files__ < ModuleCount:
-                __Max_Files__ = ModuleCount
-
-            # Convert limit to a power of 9
-            Limit = (__Max_Files__ / ModuleCount) * ModuleCount
-
-            # Debug output
-            if not quietEnabled():
-                ShowMessage("Rearranging images...")
-
-            # Rearrange images
-            Arranged_Images = rearrangeImages(__Output__, __extractMOV_Results__[2], __extractMOV_Results__[8], __Output__, Limit, ModuleCount)
-
-            # Debug output
-            if not quietEnabled():
-                ShowMessage("Updating JSON file...")
-
-            # Update JSON file flags
-            UpdateJSON(__JSONFile__, Arranged_Images, __extractMOV_Results__[8])
-
-            # Remove temp folder
-            if os.path.isdir(__Output__):
-                shutil.rmtree(__Output__)
-
-            # Increment index
-            Index += 1
-
-        else:
-
-            # Debug output
-            print >> sys.stderr, "Skipping segment '%s', already extracted" % Segment
-
-            # Increment index
-            Index += 1
-
-    # Debug output
-    if not quietEnabled():
-        Delay = (time.clock() - __Exec_Timer__)
-        ShowMessage("Done in %s" % time.strftime("%H:%M:%S", time.gmtime(Delay)))
-
-# Program entry point
-if __name__ == "__main__":
-    main(sys.argv[1:])
+fi

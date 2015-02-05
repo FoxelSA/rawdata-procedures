@@ -186,8 +186,8 @@ def main(argv):
         sys.exit(0)
 
     # Compute paths
-    BaseSyncFolder = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    FastCalKeyFile = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    BaseSyncFolder = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    FastCalKeyFile = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
 
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)

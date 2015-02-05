@@ -1,0 +1,134 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+# Imports
+import glob
+import json
+import os
+import re
+import sys
+
+
+def updateJson(JSONFile, CorruptedPath):
+
+    # Local corrupted timestamps container
+    TimeStamps = []
+
+    # Iterate over corrupted files
+    for filePath in glob.glob("%s/*.jp4" % CorruptedPath):
+
+        # Get file name
+        FileName = os.path.basename( filePath )
+
+        # Extract timestamp from file name
+        exp = re.match( r'(\d+)_(\d+)_(\d+)\.jp4', FileName)
+
+        # Extract timestamp from JP4 path
+        TimeStamp = "%s_%s" % (exp.group(1), exp.group(2))
+
+        # Append timestamp to list
+        TimeStamps.append( TimeStamp )
+
+    # Open file
+    SourceJSON = open(JSONFile, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Close JSON file
+    SourceJSON.close()
+
+    # Set 'split' tag to true
+    json_data['split'] = True
+
+    # Get pose sections
+    poses = json_data['pose']
+
+    # Iterate over poses
+    for pose in poses:
+
+        # Compute timestamp
+        timestamp = "%d_%06d" % (pose['sec'], pose['usc'])
+
+        # Assing corrupted tag if image is corrupted
+        if timestamp in TimeStamps:
+            pose['status'] = "corrupted"
+
+    # Write validated JSON file
+    with open(JSONFile, 'w') as outfile:
+        json.dump(json_data, outfile, sort_keys = True, indent = 4)
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
+    """ % os.path.basename( sys.argv[ 0 ] )
+
+# Program entry point function
+# pylint: disable=W0603
+def main(argv):
+
+    # Check arguments
+    if( len( argv ) < 4 ):
+        _usage()
+        sys.exit( 0 )
+
+    # Parse arguments
+    __Param_Mount__   = argv[ 0 ]
+    __Param_MAC__     = argv[ 1 ]
+    __Param_Master__  = argv[ 2 ]
+    __Param_Segment__ = argv[ 3 ]
+
+    # Compute base path
+    __BasePath__ = "%s/rawdata/%s/master/%s" % (__Param_Mount__, __Param_MAC__, __Param_Master__)
+
+    # Compute JSON file path
+    __JSONFile__ = "%s/segment/%s/info/segment.json" % (__BasePath__, __Param_Segment__)
+
+    # Compute currupted images path
+    __CorruptedPath__ = "%s/info/raw/corrupted/integrity" % (__BasePath__)
+
+    # Tag corrupted images in json
+    updateJson( __JSONFile__, __CorruptedPath__)
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

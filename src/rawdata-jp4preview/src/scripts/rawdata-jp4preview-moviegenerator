@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+# Imports
+import sys
+import os
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <No debayer ? *0|1>
+    """ % os.path.basename( sys.argv[ 0 ] )
+
+# Program entry point function
+# pylint: disable=W0603
+def main(argv):
+
+    # Check arguments
+    if( len( argv ) < 5 ):
+        _usage()
+        sys.exit( 0 )
+
+    # Arguments variables
+    __MountPoint__       = argv[ 0 ]
+    __CameraMAC__        = argv[ 1 ]
+    __MasterTimestamp__  = argv[ 2 ]
+    __SegmentTimestamp__ = argv[ 3 ]
+    __Param_NoDebayer__ = "0"
+
+    if( len( argv ) > 4 ):
+        __Param_NoDebayer__ = argv[ 4 ]
+
+    # Compute JSON file path
+    __Segment_Folder__ = "%s/rawdata/%s/master/%s/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__, __SegmentTimestamp__)
+    __NoDebayer__ = (int( __Param_NoDebayer__ ) == 1)
+
+    # Compute source folder
+    PreviewsFolder = "%s/preview/%s/img" % (__Segment_Folder__, ('no-debayer' if __NoDebayer__ else 'debayer'))
+
+    # Compute destination folder
+    VideoFolder = "%s/preview/%s/vid" % (__Segment_Folder__, ('no-debayer' if __NoDebayer__ else 'debayer'))
+
+    # Create output folder if not present
+    if not os.path.isdir(VideoFolder):
+        os.makedirs(VideoFolder)
+
+    # Create preview movie if not exists
+    if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
+        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/25fps.webm > /dev/null 2>&1' % (PreviewsFolder, VideoFolder))
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

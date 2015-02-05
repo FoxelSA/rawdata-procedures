@@ -5,6 +5,7 @@
 
     all:directories
 	cp src/rawdata-movsplit bin/rawdata-movsplit
+	cp src/scripts/* bin/
 
 #
 #   make - directories

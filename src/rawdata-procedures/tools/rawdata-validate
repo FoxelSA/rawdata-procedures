@@ -168,16 +168,12 @@ def main(argv):
         sys.exit(0)
 
     # Compute paths
-    BaseSegmentsFolder = "%s/camera/%s/raw/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    BaseSyncFolder     = "%s/camera/%s/raw/sync/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    BinFile            = "%s/info/rawdata-procedures/jp4table.bin" % (BaseSyncFolder)
-    FastCalKeyFile     = "%s/camera/%s/info/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    BaseSyncFolder     = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    BinFile            = "%s/info/raw/jp4table.bin" % (BaseSyncFolder)
+    FastCalKeyFile     = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
 
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)
-
-    # Get all segments
-    __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
 
     # Debug output
     ShowMessage("Loading jp4table.bin file (%s)..." % BinFile)
@@ -241,82 +237,8 @@ def main(argv):
     else:
         ShowMessage("All MOV files are present in jp4table.bin")
 
-    # Debug output
-    ShowMessage("Validating segments hardlinks based on inodes...")
-
-    # Find all MOV inodes
-    RAW_MOV_INODES = []
-
-    for mov in __MOV_List__:
-        inode = os.stat(mov.path).st_ino
-        RAW_MOV_INODES.append(inode)
-    RAW_MOV_INODES = sorted(RAW_MOV_INODES)
-
-
-    # Error counter
-    Inode_Errors = 0
-
-    # Check if all mov files have valid hardlinks
-    # Iterate over segments
-    for Segment in __Segments__:
-
-        # Compute paths
-        __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
-        __MOV_Files__  = sorted(glob.glob("%s/*/*.mov" % __Input__))
-
-        # Iterate over MOV files
-        for mov in __MOV_Files__:
-            inode = os.stat(mov).st_ino
-
-            if not inode in RAW_MOV_INODES:
-                ShowMessage("Inode error on %s" % mov, 1)
-                Inode_Errors += 1
-
-    if Inode_Errors > 0:
-        ShowMessage("%d MOV file(s) have bad inodes" % Inode_Errors, 1)
-    else:
-        ShowMessage("All MOV files have good inodes")
-
-
-    # Debug outputfiles
-    ShowMessage("Validating segments hardlinks based on MOV files...")
-
-    # Check if all mov files are hardlinked
-    # Iterate over segments
-    SEGMENTS_MOV_FILES = []
-
-    for Segment in __Segments__:
-
-        # Compute paths
-        __Input__    = "%s/%s/mov" % (BaseSegmentsFolder, Segment)
-
-        # Find all mov files
-        for mn in CameraModules:
-            for MOV in sorted(glob.glob("%s/*/*.mov" % __Input__)):
-                File = MovFile(MOV, mn)
-                SEGMENTS_MOV_FILES.append( "%s_%s" % (File.timestamp, File.microtimestamp) )
-        SEGMENTS_MOV_FILES = sorted(SEGMENTS_MOV_FILES)
-
-    # Error counter
-    Hardlink_Errors = 0
-
-    # Iterate over MOV files
-    for mov in __MOV_List__:
-        timestamp = "%s_%d" % (mov.timestamp, mov.microtimestamp)
-
-        if not timestamp in SEGMENTS_MOV_FILES:
-            ShowMessage("Source MOV file %s are not hardlinked" % mov.path, 1)
-            Hardlink_Errors += 1
-
-    if Hardlink_Errors > 0:
-        ShowMessage("%d MOV file(s) are not hardlinked" % Hardlink_Errors, 1)
-    else:
-        ShowMessage("All MOV files are hardlinked")
-
     ShowMessage("== Tests summary ==")
     ShowMessage("Missing MOV file(s) in jp4table.bin: %d" % MOV_Errors)
-    ShowMessage("Wrong hardlinks inodes: %d" % Inode_Errors)
-    ShowMessage("Unlinked MOV files: %d" % Hardlink_Errors)
 
 
 # Program entry point

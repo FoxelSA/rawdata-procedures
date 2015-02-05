@@ -1,0 +1,199 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import json
+import struct
+import os
+import sys
+
+# Global variables
+STD_OUTPUT = 0
+
+# Main binary file structure parameters
+MAIN_TYPE   = 'i i i i h'
+MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
+MAIN_STRUCT = struct.Struct(MAIN_TYPE)
+
+# Function to compare a specified timestamp
+def GreaterOrEqual(timestamp_a, timestamp_a_usc, timestamp_b, timestamp_b_usc):
+
+    # Check if first is greater than second
+    if timestamp_a > timestamp_b:
+
+        # Return result
+        return True
+    else:
+
+        # Check if first is equal to second
+        if timestamp_a == timestamp_b:
+
+            # Check if first is greater or equal than second
+            if timestamp_a_usc >= timestamp_b_usc:
+
+                # Return result
+                return True
+            else:
+
+                # Return result
+                return False
+        else:
+
+            # Return result
+            return False
+
+# Function to find MOV files containing specified JP4 timestamps ranges
+def SearchRange(start_ts, start_micro, end_ts, end_micro, List):
+
+    # Local results variable
+    Results = []
+
+    # Iterate over list
+    for i in List:
+
+        # Check if timestamp is in range
+        if GreaterOrEqual(i[0], i[1], start_ts, start_micro) and GreaterOrEqual(end_ts, end_micro, i[0], i[1]):
+
+            # Build result value
+            MOV = [i[2], i[3], i[4]]
+
+            # Insert result if not present
+            if not MOV in Results:
+                Results.append(MOV)
+
+    # Return results
+    return Results
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
+    """ % os.path.basename( sys.argv[ 0 ] )
+
+# Program entry point function
+def main(argv):
+
+    # Check arguments
+    if( len( argv ) < 4 ):
+        _usage()
+        sys.exit( 0 )
+
+    # Arguments variables
+    __MountPoint__       = argv[ 0 ]
+    __CameraMAC__        = argv[ 1 ]
+    __MasterTimestamp__  = argv[ 2 ]
+    __SegmentTimestamp__ = argv[ 3 ]
+
+    # Compute paths
+    BaseSyncFolder    = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    InputFile         = "%s/info/raw/jp4table.bin" % (BaseSyncFolder)
+    SourceMOVDir      = "%s/mov" % (BaseSyncFolder)
+
+    # Build CSPS range list
+    RANGES = []
+
+    # Find all JSON files
+    JSON_File = "%s/rawdata/%s/master/%s/segment/%s/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__, __SegmentTimestamp__)
+
+    # Open file
+    with open(JSON_File) as f:
+
+        # Load JSON file
+        json_data = json.load(f)
+
+        # Get pose sections
+        poses = json_data['pose']
+
+        # Apprend values to list
+        RANGES.append([
+                json_data['pose'][0]['sec'],
+                json_data['pose'][0]['usc'],
+                json_data['pose'][len(poses) - 1]['sec'],
+                json_data['pose'][len(poses) - 1]['usc']
+            ]
+        )
+
+    # Read state file
+    BINARY_DATA = open(InputFile, "rb").read()
+
+    # Determine data length
+    Len = len(BINARY_DATA)
+
+    # Determine entries count
+    Count = Len / MAIN_SIZE
+
+    # Initialize variables
+    VALUES = []
+    Offset = MAIN_SIZE
+
+    # Iterate over entries count
+    for i in range(0, Count):
+
+        # Unpack binary values
+        Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
+
+        # Append values to array
+        VALUES.append( Unpacked )
+
+        # Increment offset
+        Offset += MAIN_SIZE
+
+    # Iterate over CSPS ranges
+    for i in RANGES:
+
+        # Search matching MOV files based on given ranges
+        Querry = SearchRange(i[0], i[1], i[2], i[3], VALUES)
+
+        # Verify that search returned values
+        if len(Querry) > 0:
+
+            # Iterate over search results
+            for j in Querry:
+
+                # Compute paths
+                SourceFile = "%s/%d/%d_%06d.mov" % (SourceMOVDir, j[2], j[0], j[1])
+
+                # Output result
+                print( SourceFile )
+
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
