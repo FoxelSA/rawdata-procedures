@@ -53,7 +53,7 @@ MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
 MAIN_STRUCT = struct.Struct(MAIN_TYPE)
 
 # Function to compare a specified timestamp
-def GreaterOrEqual(timestamp_a, timestamp_a_usc, timestamp_b, timestamp_b_usc):
+def GreaterOrEqual(timestamp_a, timestamp_a_usec, timestamp_b, timestamp_b_usec):
 
     # Check if first is greater than second
     if timestamp_a > timestamp_b:
@@ -66,7 +66,7 @@ def GreaterOrEqual(timestamp_a, timestamp_a_usc, timestamp_b, timestamp_b_usc):
         if timestamp_a == timestamp_b:
 
             # Check if first is greater or equal than second
-            if timestamp_a_usc >= timestamp_b_usc:
+            if timestamp_a_usec >= timestamp_b_usec:
 
                 # Return result
                 return True
@@ -144,9 +144,9 @@ def main(argv):
         # Apprend values to list
         RANGES.append([
                 json_data['pose'][0]['sec'],
-                json_data['pose'][0]['usc'],
+                json_data['pose'][0]['usec'],
                 json_data['pose'][len(poses) - 1]['sec'],
-                json_data['pose'][len(poses) - 1]['usc']
+                json_data['pose'][len(poses) - 1]['usec']
             ]
         )
 

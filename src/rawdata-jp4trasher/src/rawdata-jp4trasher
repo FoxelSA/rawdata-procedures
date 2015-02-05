@@ -272,17 +272,17 @@ def main(argv):
         for j in poses:
 
             # Check if status is unknown
-            if j['status'] == 'unknown':
+            if j['raw'] == 'unknown':
 
                 # Check if timestamp is not trashed
-                if '%d_%06d' % (j['sec'], j['usc']) in COMPLETE_TIMESTAMPS:
+                if '%d_%06d' % (j['sec'], j['usec']) in COMPLETE_TIMESTAMPS:
 
                     # Tag as valid
-                    j['status'] = "validated"
+                    j['raw'] = "valid"
                 else:
 
                     # Tag as trashed
-                    j['status'] = "trashed"
+                    j['raw'] = "trash"
 
         # Write validated JSON file
         with open(i, 'w') as outfile:

@@ -225,10 +225,10 @@ def LoadTimestampsFromJSON(JSONFile):
     for j in poses:
 
         # Check if status is unknown
-        if j['status'] == 'validated':
+        if j['raw'] == 'valid':
 
             # Append result
-            Results.append("%d_%06d" % (j['sec'], j['usc']))
+            Results.append("%d_%06d" % (j['sec'], j['usec']))
 
     # Return result
     return sorted(Results)

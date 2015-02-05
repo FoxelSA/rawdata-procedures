@@ -86,11 +86,11 @@ def updateJson(JSONFile, CorruptedPath):
     for pose in poses:
 
         # Compute timestamp
-        timestamp = "%d_%06d" % (pose['sec'], pose['usc'])
+        timestamp = "%d_%06d" % (pose['sec'], pose['usec'])
 
         # Assing corrupted tag if image is corrupted
         if timestamp in TimeStamps:
-            pose['status'] = "corrupted"
+            pose['raw'] = "corrupt"
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
