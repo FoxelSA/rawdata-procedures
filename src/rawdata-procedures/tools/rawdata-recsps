@@ -1,0 +1,66 @@
+#!/bin/bash
+# rawdata-procedures - Camera raw data procedures
+#
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Nils Hamel <n.hamel@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+# Usage :
+# rawdata-recsps path_to_auto-segment mac-address
+
+# Topology file #
+echo "rawdata-recsps : Reseting topology file ..."
+rm -f $1/csps/topology
+cp $1/../../../../../../camera/$2/csps/csps-topology $1/csps/topology
+
+# Clear streams #
+echo "rawdata-recsps : Clear streams ..."
+rm -f $1/csps/streams/*.bin
+
+# CSPS-process #
+echo "rawdata-recsps : CSPS-processing ..."
+csps-process -p $1/csps \
+             -t $1/csps/topology \
+              > /dev/null
+
+# JSON file #
+echo "rawdata-recsps : Backup JSON export file ..."
+rm -f $1/info/segment.json.backup
+cp    $1/info/segment.json $1/info/segment.json.backup
+
+# JSON export #
+echo "rawdata-recsps : Export JSON file ..."
+csps-export -p $1/csps -e $1/info/segment.json -c eyesis4pi \
+            -m mod-DSIDE -g ls20031 -n mod-SGNQF -i adis16375 \
+            -s mod-IFETI -t adis16375 -k mod-ISRAD > /dev/null
+
