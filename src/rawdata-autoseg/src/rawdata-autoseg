@@ -143,6 +143,7 @@ process() {
 
         # Retrieve auto-segment timestamp #
         MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
+        >&2 echo "    $AS_ENUM -> $MTS"
         echo "    $AS_ENUM -> $MTS" >> $AS_RAW/csps/logs-broadcast.log
 
         # Creates CSPS-specific directories #
