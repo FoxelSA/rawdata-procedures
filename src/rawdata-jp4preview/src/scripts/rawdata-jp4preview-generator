@@ -183,10 +183,10 @@ def GetImagesCorrections(FastCalKeyFilePath):
         Output.rolls.append( config.getfloat('calibration', 'roll_%02d' % i) )
 
         # Append vertical flip
-        Output.vflips.append( config.getint('calibration', 'flip_ver_%02d' % i) )
+        Output.vflips.append( config.getint('calibration', 'vflip_%02d' % i) )
 
         # Append horizontal flip
-        Output.hflips.append( config.getint('calibration', 'flip_hor_%02d' % i) )
+        Output.hflips.append( config.getint('calibration', 'hflip_%02d' % i) )
 
     # Return value
     return Output
