@@ -111,6 +111,35 @@ def find_all(a_str, sub):
         # Move pointer to next occurence
         start += len(sub)
 
+# Function to validate EXIF data contents
+def ValidateEXIFData(EXIFData):
+
+    # Check if EXIF data is present
+    if not EXIFData:
+        return False
+
+    # Verify micro timestamp entry presence
+    if 'EXIF SubSecTimeOriginal' in EXIFData:
+
+        # Verify micro timestamp
+        if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
+            return False
+    else:
+        return False
+
+    # Verify image date entry presence
+    if 'Image DateTime' in EXIFData:
+
+        # Verify image date
+        _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
+        if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+            return False
+    else:
+        return False
+
+    # Return True if all tests passed
+    return True
+
 # Function to extract JPEG images inside a MOV file
 def extractMOV(InputFile, ModuleName, TrashFolder, OutputFolder, Valid_Timestamps):
 
@@ -145,63 +174,66 @@ def extractMOV(InputFile, ModuleName, TrashFolder, OutputFolder, Valid_Timestamp
         ImageData_File = StringIO(ImageData)
         EXIF_Tags = exifread.process_file(ImageData_File)
 
-        # Output file variables
-        timestamp = ""
-        Output_Name = ""
-        Output_Image = None
+        # Check if EXIF data integrity
+        if ValidateEXIFData( EXIF_Tags ):
 
-        # Calculate the output filename
-        date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
-        epoch = calendar.timegm(date_object.utctimetuple())
-        timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
-        Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
-        Output_Prefix = str(epoch)[:8]
+            # Output file variables
+            timestamp = ""
+            Output_Name = ""
+            Output_Image = None
 
-        # Check if timestamp is valid
-        if (timestamp in Valid_Timestamps):
+            # Calculate the output filename
+            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
+            epoch = calendar.timegm(date_object.utctimetuple())
+            timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
+            Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
+            Output_Prefix = str(epoch)[:8]
 
-            # Chceck image integrity
-            jpeg_messages = validate_jpeg_from_buffer(ImageData)
+            # Check if timestamp is valid
+            if (timestamp in Valid_Timestamps):
 
-            # Check presence of error or warning messages
-            if jpeg_messages[0] or jpeg_messages[1]:
+                # Chceck image integrity
+                jpeg_messages = validate_jpeg_from_buffer(ImageData)
 
-                # Debug output
-                ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
+                # Check presence of error or warning messages
+                if jpeg_messages[0] or jpeg_messages[1]:
 
-                # Create output trash dir if not exists
-                if not os.path.isdir(TrashFolder):
-                    os.makedirs(TrashFolder)
+                    # Debug output
+                    ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
 
-                # Compute output file path
-                Output_Path = '%s/%s.jp4' % (TrashFolder, Output_Name)
+                    # Create output trash dir if not exists
+                    if not os.path.isdir(TrashFolder):
+                        os.makedirs(TrashFolder)
 
-                # Open output file
-                Output_Image = open(Output_Path, 'wb')
+                    # Compute output file path
+                    Output_Path = '%s/%s.jp4' % (TrashFolder, Output_Name)
 
-            else:
+                    # Open output file
+                    Output_Image = open(Output_Path, 'wb')
 
-                # Compute destination folder
-                DestFolder = "%s/%s" % (OutputFolder, Output_Prefix)
+                else:
 
-                # Create output trash dir if not exists
-                if not os.path.isdir( DestFolder ):
-                    os.system("mkdir -p %s" % DestFolder)
-                    time.sleep( 1 )
+                    # Compute destination folder
+                    DestFolder = "%s/%s" % (OutputFolder, Output_Prefix)
 
-                # Compute output file path
-                Output_Path = '%s/%s.jp4' % (DestFolder, Output_Name)
+                    # Create output trash dir if not exists
+                    if not os.path.isdir( DestFolder ):
+                        os.system("mkdir -p %s" % DestFolder)
+                        time.sleep( 1 )
 
-                # Open output file
-                Output_Image = open(Output_Path, 'wb')
+                    # Compute output file path
+                    Output_Path = '%s/%s.jp4' % (DestFolder, Output_Name)
 
-        # write the file
-        if Output_Image:
-            Output_Image.write(ImageData)
-            Output_Image.close()
+                    # Open output file
+                    Output_Image = open(Output_Path, 'wb')
 
-        # Close StringIO image stream
-        ImageData_File.close()
+            # write the file
+            if Output_Image:
+                Output_Image.write(ImageData)
+                Output_Image.close()
+
+            # Close StringIO image stream
+            ImageData_File.close()
 
 # Function to load validated timestamps from CSPS JSON file
 def LoadTimestampsFromJSON(JSONFile):
