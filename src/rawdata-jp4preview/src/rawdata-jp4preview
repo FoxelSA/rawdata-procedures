@@ -40,7 +40,7 @@ PARAM_MOUNT="/data/"
 PARAM_MAC=""
 PARAM_MASTER=""
 PARAM_SEGMENT=""
-PARAM_DISK_THREADS=""
+PARAM_CPU_THREADS=""
 PARAM_NO_DEBAYER="0"
 
 # Loop breaker
@@ -107,11 +107,11 @@ arguments() {
                 PARAM_SEGMENT="$1"
                 shift
             ;;
-            --disk-threads)
+            --cpu-threads)
                 if [ -z "$1" ]; then
-                    PARAM_DISK_THREADS="+0"
+                    PARAM_CPU_THREADS="+0"
                 else
-                    PARAM_DISK_THREADS="$1"
+                    PARAM_CPU_THREADS="$1"
                 fi
                 shift
             ;;
@@ -195,7 +195,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 # Generate previews for segment
                 echo "Generating previews for segment $SEGMENT_TIMESTAMP..."
 
-                if [ -z "$PARAM_DISK_THREADS" ]; then
+                if [ -z "$PARAM_CPU_THREADS" ]; then
                     find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
                     $PARAM_MASTER \
@@ -203,7 +203,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     $SEGMENT_TIMESTAMP \
                     $PARAM_NO_DEBAYER
                 else
-                    find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $PREVIEW_SCRIPT {} \
+                    find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
                     $PARAM_MASTER \
                     $PARAM_MAC \
@@ -274,7 +274,7 @@ else
             # Generate previews for segment
             echo "Generating previews for segment $PARAM_SEGMENT..."
 
-            if [ -z "$PARAM_DISK_THREADS" ]; then
+            if [ -z "$PARAM_CPU_THREADS" ]; then
                 find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MASTER \
@@ -282,7 +282,7 @@ else
                 $PARAM_SEGMENT \
                 $PARAM_NO_DEBAYER
             else
-                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $PREVIEW_SCRIPT {} \
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MASTER \
                 $PARAM_MAC \
