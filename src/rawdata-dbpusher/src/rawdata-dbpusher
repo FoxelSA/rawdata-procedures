@@ -63,6 +63,7 @@ def _usage():
     --segment-timestamp   Segment timestamp
     --update-split-flag   Update split flag in DB
     --update-preview-flag Update preview flag in DB
+    --update-corrupted    Update corrupted images raw status in DB
 
     """ % sys.argv[0]
 
@@ -118,12 +119,13 @@ def main(argv):
                 Arguments[splited[0]] =  None
 
     # Arguments variables initialisation
-    __MountPoint__          = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
-    __CameraMAC__           = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
-    __MasterTimestamp__     = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
-    __SegmentTimestamp__    = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
-    __Update_Split_Flag__   = (False if not 'update-split-flag' in Arguments else True)
-    __Update_Preview_Flag__ = (False if not 'update-preview-flag' in Arguments else True)
+    __MountPoint__            = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __CameraMAC__             = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
+    __MasterTimestamp__       = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __SegmentTimestamp__      = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
+    __Update_Split_Flag__     = (False if not 'update-split-flag' in Arguments else True)
+    __Update_Preview_Flag__   = (False if not 'update-preview-flag' in Arguments else True)
+    __Update_Corrupted_Flag__ = (False if not 'update-corrupted' in Arguments else True)
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
@@ -295,7 +297,7 @@ def main(argv):
             if data_segment:
 
                 # Check if update split/preview flag is given
-                if not __Update_Split_Flag__ and not __Update_Preview_Flag__:
+                if not __Update_Split_Flag__ and not __Update_Preview_Flag__ and not __Update_Corrupted_Flag__:
 
                     # Debug output
                     print('Segment %s already pushed, skipping' % Segment)
@@ -307,19 +309,27 @@ def main(argv):
                         # Check if update split flag is given
                         if __Update_Split_Flag__:
 
-                            # Debug output
-                            print("Updating split flag...")
-
                             # Update split flag on database
                             cur.execute("UPDATE segment SET flag_split=%d WHERE id=%d" % (_split_flag, data_segment[ 0 ]))
 
                         elif __Update_Preview_Flag__:
 
-                            # Debug output
-                            print("Updating preview flag...")
-
                             # Update preview flag on database
                             cur.execute("UPDATE segment SET flag_preview=%d WHERE id=%d" % (_preview_flag, data_segment[ 0 ]))
+
+                        elif __Update_Corrupted_Flag__:
+
+                            # Get poses
+                            poses = json_data['pose']
+
+                            # Iterate over poses
+                            for pose in poses:
+
+                                # Check if image is corrupted
+                                if 'corrupt' in pose[ "raw" ]:
+
+                                    # Update pose in database
+                                    cur.execute("UPDATE pose SET flag_errcode=%d WHERE segment_id=%d AND timestamp_sec=%d AND timestamp_usec=%d" % (errorToCode( "corrupt" ), data_segment[ 0 ], pose[ "sec" ], pose[ "usec" ]))
 
                         # Commit changes to database
                         DB.commit()
