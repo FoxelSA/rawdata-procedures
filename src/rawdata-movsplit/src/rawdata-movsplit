@@ -218,11 +218,23 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                 # Update JSON file
-                echo Updating segment JSON file...
+                echo "Updating segment JSON file..."
                 $JSONUPDATE_SCRIPT $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $SEGMENT_TIMESTAMP
+
+                # Loop break checker
+                if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                # Update split flag in database
+                echo "Updating segment split flag in database..."
+                rawdata-dbpusher --mount-point $PARAM_MOUNT \
+                --mac-address $PARAM_MAC \
+                --master-timestamp $PARAM_MASTER \
+                --segment-timestamp $SEGMENT_TIMESTAMP \
+                --update-split-flag
+
             else
 
                 # Display warning segment
@@ -280,11 +292,23 @@ else
 
 
             # Update JSON file
-            echo Updating segment JSON file...
+            echo "Updating segment JSON file..."
             $JSONUPDATE_SCRIPT $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
             $PARAM_SEGMENT
+
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+            # Update split flag in database
+            echo "Updating segment split flag in database..."
+            rawdata-dbpusher --mount-point $PARAM_MOUNT \
+            --mac-address $PARAM_MAC \
+            --master-timestamp $PARAM_MASTER \
+            --segment-timestamp $PARAM_SEGMENT \
+            --update-split-flag
+
         else
 
             # Display warning segment

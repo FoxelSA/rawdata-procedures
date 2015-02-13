@@ -181,6 +181,10 @@ rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-ti
 echo "[$(date '+%F %R')] rawdata-procedures : creating table of trashed jp4 files ..."
 rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
+# Run procedure #
+echo "[$(date '+%F %R')] rawdata-procedures : pushing data into database ..."
+rawdata-dbpusher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
+
 # Check execution switch #
 if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
 

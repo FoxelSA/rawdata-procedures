@@ -232,6 +232,18 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 $PARAM_MASTER \
                 $SEGMENT_TIMESTAMP \
                 $PARAM_NO_DEBAYER
+
+                # Loop break checker
+                if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                # Update preview flag in database
+                echo "Updating segment preview flag in database..."
+                rawdata-dbpusher --mount-point $PARAM_MOUNT \
+                --mac-address $PARAM_MAC \
+                --master-timestamp $PARAM_MASTER \
+                --segment-timestamp $SEGMENT_TIMESTAMP \
+                --update-preview-flag
+
             else
 
                 # Display warning segment
@@ -299,6 +311,18 @@ else
             $PARAM_MASTER \
             $PARAM_SEGMENT \
             $PARAM_NO_DEBAYER
+
+            # Loop break checker
+            if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+            # Update preview flag in database
+            echo "Updating segment preview flag in database..."
+            rawdata-dbpusher --mount-point $PARAM_MOUNT \
+            --mac-address $PARAM_MAC \
+            --master-timestamp $PARAM_MASTER \
+            --segment-timestamp $PARAM_SEGMENT \
+            --update-preview-flag
+
         else
 
             # Display warning segment

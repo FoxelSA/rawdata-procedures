@@ -236,13 +236,23 @@ def ValidateEXIFData(EXIFData):
     if not EXIFData:
         return False
 
-    # Verify micro timestamp
-    if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
+    # Verify micro timestamp entry presence
+    if 'EXIF SubSecTimeOriginal' in EXIFData:
+
+        # Verify micro timestamp
+        if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
+            return False
+    else:
         return False
 
-    # Verify image date
-    _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
-    if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+    # Verify image date entry presence
+    if 'Image DateTime' in EXIFData:
+
+        # Verify image date
+        _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
+        if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+            return False
+    else:
         return False
 
     # Return True if all tests passed
@@ -521,6 +531,7 @@ def main(argv):
     __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __DiskThreads__     = (None if not 'disk-threads' in Arguments else Arguments['disk-threads'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
     STD_OUTPUT          = (1 if 'output' in Arguments else 0)
 
@@ -544,6 +555,10 @@ def main(argv):
 
     # Get local jobs count from config file
     __Jobs__ = GetCores( ParallelConfigFile )
+
+    # Override disk threads is specified
+    if __DiskThreads__:
+        __Jobs__ = int( __DiskThreads__ )
 
     # Delete table file if present
     if os.path.isfile( OutputFile ):
@@ -598,6 +613,7 @@ def main(argv):
     # Sort table
     sortTable( OutputFile )
 
+    # Debug output
     ShowMessage("Done")
 
 # Program entry point

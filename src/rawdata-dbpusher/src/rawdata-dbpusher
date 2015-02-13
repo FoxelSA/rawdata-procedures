@@ -1,0 +1,442 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http:#foxel.ch
+  Please read <http:#foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http:#foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http:#www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http:#foxel.ch/license>.
+"""
+
+# Imports
+import ConfigParser
+import sys
+import json
+import os
+
+from warnings import filterwarnings
+from cStringIO import StringIO
+import MySQLdb
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    --mount-point         Base mount directory
+    --mac-address         Camera MAC address
+    --master-timestamp    Master timestamp
+
+    [Optional arguments]
+    --segment-timestamp   Segment timestamp
+    --update-split-flag   Update split flag in DB
+    --update-preview-flag Update preview flag in DB
+
+    """ % sys.argv[0]
+
+# Function to convert a raw status message to error code
+def errorToCode(error):
+
+    # Return proper code
+    if 'valid' in error:
+        return 0
+    elif 'trash' in error:
+        return 1
+    elif 'corrupt' in error:
+        return 2
+
+# Function to convert a preview status message to error code
+def previewToCode(state):
+
+    # Check if state is assigned
+    if state:
+
+        # Return proper code
+        if 'debayer' in state:
+            return 1
+        elif 'no-debayer' in state:
+            return 2
+
+    else:
+
+        # Return proper code
+        return 0
+
+# Program entry point function
+def main(argv):
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables initialisation
+    __MountPoint__          = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __CameraMAC__           = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
+    __MasterTimestamp__     = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __SegmentTimestamp__    = (None if not 'segment-timestamp' in Arguments else Arguments['segment-timestamp'])
+    __Update_Split_Flag__   = (False if not 'update-split-flag' in Arguments else True)
+    __Update_Preview_Flag__ = (False if not 'update-preview-flag' in Arguments else True)
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Disable MySQLdb warning messages
+    filterwarnings('ignore', category = MySQLdb.Warning)
+
+    # Determine base segments folder
+    BaseSegmentsFolder = "%s/rawdata/%s/master/%s/segment" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+
+    # Determine database config file path
+    DatabaseConfigFile = "%s/system/etc/credentials/dav-db.conf" % (__MountPoint__)
+
+    # Determine FastCal key file path
+    FastCalKeyFile = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+
+    # Determine camera info key file path
+    CameraInfoKeyFile = "%s/camera/camera.info" % (__MountPoint__)
+
+    # Scope variables initialisation
+    __Segments__   = []
+
+    # Get available segments
+    if __SegmentTimestamp__:
+        __Segments__.append(__SegmentTimestamp__)
+    else:
+        __Segments__ = sorted(os.listdir(BaseSegmentsFolder))
+
+    # Arguments check
+    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+        _usage()
+        sys.exit(0)
+
+    # Database container
+    DB = None
+
+    try:
+
+        # Instanciate database ConfigParser
+        db_config = ConfigParser.RawConfigParser()
+
+        # Instanciate FastCal ConfigParser
+        fastcal_config = ConfigParser.RawConfigParser()
+
+        # Instanciate camera info ConfigParser
+        camera_info_config = ConfigParser.RawConfigParser()
+
+        # Read database config file and prepend a fake [section] to comply with ConfigParser
+        db_config.readfp(StringIO('[connection]\n' + open(DatabaseConfigFile, 'r').read()))
+
+        # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+        fastcal_config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFile, 'r').read()))
+
+        # Read camera info file and prepend a fake [section] to comply with ConfigParser
+        camera_info_config.readfp(StringIO('[info]\n' + open(CameraInfoKeyFile, 'r').read()))
+
+        # Read hardware informations from FastCal key file
+        _cam_type = fastcal_config.get('calibration', 'type')
+        _cam_model  = fastcal_config.get('calibration', 'model')
+        _cam_id    = None
+
+        # Try to etablish connection with the database
+        DB = MySQLdb.connect(host=db_config.get('connection', 'host'),
+                             user=db_config.get('connection', 'username'),
+                             passwd=db_config.get('connection', 'password'),
+                             db=db_config.get('connection', 'database'))
+
+        # Create database cursor
+        cur = DB.cursor()
+
+        # Test camera
+        cur.execute("SELECT id FROM camera WHERE mac LIKE '%s'" % (__CameraMAC__))
+
+        # fetch all of the rows from the query
+        data_cam = cur.fetchone()
+
+        # Check if camera exists
+        if not data_cam:
+
+            # Test camera model
+            cur.execute("SELECT id FROM camera_model WHERE model LIKE '%s'" % (_cam_model))
+
+            # fetch all of the rows from the query
+            data_camera_model = cur.fetchone()
+
+            # Local variables
+            _camera_model_id = None
+            _camera_type_id = None
+
+            # Check if camera model exists
+            if not data_camera_model:
+
+                # Test camera type
+                cur.execute("SELECT id FROM camera_type WHERE type LIKE '%s'" % (_cam_type))
+
+                # fetch all of the rows from the query
+                data_camera_type = cur.fetchone()
+
+                # Check if camera model exists
+                if not data_camera_type:
+
+                    # Insert new type
+                    cur.execute("INSERT INTO camera_type (type, name) VALUES ('%s', '%s')" % (_cam_type, camera_info_config.get('info', _cam_type)))
+                    _camera_type_id = cur.lastrowid
+
+                else:
+
+                    # Always update camera type name
+                    cur.execute("UPDATE camera_type SET name='%s'" % camera_info_config.get('info', _cam_type))
+
+                    # Get camera type id
+                    _camera_type_id = data_camera_type[ 0 ]
+
+                # Insert new model
+                cur.execute("INSERT INTO camera_model (type_id, model, name) VALUES ('%d', '%s', '%s')" % (_camera_type_id, _cam_model, camera_info_config.get('info', _cam_model) ))
+                _camera_model_id = cur.lastrowid
+
+            else:
+
+                # Always update camera model name
+                cur.execute("UPDATE camera_model SET name='%s'" % camera_info_config.get('info', _cam_model))
+
+                # Get camera model id
+                _camera_model_id = data_camera_model[ 0 ]
+
+
+            # Insert camera
+            cur.execute("INSERT INTO camera (model_id, mac) VALUES (%d, '%s')" % (_camera_model_id, __CameraMAC__))
+            _cam_id = cur.lastrowid
+
+        else:
+
+            # Always update camera model name
+            cur.execute("UPDATE camera_model SET name='%s'" % camera_info_config.get('info', _cam_model))
+
+            # Always update camera type name
+            cur.execute("UPDATE camera_type SET name='%s'" % camera_info_config.get('info', _cam_type))
+
+            # Get camera id
+            _cam_id = data_cam[ 0 ]
+
+        # Commit changes to database
+        DB.commit()
+
+        for Segment in __Segments__:
+
+            # Compute JSON file path
+            __JSONFile__ = "%s/%s/info/segment.json" % (BaseSegmentsFolder, Segment)
+
+            # Load JSON file
+            SourceJSON = open(__JSONFile__, 'r')
+
+            # Load JSON data
+            json_data = json.load(SourceJSON)
+
+            # Parse JSON flags
+            _split_flag = (1 if json_data[ 'split' ] else 0)
+            _preview_flag = previewToCode( json_data[ 'preview' ] )
+
+            # Test segment
+            cur.execute("SELECT id FROM segment WHERE camera_id=%d AND timestamp_master='%s' AND timestamp_segment='%s'" % (_cam_id, __MasterTimestamp__, Segment))
+
+            # fetch all of the rows from the query
+            data_segment = cur.fetchone()
+
+            # Check if segment exists
+            if data_segment:
+
+                # Check if update split/preview flag is given
+                if not __Update_Split_Flag__ and not __Update_Preview_Flag__:
+
+                    # Debug output
+                    print('Segment %s already pushed, skipping' % Segment)
+                else:
+
+                    # Check if segment timestamp is specified
+                    if __SegmentTimestamp__:
+
+                        # Check if update split flag is given
+                        if __Update_Split_Flag__:
+
+                            # Debug output
+                            print("Updating split flag...")
+
+                            # Update split flag on database
+                            cur.execute("UPDATE segment SET flag_split=%d WHERE id=%d" % (_split_flag, data_segment[ 0 ]))
+
+                        elif __Update_Preview_Flag__:
+
+                            # Debug output
+                            print("Updating preview flag...")
+
+                            # Update preview flag on database
+                            cur.execute("UPDATE segment SET flag_preview=%d WHERE id=%d" % (_preview_flag, data_segment[ 0 ]))
+
+                        # Commit changes to database
+                        DB.commit()
+                    else:
+
+                        # Debug output
+                        print("No --segment-timestamp given with --update-split-flag, exiting...")
+
+                        # Exit loop
+                        break
+            else:
+
+                # Debug output
+                print( "Pushing segment %s..." % Segment )
+
+                # Insert segment
+                cur.execute("INSERT INTO segment (camera_id, timestamp_master, timestamp_segment, flag_split, flag_preview) VALUES (%d, '%s', '%s', %d, %d)" % (_cam_id, __MasterTimestamp__, Segment, _split_flag, _preview_flag))
+
+                # Get inserted segment id
+                _segment_id = cur.lastrowid
+
+                # Get poses
+                poses = json_data['pose']
+
+                # Iterate over poses
+                for pose in poses:
+
+                    # Get values from JSON
+                    timestamp_sec           = int( pose[ 'sec' ] )
+                    timestamp_usec          = int( pose[ 'usec' ] )
+                    flag_still              = (1 if pose[ 'still' ] else 0)
+                    flag_errcode            = errorToCode( pose[ 'raw' ] )
+                    position_robustness     = (('%f' % pose[ 'position' ][ 3 ]) if pose[ 'position' ] else 'NULL')
+                    position_geo            = 'POINT(%f %f)' % (pose[ 'position' ][ 1 ] if pose[ 'position' ] else 0.0, pose[ 'position' ][ 2 ] if pose[ 'position' ] else 0.0)
+                    position_altitude       =  pose[ 'position' ][ 0 ] if pose[ 'position' ] else 0.0
+                    orientation_robustness  = (('%f' % pose[ 'orientation' ][ 9 ]) if pose[ 'orientation' ] else 'NULL')
+                    orientation_rotation_00 = pose[ 'orientation' ][ 0 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_01 = pose[ 'orientation' ][ 1 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_02 = pose[ 'orientation' ][ 2 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_10 = pose[ 'orientation' ][ 3 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_11 = pose[ 'orientation' ][ 4 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_12 = pose[ 'orientation' ][ 5 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_20 = pose[ 'orientation' ][ 6 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_21 = pose[ 'orientation' ][ 7 ] if pose[ 'orientation' ] else 0.0
+                    orientation_rotation_22 = pose[ 'orientation' ][ 8 ] if pose[ 'orientation' ] else 0.0
+
+                    # Build query
+                    query = ('INSERT INTO pose ('
+                            'segment_id,'
+                            'timestamp_sec,'
+                            'timestamp_usec,'
+                            'flag_still,'                             # true/false | 0: not still, 1: still
+                            'flag_errcode,'                           # 0: no error, 1: trashed, 2: corrupted, 3: crap as defined by the user
+                            'position_robustness,'                    # null if position is unknown
+                            'position_geo,'                           # spatial point geometry, x:0.0/y:0.0 if position is unknown
+                            'position_altitude,'                      # 0.0 if position is unknown
+                            'orientation_robustness,'                 # null if orientation is unknown
+                            'orientation_rotation_00,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_01,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_02,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_10,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_11,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_12,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_20,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_21,'                # 0.0 if orientation is unknown
+                            'orientation_rotation_22'                 # 0.0 if orientation is unknown
+                         ') VALUES ('
+                            '%d,'
+                            '%d,'
+                            '%d,'
+                            '%d,'
+                            '%d,'
+                            '%s,'
+                            'PointFromText(\'%s\'),'
+                            '%f,'
+                            '%s,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f,'
+                            '%f'
+                         ')') % (_segment_id,
+                             timestamp_sec,
+                             timestamp_usec,
+                             flag_still,
+                             flag_errcode,
+                             position_robustness,
+                             position_geo,
+                             position_altitude,
+                             orientation_robustness,
+                             orientation_rotation_00,
+                             orientation_rotation_01,
+                             orientation_rotation_02,
+                             orientation_rotation_10,
+                             orientation_rotation_11,
+                             orientation_rotation_12,
+                             orientation_rotation_20,
+                             orientation_rotation_21,
+                             orientation_rotation_22)
+
+                    # Execute query
+                    cur.execute( query )
+
+                # Commit changes to database
+                DB.commit()
+
+    # Error handler
+    except MySQLdb.Error, e:
+
+        # Error handler
+        print "Database error %d: %s" % (e.args[0], e.args[1])
+        sys.exit(1)
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
