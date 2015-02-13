@@ -391,7 +391,7 @@ def main(argv):
 
         # Create output folder if not present
         if not os.path.isdir(__Output__):
-            os.makedirs(__Output__)
+            os.system("mkdir -p %s" % __Output__)
 
         # Build list of images to be converted
         JP4ToJPEG_List = []

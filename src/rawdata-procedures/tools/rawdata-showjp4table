@@ -119,7 +119,7 @@ def main(argv):
         Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
 
         # Print values
-        print("%010d_%06d.jp4 => %d/%010d_%06d.mov" % (Unpacked[0], Unpacked[1], Unpacked[4], Unpacked[2], Unpacked[3]))
+        print("%010d_%06d_%d.jp4 => %d/%010d_%06d.mov" % (Unpacked[0], Unpacked[1], Unpacked[4], Unpacked[4], Unpacked[2], Unpacked[3]))
 
         # Increment offset
         Offset += MAIN_SIZE
