@@ -44,6 +44,8 @@ import struct
 import os
 import sys
 
+from operator import itemgetter
+
 # Global variables
 STD_OUTPUT = 0
 
@@ -99,7 +101,7 @@ def SearchRange(start_ts, start_micro, end_ts, end_micro, List):
                 Results.append(MOV)
 
     # Return results
-    return Results
+    return sorted(Results, key=itemgetter(0))
 
 # Usage display function
 def _usage():
@@ -175,6 +177,9 @@ def main(argv):
         # Increment offset
         Offset += MAIN_SIZE
 
+    # MOV list for mixing
+    MOVList = {}
+
     # Iterate over CSPS ranges
     for i in RANGES:
 
@@ -190,9 +195,32 @@ def main(argv):
                 # Compute paths
                 SourceFile = "%s/%d/%d_%06d.mov" % (SourceMOVDir, j[2], j[0], j[1])
 
-                # Output result
-                print( SourceFile )
+                # Check if module index is present on array
+                if not j[2] in MOVList:
 
+                    # Allocate a new array corresponding to module index
+                    MOVList[ j[ 2 ] ] = []
+
+                # Append MOV file
+                MOVList[ j[2] ].append( SourceFile )
+
+    # MOV list while
+    while len(MOVList) > 0:
+
+        # Iterate over MOV list length
+        for _idx in range(1, len(MOVList) + 1 ):
+
+            # Display MOV path
+            print( MOVList[ _idx ][ 0 ] )
+
+            # Pop item form array
+            MOVList[ _idx ].pop( 0 )
+
+            # Check if module index is empty
+            if len( MOVList[ _idx ] ) == 0:
+
+                # Pop module index
+                MOVList.pop( _idx )
 
 # Program entry point
 if __name__ == "__main__":
