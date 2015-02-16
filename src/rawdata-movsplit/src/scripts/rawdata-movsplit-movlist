@@ -180,6 +180,9 @@ def main(argv):
     # MOV list for mixing
     MOVList = {}
 
+    # Indexes container
+    Indexes = []
+
     # Iterate over CSPS ranges
     for i in RANGES:
 
@@ -201,6 +204,9 @@ def main(argv):
                     # Allocate a new array corresponding to module index
                     MOVList[ j[ 2 ] ] = []
 
+                    # Append index to list
+                    Indexes.append( j[2] )
+
                 # Append MOV file
                 MOVList[ j[2] ].append( SourceFile )
 
@@ -208,19 +214,26 @@ def main(argv):
     while len(MOVList) > 0:
 
         # Iterate over MOV list length
-        for _idx in range(1, len(MOVList) + 1 ):
+        for _idx in Indexes:
 
-            # Display MOV path
-            print( MOVList[ _idx ][ 0 ] )
+            # Check module index presence
+            if _idx in MOVList:
 
-            # Pop item form array
-            MOVList[ _idx ].pop( 0 )
+                # Display MOV path
+                print( MOVList[ _idx ][ 0 ] )
 
-            # Check if module index is empty
-            if len( MOVList[ _idx ] ) == 0:
+                # Pop item form array
+                MOVList[ _idx ].pop( 0 )
 
-                # Pop module index
-                MOVList.pop( _idx )
+                # Check if module index is empty
+                if len( MOVList[ _idx ] ) == 0:
+
+                    # Pop module index
+                    MOVList.pop( _idx )
+            else:
+
+                # Remove index from list
+                Indexes.remove( _idx )
 
 # Program entry point
 if __name__ == "__main__":
