@@ -291,15 +291,26 @@ def StitchPano(_tilesdir, _output, ImagesCorr, _temp):
     os.remove("%s/mid.jpeg" % _temp)
     os.remove("%s/bot.jpeg" % _temp)
 
+# Usage display function
+def _usage():
+    print """
+    Usage: %s <_1 JP4 file path> <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [ no debayer 0 | 1]
+    """ % os.path.basename( sys.argv[ 0 ] )
+
 # Program entry point function
 # pylint: disable=W0603
 def main(argv):
 
+    # Check arguments
+    if( len( argv ) < 5 ):
+        _usage()
+        sys.exit( 0 )
+
     # Parse arguments
     __Input_File__    = argv[ 0 ]
     __PARAM_MOUNT__   = argv[ 1 ]
-    __PARAM_MASTER__  = argv[ 2 ]
-    __PARAM_MAC__     = argv[ 3 ]
+    __PARAM_MAC__     = argv[ 2 ]
+    __PARAM_MASTER__  = argv[ 3 ]
     __PARAM_SEGMENT__ = argv[ 4 ]
     __NoDebayer__     = (int( argv[ 5 ] ) == 1)
 
