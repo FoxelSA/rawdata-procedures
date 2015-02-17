@@ -40,6 +40,7 @@
 """
 
 # Imports
+import multiprocessing
 import sys
 import os
 
@@ -78,13 +79,16 @@ def main(argv):
     # Compute destination folder
     VideoFolder = "%s/preview/%s/vid" % (__Segment_Folder__, ('no-debayer' if __NoDebayer__ else 'debayer'))
 
+    # Determine number of system CPU cores
+    CoreCount = multiprocessing.cpu_count()
+
     # Create output folder if not present
     if not os.path.isdir(VideoFolder):
         os.makedirs(VideoFolder)
 
     # Create preview movie if not exists
     if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
-        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/25fps.webm' % (PreviewsFolder, VideoFolder))
+        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (PreviewsFolder, CoreCount, VideoFolder))
 
 # Program entry point
 if __name__ == "__main__":
