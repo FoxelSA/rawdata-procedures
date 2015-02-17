@@ -214,7 +214,7 @@ def main(argv):
             Unpacked = MAIN_STRUCT.unpack( BINARY_DATA[MAIN_SIZE * i : Offset] )
 
             # Compute string timestamp
-            TimeStamp = "%d_%06d" % (Unpacked[0], Unpacked[1])
+            TimeStamp = "%10d_%06d" % (Unpacked[0], Unpacked[1])
 
             # Check presence of timestamp in list
             if not (TimeStamp in TEMP_LIST):
@@ -269,7 +269,8 @@ def main(argv):
         TimeStamp = "%s_%s" % (exp.group(1), exp.group(2))
 
         # Append timestamp to list
-        Integrity_TimeStamps.append( TimeStamp )
+        if not TimeStamp in Integrity_TimeStamps:
+            Integrity_TimeStamps.append( TimeStamp )
 
     # Debug output
     ShowMessage("%d image(s) found." % len( Integrity_TimeStamps ))
@@ -298,18 +299,19 @@ def main(argv):
         # Iterate over pose sections
         for j in poses:
 
-            # Check if status is unknown
-            if j['raw'] == 'unknown':
+            # Compute image TS
+            ImageTS = '%10d_%06d' % (j['sec'], j['usec'])
 
-                # Compute image TS
-                ImageTS = '%d_%06d' % (j['sec'], j['usec'])
+            # Check if timestamp is corrupted
+            if ImageTS in Integrity_TimeStamps:
 
-                # Check if timestamp is not trashed
-                if ImageTS in Integrity_TimeStamps:
+                # Tag as corrupt
+                j['raw'] = "corrupt"
 
-                    # Tag as corrupt
-                    j['raw'] = "corrupt"
-                elif ImageTS in COMPLETE_TIMESTAMPS:
+            else:
+
+                # Check if pose in complete
+                if ImageTS in COMPLETE_TIMESTAMPS:
 
                     # Tag as valid
                     j['raw'] = "valid"
