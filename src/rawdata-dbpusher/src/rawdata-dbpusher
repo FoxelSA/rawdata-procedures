@@ -303,40 +303,60 @@ def main(argv):
                     print('Segment %s already pushed, skipping' % Segment)
                 else:
 
-                    # Check if segment timestamp is specified
+                    # Check presence of --segment-timestamp option
                     if __SegmentTimestamp__:
 
-                        # Check if update split flag is given
-                        if __Update_Split_Flag__:
+                        # Assign segment timestamp
+                        Segment = __SegmentTimestamp__
 
-                            # Update split flag on database
-                            cur.execute("UPDATE segment SET flag_split=%d WHERE id=%d" % (_split_flag, data_segment[ 0 ]))
+                    # Check --update-split-flag option presence, don't output on segment timestamp
+                    if __Update_Split_Flag__ and not __SegmentTimestamp__:
 
-                        elif __Update_Preview_Flag__:
+                        # Debug output
+                        print("Updating split flag for segment %s..." % (Segment))
 
-                            # Update preview flag on database
-                            cur.execute("UPDATE segment SET flag_preview=%d WHERE id=%d" % (_preview_flag, data_segment[ 0 ]))
+                    # Check --update-preview-flag option presence, don't output on segment timestamp
+                    if __Update_Preview_Flag__ and not __SegmentTimestamp__:
 
-                        elif __Update_Corrupted_Flag__:
+                        # Debug output
+                        print("Updating preview flag for segment %s..." % (Segment))
 
-                            # Get poses
-                            poses = json_data['pose']
+                    # Check --update-corrupted option presence, don't output on segment timestamp
+                    if __Update_Corrupted_Flag__ and not __SegmentTimestamp__:
 
-                            # Iterate over poses
-                            for pose in poses:
+                        # Debug output
+                        print("Updating corrupted flag for segment %s..." % (Segment))
 
-                                # Check if image is corrupted
-                                if 'corrupt' in pose[ "raw" ]:
+                    # Check if update split flag is given
+                    if __Update_Split_Flag__:
 
-                                    # Update pose in database
-                                    cur.execute("UPDATE pose SET flag_errcode=%d WHERE segment_id=%d AND timestamp_sec=%d AND timestamp_usec=%d" % (errorToCode( "corrupt" ), data_segment[ 0 ], pose[ "sec" ], pose[ "usec" ]))
+                        # Update split flag on database
+                        cur.execute("UPDATE segment SET flag_split=%d WHERE id=%d" % (_split_flag, data_segment[ 0 ]))
+
+                    if __Update_Preview_Flag__:
+
+                        # Update preview flag on database
+                        cur.execute("UPDATE segment SET flag_preview=%d WHERE id=%d" % (_preview_flag, data_segment[ 0 ]))
+
+                    if __Update_Corrupted_Flag__:
+
+                        # Get poses
+                        poses = json_data['pose']
+
+                        # Iterate over poses
+                        for pose in poses:
+
+                            # Check if image is corrupted
+                            if 'corrupt' in pose[ "raw" ]:
+
+                                # Update pose in database
+                                cur.execute("UPDATE pose SET flag_errcode=%d WHERE segment_id=%d AND timestamp_sec=%d AND timestamp_usec=%d" % (errorToCode( "corrupt" ), data_segment[ 0 ], pose[ "sec" ], pose[ "usec" ]))
 
                         # Commit changes to database
                         DB.commit()
-                    else:
 
-                        # Debug output
-                        print("No --segment-timestamp given with --update-split-flag, exiting...")
+                    # Check presence of --segment-timestamp option
+                    if __SegmentTimestamp__:
 
                         # Exit loop
                         break
