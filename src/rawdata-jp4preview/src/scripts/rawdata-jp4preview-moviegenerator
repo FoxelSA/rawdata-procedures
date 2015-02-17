@@ -63,7 +63,7 @@ def main(argv):
     __CameraMAC__        = argv[ 1 ]
     __MasterTimestamp__  = argv[ 2 ]
     __SegmentTimestamp__ = argv[ 3 ]
-    __Param_NoDebayer__ = "0"
+    __Param_NoDebayer__  = "0"
 
     if( len( argv ) > 4 ):
         __Param_NoDebayer__ = argv[ 4 ]
@@ -84,7 +84,7 @@ def main(argv):
 
     # Create preview movie if not exists
     if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
-        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/25fps.webm > /dev/null 2>&1' % (PreviewsFolder, VideoFolder))
+        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell -ffourcc VP80 -oac copy -o %s/25fps.webm' % (PreviewsFolder, VideoFolder))
 
 # Program entry point
 if __name__ == "__main__":
