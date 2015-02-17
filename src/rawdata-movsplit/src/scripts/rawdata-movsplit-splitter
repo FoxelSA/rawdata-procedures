@@ -51,7 +51,6 @@ from cStringIO import StringIO
 from datetime import datetime
 
 import exifread
-from pycheckjpeg import validate_jpeg_from_buffer
 
 # Function to print debug messages
 def ShowMessage(Message, Type=0, Halt=0):
@@ -141,7 +140,7 @@ def ValidateEXIFData(EXIFData):
     return True
 
 # Function to extract JPEG images inside a MOV file
-def extractMOV(InputFile, ModuleName, TrashFolder, OutputFolder, Valid_Timestamps):
+def extractMOV(InputFile, ModuleName, OutputFolder, Valid_Timestamps):
 
     # Local variables
     JPEGHeader           = b'\xff\xd8\xff\xe1'
@@ -192,40 +191,19 @@ def extractMOV(InputFile, ModuleName, TrashFolder, OutputFolder, Valid_Timestamp
             # Check if timestamp is valid
             if (timestamp in Valid_Timestamps):
 
-                # Chceck image integrity
-                jpeg_messages = validate_jpeg_from_buffer(ImageData)
+                # Compute destination folder
+                DestFolder = "%s/%s" % (OutputFolder, Output_Prefix)
 
-                # Check presence of error or warning messages
-                if jpeg_messages[0] or jpeg_messages[1]:
+                # Create output trash dir if not exists
+                if not os.path.isdir( DestFolder ):
+                    os.system("mkdir -p %s" % DestFolder)
+                    time.sleep( 1 )
 
-                    # Debug output
-                    ShowMessage("Image is corrupted (%s).jp4" % Output_Name, 1)
+                # Compute output file path
+                Output_Path = '%s/%s.jp4' % (DestFolder, Output_Name)
 
-                    # Create output trash dir if not exists
-                    if not os.path.isdir(TrashFolder):
-                        os.makedirs(TrashFolder)
-
-                    # Compute output file path
-                    Output_Path = '%s/%s.jp4' % (TrashFolder, Output_Name)
-
-                    # Open output file
-                    Output_Image = open(Output_Path, 'wb')
-
-                else:
-
-                    # Compute destination folder
-                    DestFolder = "%s/%s" % (OutputFolder, Output_Prefix)
-
-                    # Create output trash dir if not exists
-                    if not os.path.isdir( DestFolder ):
-                        os.system("mkdir -p %s" % DestFolder)
-                        time.sleep( 1 )
-
-                    # Compute output file path
-                    Output_Path = '%s/%s.jp4' % (DestFolder, Output_Name)
-
-                    # Open output file
-                    Output_Image = open(Output_Path, 'wb')
+                # Open output file
+                Output_Image = open(Output_Path, 'wb')
 
             # write the file
             if Output_Image:
@@ -299,9 +277,6 @@ def main(argv):
     # Compute JSON file path
     __JSONFile__ = "%s/segment/%s/info/segment.json" % (__BasePath__, __Param_Segment__)
 
-    # Compute corrupted EXIF trashing folder
-    __Trash__    = "%s/info/raw/corrupted/integrity" % (__BasePath__)
-
     # Compute output folder
     __Output__ = "%s/segment/%s/raw" % (__BasePath__, __Param_Segment__)
 
@@ -311,7 +286,6 @@ def main(argv):
     # Extract MOV file
     extractMOV(__Param_MOV__,   # MOV path
                Module,     # Module name
-               __Trash__,  # Trash folder for corrupted EXIF files
                __Output__, # Output folder to write JP4 files
                Valid_Timestamps) # List of valid timestamps to be extracted
 

@@ -41,6 +41,8 @@
 
 import ConfigParser
 import glob
+import os
+import re
 import json
 import struct
 import sys
@@ -182,6 +184,7 @@ def main(argv):
     BaseSyncFolder    = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     InputFile         = "%s/info/raw/jp4table.bin" % (BaseSyncFolder)
     FastCalKeyFile    = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    CorruptedPath     = "%s/info/raw/corrupted/integrity" % (BaseSyncFolder)
 
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)
@@ -247,6 +250,30 @@ def main(argv):
     # Debug output
     ShowMessage("%d entries loaded" % Count)
 
+    # Local integrity corrupted timestamps container
+    Integrity_TimeStamps = []
+
+    # Debug output
+    ShowMessage("Listing corrupted images (integrity)...")
+
+    # Iterate over corrupted files
+    for filePath in glob.glob("%s/*.jp4" % CorruptedPath):
+
+        # Get file name
+        FileName = os.path.basename( filePath )
+
+        # Extract timestamp from file name
+        exp = re.match( r'(\d+)_(\d+)_(\d+)\.jp4', FileName)
+
+        # Extract timestamp from JP4 path
+        TimeStamp = "%s_%s" % (exp.group(1), exp.group(2))
+
+        # Append timestamp to list
+        Integrity_TimeStamps.append( TimeStamp )
+
+    # Debug output
+    ShowMessage("%d image(s) found." % len( Integrity_TimeStamps ))
+
     # Find all JSON files
     JSON_Files = glob.glob("%s/rawdata/%s/master/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
 
@@ -274,8 +301,15 @@ def main(argv):
             # Check if status is unknown
             if j['raw'] == 'unknown':
 
+                # Compute image TS
+                ImageTS = '%d_%06d' % (j['sec'], j['usec'])
+
                 # Check if timestamp is not trashed
-                if '%d_%06d' % (j['sec'], j['usec']) in COMPLETE_TIMESTAMPS:
+                if ImageTS in Integrity_TimeStamps:
+
+                    # Tag as currupt
+                    j['raw'] = "currupt"
+                elif ImageTS in COMPLETE_TIMESTAMPS:
 
                     # Tag as valid
                     j['raw'] = "valid"

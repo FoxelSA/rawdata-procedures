@@ -40,32 +40,12 @@
 """
 
 # Imports
-import glob
 import json
 import os
-import re
 import sys
 
 
-def updateJson(JSONFile, CorruptedPath):
-
-    # Local corrupted timestamps container
-    TimeStamps = []
-
-    # Iterate over corrupted files
-    for filePath in glob.glob("%s/*.jp4" % CorruptedPath):
-
-        # Get file name
-        FileName = os.path.basename( filePath )
-
-        # Extract timestamp from file name
-        exp = re.match( r'(\d+)_(\d+)_(\d+)\.jp4', FileName)
-
-        # Extract timestamp from JP4 path
-        TimeStamp = "%s_%s" % (exp.group(1), exp.group(2))
-
-        # Append timestamp to list
-        TimeStamps.append( TimeStamp )
+def updateJson(JSONFile):
 
     # Open file
     SourceJSON = open(JSONFile, 'r')
@@ -78,19 +58,6 @@ def updateJson(JSONFile, CorruptedPath):
 
     # Set 'split' tag to true
     json_data['split'] = True
-
-    # Get pose sections
-    poses = json_data['pose']
-
-    # Iterate over poses
-    for pose in poses:
-
-        # Compute timestamp
-        timestamp = "%d_%06d" % (pose['sec'], pose['usec'])
-
-        # Assing corrupted tag if image is corrupted
-        if timestamp in TimeStamps:
-            pose['raw'] = "corrupt"
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
@@ -123,11 +90,8 @@ def main(argv):
     # Compute JSON file path
     __JSONFile__ = "%s/segment/%s/info/segment.json" % (__BasePath__, __Param_Segment__)
 
-    # Compute currupted images path
-    __CorruptedPath__ = "%s/info/raw/corrupted/integrity" % (__BasePath__)
-
     # Tag corrupted images in json
-    updateJson( __JSONFile__, __CorruptedPath__)
+    updateJson( __JSONFile__)
 
 # Program entry point
 if __name__ == "__main__":

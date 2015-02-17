@@ -55,6 +55,7 @@ from datetime import datetime
 from operator import itemgetter
 
 import exifread
+from pycheckjpeg import validate_jpeg_from_buffer
 
 # Global config variables
 Threads_Sleep_Delay = 0.1
@@ -213,21 +214,31 @@ def UsedSlots(Slots):
     # Return result
     return ret
 
-def TrashImage(EXIFTrashFolder, ImageData):
+def TrashImage_EXIF(TrashFolder, ImageData):
 
     # Global variable
     global CORRUPTED_COUNT
 
     # Create output trash dir if not exists
-    if not os.path.isdir(EXIFTrashFolder):
-        os.makedirs(EXIFTrashFolder)
+    if not os.path.isdir(TrashFolder):
+        os.makedirs(TrashFolder)
 
     # Save corrupted image
-    with open("%s/exif_fail_%d.jp4" % (EXIFTrashFolder, CORRUPTED_COUNT), 'w') as f:
+    with open("%s/exif_fail_%d.jp4" % (TrashFolder, CORRUPTED_COUNT), 'w') as f:
         f.write(ImageData)
 
     # Increment index
     CORRUPTED_COUNT += 1
+
+def TrashImage_Integrity(TrashFolder, Timestamp, MicroTimestamp, Module, ImageData):
+
+    # Create output trash dir if not exists
+    if not os.path.isdir(TrashFolder):
+        os.makedirs(TrashFolder)
+
+    # Save corrupted image
+    with open("%s/%010d_%06d_%d.jp4" % (TrashFolder, Timestamp, MicroTimestamp, Module), 'w') as f:
+        f.write(ImageData)
 
 # Function to validate EXIF data contents
 def ValidateEXIFData(EXIFData):
@@ -258,7 +269,7 @@ def ValidateEXIFData(EXIFData):
     # Return True if all tests passed
     return True
 
-def indexMOV(InputFile, EXIFTrashFolder, tid=0):
+def indexMOV(InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid=0):
 
     # Local variables
     JPEGHeader    = b'\xff\xd8\xff\xe1'
@@ -295,12 +306,15 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
         if not ValidateEXIFData(EXIF_Tags):
 
             # Debug output
-            ShowMessage("Corrputed image in MOV file %s" % InputFile.path, 1)
+            ShowMessage("Image with corrputed EXIF data in MOV file %s" % InputFile.path, 1)
 
             # Trash image
-            TrashImage(EXIFTrashFolder, ImageData)
+            TrashImage_EXIF(EXIFTrashFolder, ImageData)
 
         else:
+
+            # Chceck image integrity
+            jpeg_messages = validate_jpeg_from_buffer(ImageData)
 
             # Get date object
             date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
@@ -310,6 +324,15 @@ def indexMOV(InputFile, EXIFTrashFolder, tid=0):
 
             # Get microseconds timestamp
             Microseconds = int( str(EXIF_Tags["EXIF SubSecTimeOriginal"]) )
+
+            # Check presence of error or warning messages
+            if jpeg_messages[0] or jpeg_messages[1]:
+
+                # Debug output
+                ShowMessage("Corrupted image (%10d_%06d_%d).jp4 in MOV file %s" % (Timestamp, Microseconds, InputFile.module, InputFile.path), 1)
+
+                # Trash image
+                TrashImage_Integrity(IntegrityTrashFolder, Timestamp, Microseconds, InputFile.module, ImageData)
 
             # Append results to array
             Result[0].append([
@@ -366,11 +389,11 @@ def sortTable( tableFile ):
             f.write(MAIN_DATA.pack(*i))
 
 # Thread function to index MOV files
-def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, tid):
+def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid):
 
     # Add action to queue
     Threads.put(
-        indexMOV(InputFile, EXIFTrashFolder, tid)
+        indexMOV(InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid)
     )
 
 # MOV counting data collector
@@ -411,7 +434,7 @@ def WorkerThread_indexCollector(Source, OutputFile):
 
 # Main thread
 # pylint: disable=W0602
-def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Output_File):
+def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, __Total_Files__, __Output_File):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -463,7 +486,7 @@ def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, __Total_Files__, __Out
             # Create thread
             ThreadJob = threading.Thread(
                 target = indexMOV_Thread,
-                args = (Threads, MOV, EXIFTrashFolder, Index)
+                args = (Threads, MOV, EXIFTrashFolder, IntegrityTrashFolder, Index)
             )
 
             # Start thread
@@ -546,12 +569,13 @@ def main(argv):
         return
 
     # Compute paths
-    InputFolder         = "%s/rawdata/%s/master/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFolder        = "%s/rawdata/%s/master/%s/info/raw" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    OutputFile          = "%s/jp4table.bin" % (OutputFolder)
-    EXIFTrashFolder     = "%s/rawdata/%s/master/%s/info/raw/corrupted/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    FastCalKeyFile      = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
-    ParallelConfigFile  = "%s/system/etc/ssh-configs/rawdata-procedures/rawdata-jp4table.conf" % (__MountPoint__)
+    InputFolder          = "%s/rawdata/%s/master/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFolder         = "%s/rawdata/%s/master/%s/info/raw" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    OutputFile           = "%s/jp4table.bin" % (OutputFolder)
+    EXIFTrashFolder      = "%s/rawdata/%s/master/%s/info/raw/corrupted/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    IntegrityTrashFolder = "%s/rawdata/%s/master/%s/info/raw/corrupted/integrity" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    FastCalKeyFile       = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    ParallelConfigFile   = "%s/system/etc/ssh-configs/rawdata-procedures/rawdata-jp4table.conf" % (__MountPoint__)
 
     # Get local jobs count from config file
     __Jobs__ = GetCores( ParallelConfigFile )
@@ -596,7 +620,7 @@ def main(argv):
     #Create main thread
     MainThread = threading.Thread(
         target = WorkerThread,
-        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, len(__MOV_List__), OutputFile)
+        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, len(__MOV_List__), OutputFile)
     )
 
     # Start main thread
