@@ -61,7 +61,6 @@ from pycheckjpeg import validate_jpeg_from_buffer
 Threads_Sleep_Delay = 0.1
 
 # Global variables
-STD_OUTPUT      = 0
 CORRUPTED_COUNT = 0
 QUEUE_Done      = 0
 QUEUE_Count     = 0
@@ -82,14 +81,7 @@ class MovFile:
         self.module = int(modulename)
 
 # Function to print debug messages
-def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
-
-    # Global variables
-    global STD_OUTPUT
-
-    # Check if output is enabled
-    if not STD_OUTPUT:
-        return
+def ShowMessage(Message, Type=0, Halt=0, SameLine=0):
 
     NO_COLORS = 0
 
@@ -99,32 +91,32 @@ def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
     # Get current date
     DateNow = datetime.now().strftime("%H:%M:%S")
 
-    # Display proper message
-    Prepend = ""
+    # Return type
+    RetChar = '\n'
 
-    if ThreadID != -1:
-        Prepend = "[Thread %d]" % (ThreadID+1)
+    if SameLine:
+        RetChar = '\r'
 
     if Type == 0:
         if NO_COLORS:
-            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [INFO] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[32m[INFO]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 1:
         if NO_COLORS:
-            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [WARNING] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[33m[WARNING]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 2:
         if NO_COLORS:
-            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [ERROR] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[31m[ERROR]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 3:
         if NO_COLORS:
-            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [DEBUG] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[34m[DEBUG]\033[39m %s%s" % (DateNow, Message, RetChar))
 
     # Flush stdout
     sys.stdout.flush()
@@ -214,6 +206,8 @@ def UsedSlots(Slots):
     # Return result
     return ret
 
+# Function to trash an EXIF corrupted image
+# pylint: disable=W0603
 def TrashImage_EXIF(TrashFolder, ImageData):
 
     # Global variable
@@ -230,6 +224,7 @@ def TrashImage_EXIF(TrashFolder, ImageData):
     # Increment index
     CORRUPTED_COUNT += 1
 
+# Function to trash an integrity corrupted image
 def TrashImage_Integrity(TrashFolder, Timestamp, MicroTimestamp, Module, ImageData):
 
     # Create output trash dir if not exists
@@ -329,7 +324,7 @@ def indexMOV(InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid=0):
             if jpeg_messages[0] or jpeg_messages[1]:
 
                 # Debug output
-                ShowMessage("Corrupted image (%10d_%06d_%d).jp4 in MOV file %s" % (Timestamp, Microseconds, InputFile.module, InputFile.path), 1)
+                ShowMessage("Corrupted image (%10d_%06d_%d.jp4) in MOV file %s" % (Timestamp, Microseconds, InputFile.module, InputFile.path), 1)
 
                 # Trash image
                 TrashImage_Integrity(IntegrityTrashFolder, Timestamp, Microseconds, InputFile.module, ImageData)
@@ -418,9 +413,6 @@ def WorkerThread_indexCollector(Source, OutputFile):
             # Unlock thread slot
             QUEUE_Slots[Ret[1]] = 0
 
-            # Debug output
-            ShowMessage("Writing state file...")
-
             # Merge results
             with open(OutputFile, "ab") as f:
                 for i in Results:
@@ -472,7 +464,7 @@ def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, 
             MOV = __MOV_List__[0]
 
             # Debug output
-            ShowMessage("Processing (%d/%d): %s..." % (__Processed_Files__, __Total_Files__, MOV.path))
+            ShowMessage("Processing (%d/%d): %s..." % (__Processed_Files__, __Total_Files__, MOV.path), 0, 0, 1)
 
             # Issue 7980 fix
             datetime.strptime('', '')
@@ -519,16 +511,12 @@ def _usage():
 
     [Optional arguments]
     --auto-segmented     Auto segmentation executed (master script)
-    --output             Show STDOUT logs
 
     """ % sys.argv[0]
 
 # Program entry point function
 # pylint: disable=W0142
 def main(argv):
-
-    # Global variables
-    global STD_OUTPUT
 
     # Parse arguments
     Arguments = {}
@@ -556,7 +544,6 @@ def main(argv):
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __DiskThreads__     = (None if not 'disk-threads' in Arguments else Arguments['disk-threads'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
-    STD_OUTPUT          = (1 if 'output' in Arguments else 0)
 
     # Arguments check
     if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
