@@ -307,8 +307,8 @@ def main(argv):
                 # Check if timestamp is not trashed
                 if ImageTS in Integrity_TimeStamps:
 
-                    # Tag as currupt
-                    j['raw'] = "currupt"
+                    # Tag as corrupt
+                    j['raw'] = "corrupt"
                 elif ImageTS in COMPLETE_TIMESTAMPS:
 
                     # Tag as valid

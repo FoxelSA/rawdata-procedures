@@ -91,7 +91,7 @@ arguments() {
 arguments $@
 
 # Check execution consistency #
-if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/footage ]; then
+if [ ! -d $PARAM_MOUNT/camera ]; then
 
     # Exit script #
     echo "Error : unable to access standard directory with specified mount point"
