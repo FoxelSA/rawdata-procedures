@@ -235,17 +235,6 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 --segment-timestamp $SEGMENT_TIMESTAMP \
                 --update-split-flag
 
-                # Loop break checker
-                if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                # Update split flag in database
-                echo "Updating corrupted images flags in database..."
-                rawdata-dbpusher --mount-point $PARAM_MOUNT \
-                --mac-address $PARAM_MAC \
-                --master-timestamp $PARAM_MASTER \
-                --segment-timestamp $SEGMENT_TIMESTAMP \
-                --update-corrupted
-
             else
 
                 # Display warning segment
@@ -319,17 +308,6 @@ else
             --master-timestamp $PARAM_MASTER \
             --segment-timestamp $PARAM_SEGMENT \
             --update-split-flag
-
-            # Loop break checker
-            if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-            # Update split flag in database
-            echo "Updating corrupted images flags in database..."
-            rawdata-dbpusher --mount-point $PARAM_MOUNT \
-            --mac-address $PARAM_MAC \
-            --master-timestamp $PARAM_MASTER \
-            --segment-timestamp $PARAM_SEGMENT \
-            --update-corrupted
 
         else
 
