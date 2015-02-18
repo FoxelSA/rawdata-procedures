@@ -254,10 +254,16 @@ def main(argv):
     Integrity_TimeStamps = []
 
     # Debug output
-    ShowMessage("Listing corrupted images (integrity)...")
+    ShowMessage("Listing corrupted images timestamps(integrity)...")
+
+    # Corrupted image(s) counter
+    Corr_Count = 0
 
     # Iterate over corrupted files
     for filePath in glob.glob("%s/*.jp4" % CorruptedPath):
+
+        # Increment corrupted image(s) counter
+        Corr_Count += 1
 
         # Get file name
         FileName = os.path.basename( filePath )
@@ -272,8 +278,9 @@ def main(argv):
         if not TimeStamp in Integrity_TimeStamps:
             Integrity_TimeStamps.append( TimeStamp )
 
+
     # Debug output
-    ShowMessage("%d image(s) found." % len( Integrity_TimeStamps ))
+    ShowMessage("%d timestamp(s) found in %d image(s)." % (len( Integrity_TimeStamps ), Corr_Count))
 
     # Find all JSON files
     JSON_Files = glob.glob("%s/rawdata/%s/master/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
@@ -299,11 +306,11 @@ def main(argv):
         # Iterate over pose sections
         for j in poses:
 
-            # Compute image TS
-            ImageTS = '%10d_%06d' % (j['sec'], j['usec'])
+            # Compute pose timestamp
+            PoseTS = '%10d_%06d' % (j['sec'], j['usec'])
 
             # Check if timestamp is corrupted
-            if ImageTS in Integrity_TimeStamps:
+            if PoseTS in Integrity_TimeStamps:
 
                 # Tag as corrupt
                 j['raw'] = "corrupt"
@@ -311,7 +318,7 @@ def main(argv):
             else:
 
                 # Check if pose in complete
-                if ImageTS in COMPLETE_TIMESTAMPS:
+                if PoseTS in COMPLETE_TIMESTAMPS:
 
                     # Tag as valid
                     j['raw'] = "valid"

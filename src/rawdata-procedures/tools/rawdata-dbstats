@@ -1,0 +1,222 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http:#foxel.ch
+  Please read <http:#foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http:#foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http:#www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http:#foxel.ch/license>.
+"""
+
+# Imports
+import ConfigParser
+import sys
+
+from warnings import filterwarnings
+from cStringIO import StringIO
+import MySQLdb
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    --mount-point         Base mount directory
+
+    """ % sys.argv[0]
+
+# Program entry point function
+def main(argv):
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables initialisation
+    __MountPoint__            = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+
+    # Arguments check
+    if not __MountPoint__ :
+        _usage()
+        sys.exit(0)
+
+    # Disable MySQLdb warning messages
+    filterwarnings('ignore', category = MySQLdb.Warning)
+
+    # Determine database config file path
+    DatabaseConfigFile = "%s/system/etc/credentials/dav-db.conf" % (__MountPoint__)
+
+    # Database container
+    DB = None
+
+    try:
+
+        # Instanciate database ConfigParser
+        db_config = ConfigParser.RawConfigParser()
+
+        # Read database config file and prepend a fake [section] to comply with ConfigParser
+        db_config.readfp(StringIO('[connection]\n' + open(DatabaseConfigFile, 'r').read()))
+
+        # Try to etablish connection with the database
+        DB = MySQLdb.connect(host=db_config.get('connection', 'host'),
+                             user=db_config.get('connection', 'username'),
+                             passwd=db_config.get('connection', 'password'),
+                             db=db_config.get('connection', 'database'))
+
+        # Create database cursor
+        cur = DB.cursor()
+
+        # List cameras
+        cur.execute("SELECT * from camera")
+        _Cameras = sorted(cur.fetchall())
+
+        # Tree output
+        print("Camera(s):")
+
+        # Iterate over camera(s)
+        for cam in _Cameras:
+
+            # Display MAC address
+            print("\n\tMAC: %s" % cam[ 2 ])
+
+            # Get segment(s)
+            cur.execute("SELECT * from segment WHERE camera_id = %d" % cam[ 0 ])
+            _Segments = sorted(cur.fetchall())
+
+            # Get model
+            cur.execute("SELECT * from camera_model WHERE id = %d" % cam[ 1 ])
+            _Model = cur.fetchone()
+
+            # Display model
+            print("\t\tModel: %s" % _Model[ 3 ])
+
+            # Get type
+            cur.execute("SELECT * from camera_type WHERE id = %d" % _Model[ 1 ])
+            _Type = cur.fetchone()
+
+            # Global counters
+            _TotalPosesCount          = 0
+            _TotalValidPosesCount     = 0
+            _TotalTrashedPosesCount   = 0
+            _TotalCorruptedPosesCount = 0
+
+            # Iterate over segments
+            for seg in _Segments:
+
+                # Get number of pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d" % seg[ 0 ])
+                _TotalPosesCount += cur.fetchone()[ 0 ]
+
+                # Get number of valid pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 0" % seg[ 0 ])
+                _TotalValidPosesCount += cur.fetchone()[ 0 ]
+
+                # Get number of trashed pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 1" % seg[ 0 ])
+                _TotalTrashedPosesCount += cur.fetchone()[ 0 ]
+
+                # Get number of corrupted pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 2" % seg[ 0 ])
+                _TotalCorruptedPosesCount += cur.fetchone()[ 0 ]
+
+            # Display type
+            print("\t\tType:  %s" % _Type[ 2 ])
+
+            # Display stats
+            print("\t\tSegment(s) count: %d" % (len(_Segments)))
+            print("\t\tPoses(s) count: %d" % (_TotalPosesCount))
+            print("\t\tValid pose(s): %d" % _TotalValidPosesCount)
+            print("\t\tTrashed pose(s): %d" % _TotalTrashedPosesCount)
+            print("\t\tCorrupted pose(s): %d" % _TotalCorruptedPosesCount)
+            print("\t\tInvalid images percentage: %.02f%%" % ((( _TotalTrashedPosesCount +  _TotalCorruptedPosesCount ) * 100.0) / _TotalPosesCount))
+
+            # Tree output
+            print("\t\tSegment(s):")
+
+            # Iterate over segments
+            for seg in _Segments:
+
+                # Display segment
+                print("\t\t\tSegment: %s" % seg[ 3 ])
+
+                # Get number of pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d" % seg[ 0 ])
+                _PosesCount = cur.fetchone()
+
+                # Get number of valid pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 0" % seg[ 0 ])
+                _ValidPosesCount = cur.fetchone()
+
+                # Get number of trashed pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 1" % seg[ 0 ])
+                _TrashedPosesCount = cur.fetchone()
+
+                # Get number of corrupted pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 2" % seg[ 0 ])
+                _CorruptedPosesCount = cur.fetchone()
+
+                # Display stats
+                print("\t\t\t\tPose(s): %d" % _PosesCount)
+                print("\t\t\t\tValid pose(s): %d" % _ValidPosesCount)
+                print("\t\t\t\tTrashed pose(s): %d" % _TrashedPosesCount)
+                print("\t\t\t\tCorrupted pose(s): %d" % _CorruptedPosesCount)
+                print("\t\t\t\tInvalid images percentage: %.02f%%" % ((( _TrashedPosesCount[ 0 ] + _CorruptedPosesCount[ 0 ] ) * 100.0) / _PosesCount[ 0 ]))
+
+    # Error handler
+    except MySQLdb.Error, e:
+
+        # Error handler
+        print "Database error %d: %s" % (e.args[0], e.args[1])
+        sys.exit(1)
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
