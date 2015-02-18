@@ -352,8 +352,9 @@ def main(argv):
                                 # Update pose in database
                                 cur.execute("UPDATE pose SET flag_errcode=%d WHERE segment_id=%d AND timestamp_sec=%d AND timestamp_usec=%d" % (errorToCode( "corrupt" ), data_segment[ 0 ], pose[ "sec" ], pose[ "usec" ]))
 
-                        # Commit changes to database
-                        DB.commit()
+
+                    # Commit changes to database
+                    DB.commit()
 
                     # Check presence of --segment-timestamp option
                     if __SegmentTimestamp__:
