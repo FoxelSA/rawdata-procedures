@@ -65,11 +65,17 @@ CORRUPTED_COUNT = 0
 QUEUE_Done      = 0
 QUEUE_Count     = 0
 QUEUE_Slots     = []
+PROCESSED_LIST  = []
 
 # Main binary file structure parameters
 MAIN_STRUCT = 'i i i i h'
 MAIN_SIZE   = struct.calcsize(MAIN_STRUCT)
 MAIN_DATA   = struct.Struct(MAIN_STRUCT)
+
+# State file binary structure parameters
+STATE_STRUCT = 'i i h'
+STATE_SIZE   = struct.calcsize(STATE_STRUCT)
+STATE_DATA   = struct.Struct(STATE_STRUCT)
 
 # MOV file container class
 class MovFile:
@@ -393,7 +399,7 @@ def indexMOV_Thread(Threads, InputFile, EXIFTrashFolder, IntegrityTrashFolder, t
 
 # MOV counting data collector
 # pylint: disable=W0602
-def WorkerThread_indexCollector(Source, OutputFile):
+def WorkerThread_indexCollector(Source, OutputFile, StateFile):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -413,6 +419,19 @@ def WorkerThread_indexCollector(Source, OutputFile):
             # Unlock thread slot
             QUEUE_Slots[Ret[1]] = 0
 
+            # Compute MOV timestamp
+            Entry = [ Results[ 0 ][ 2 ], Results[ 0 ][ 3 ], Results[ 0 ][ 4 ] ]
+
+            # Insert in state list if not present
+            if not Entry in PROCESSED_LIST:
+
+                # Append element to state list
+                PROCESSED_LIST.append( Entry )
+
+                # Write state file results
+                with open(StateFile, "ab") as f:
+                    f.write(STATE_DATA.pack(*Entry))
+
             # Merge results
             with open(OutputFile, "ab") as f:
                 for i in Results:
@@ -426,7 +445,7 @@ def WorkerThread_indexCollector(Source, OutputFile):
 
 # Main thread
 # pylint: disable=W0602
-def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, __Total_Files__, __Output_File):
+def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, __Total_Files__, __Output_File, _StateFile):
 
     # Global variables
     global QUEUE_Done, QUEUE_Slots
@@ -444,10 +463,10 @@ def WorkerThread(__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, 
     # Create collector thread
     CollectorThread = threading.Thread(
         target = WorkerThread_indexCollector,
-        args = (Threads, __Output_File)
+        args = (Threads, __Output_File, _StateFile)
     )
 
-    # Start collector thread
+    # Start collector thread_StateFile
     CollectorThread.setDaemon(True)
     CollectorThread.start()
 
@@ -559,6 +578,7 @@ def main(argv):
     InputFolder          = "%s/rawdata/%s/master/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     OutputFolder         = "%s/rawdata/%s/master/%s/info/raw" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     OutputFile           = "%s/jp4table.bin" % (OutputFolder)
+    StateFile            = "%s/jp4table_state.bin" % (OutputFolder)
     EXIFTrashFolder      = "%s/rawdata/%s/master/%s/info/raw/corrupted/exif" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     IntegrityTrashFolder = "%s/rawdata/%s/master/%s/info/raw/corrupted/integrity" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
     FastCalKeyFile       = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
@@ -570,10 +590,6 @@ def main(argv):
     # Override disk threads is specified
     if __DiskThreads__:
         __Jobs__ = int( __DiskThreads__ )
-
-    # Delete table file if present
-    if os.path.isfile( OutputFile ):
-        os.remove( OutputFile )
 
     # Get camera modules count
     ModuleCount = GetCameraModules(FastCalKeyFile)
@@ -594,35 +610,85 @@ def main(argv):
     ShowMessage("Imput MOV path: %s" % InputFolder)
     ShowMessage("Output state file: %s" % OutputFile)
 
+    # Check if file exists
+    if os.path.isfile( StateFile ):
+
+        # Read state file
+        with open(StateFile, "rb") as bin_file:
+            BINARY_DATA = bin_file.read()
+
+            # Determine data length
+            Len = len(BINARY_DATA)
+
+            # Determine entries count
+            Count = Len / STATE_SIZE
+
+            # Initialize variables
+            Offset = STATE_SIZE
+
+            # Iterate over entries count
+            for i in range(0, Count):
+
+                # Unpack binary values
+                Unpacked = STATE_DATA.unpack( BINARY_DATA[STATE_SIZE * i : Offset] )
+
+                # Append value to list
+                PROCESSED_LIST.append( [Unpacked[ 0 ], Unpacked[ 1 ], Unpacked[ 2 ]] )
+
+                # Increment offset
+                Offset += STATE_SIZE
+
     # List camera modules
     CameraModules = [i for i in range(1, ModuleCount + 1)]
 
     # Insert all MOV files into list
     __MOV_List__  = []
 
+    # Iterate over camera modules
     for mn in CameraModules:
+
+        # Iterate over MOV files
         for MOV in sorted(glob.glob("%s/%s/*.mov" % (InputFolder, mn))):
-            __MOV_List__.append( MovFile(MOV, mn) )
 
-    #Create main thread
-    MainThread = threading.Thread(
-        target = WorkerThread,
-        args = (__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, len(__MOV_List__), OutputFile)
-    )
+            # Create MOV file element
+            _MOV = MovFile(MOV, mn)
 
-    # Start main thread
-    MainThread.setDaemon(True)
-    MainThread.start()
+            # Build state entry element
+            _Entry = [_MOV.timestamp, _MOV.microtimestamp, _MOV.module]
 
-    # Wait until main thread finishes
-    while MainThread.is_alive():
-        time.sleep(0.5)
+            # Check if MOV is already indexed
+            if not _Entry in PROCESSED_LIST:
 
-    # Debug output
-    ShowMessage("Sorting table...")
+                # Append MOV to list
+                __MOV_List__.append( MovFile(MOV, mn) )
 
-    # Sort table
-    sortTable( OutputFile )
+    # Check if MOV list is not empty
+    if len( __MOV_List__ ) > 0:
+
+        #Create main thread
+        MainThread = threading.Thread(
+            target = WorkerThread,
+            args = (__Jobs__, __MOV_List__, EXIFTrashFolder, IntegrityTrashFolder, len(__MOV_List__), OutputFile, StateFile)
+        )
+
+        # Start main thread
+        MainThread.setDaemon(True)
+        MainThread.start()
+
+        # Wait until main thread finishes
+        while MainThread.is_alive():
+            time.sleep(0.5)
+
+        # Debug output
+        ShowMessage("Sorting table...")
+
+        # Sort table
+        sortTable( OutputFile )
+
+    else:
+
+        # Debug output
+        ShowMessage("All MOV files are already indexed")
 
     # Debug output
     ShowMessage("Done")
