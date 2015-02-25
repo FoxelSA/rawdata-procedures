@@ -151,7 +151,7 @@ process() {
     for AS_ENUM in $(ls $AS_RAW/csps/validated); do
 
         # Check validated logs-file size #
-        if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt 1048576 ]; then
+        if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt 9542400 ]; then
 
             # Retrieve auto-segment timestamp #
             MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
