@@ -44,6 +44,12 @@ AS_MOUNT=""
 AS_MACAD=""
 AS_TIMES=""
 
+# Script configuration - Decomposition minimum intervalle #
+AS_SEGS=1.0
+
+# Script configuration - 9Mo for on minute of record - 9542400 = 60*64*(2460+20+2) #
+AS_SIZE=9542400
+
 # Arguments and parameters #
 arguments() {
 
@@ -113,7 +119,7 @@ process() {
 
     # Perform logs-files processing #
     >&2 echo "rawdata-autoseg : decomposing logs-files ..."
-    csps-elphel-decompose -s $AS_RAW/csps/sorted -d $AS_RAW/csps/decomposed-a -i 1.0 > $AS_RAW/csps/logs-decomposed-a.log
+    csps-elphel-decompose -s $AS_RAW/csps/sorted -d $AS_RAW/csps/decomposed-a -i $AS_SEGS > $AS_RAW/csps/logs-decomposed-a.log
 
     # Performs audit #
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
@@ -129,7 +135,7 @@ process() {
    
     # Perform logs-files processing #
     >&2 echo "rawdata-autoseg : decomposing logs-files ..."
-    csps-elphel-decompose -s $AS_RAW/csps/merged -d $AS_RAW/csps/decomposed-b -i 1.0 > $AS_RAW/csps/logs-decomposed-b.log
+    csps-elphel-decompose -s $AS_RAW/csps/merged -d $AS_RAW/csps/decomposed-b -i $AS_SEGS > $AS_RAW/csps/logs-decomposed-b.log
 
     # Performs audit #
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
@@ -150,8 +156,8 @@ process() {
     # Auto-segment broadcasting #
     for AS_ENUM in $(ls $AS_RAW/csps/validated); do
 
-        # Check validated logs-file size - 9Mo = one minute of record on eyesis4pi = 60 * 64 * ( 2460 + 20 + 2) #
-        if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt 9542400 ]; then
+        # Check validated logs-file size #
+        if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt $AS_SIZE ]; then
 
             # Retrieve auto-segment timestamp #
             MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
