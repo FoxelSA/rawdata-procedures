@@ -156,14 +156,14 @@ process() {
             # Retrieve auto-segment timestamp #
             MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
             >&2 echo "    $AS_ENUM -> Not broadcasted ($MTS)"
-            echo "    $AS_ENUM -> Not broadcasted ($MTS)" >> $AS_RAW/csps/logs-broadcast.log    
+            echo "    $AS_ENUM -> Not broadcasted ($MTS)" >> $AS_RAW/csps/logs-broadcasting.log
 
         else
 
             # Retrieve auto-segment timestamp #
             MTS=$(csps-elphel-cat -l $AS_RAW/csps/validated/$AS_ENUM -m)
             >&2 echo "    $AS_ENUM -> $MTS"
-            echo "    $AS_ENUM -> $MTS" >> $AS_RAW/csps/logs-broadcast.log
+            echo "    $AS_ENUM -> $MTS" >> $AS_RAW/csps/logs-broadcasting.log
 
             # Creates CSPS-specific directories #
             mkdir -p $AS_SEG/$MTS
