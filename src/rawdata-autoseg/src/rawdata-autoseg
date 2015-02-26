@@ -150,7 +150,7 @@ process() {
     # Auto-segment broadcasting #
     for AS_ENUM in $(ls $AS_RAW/csps/validated); do
 
-        # Check validated logs-file size (9Mo = one minute of record on eyesis4pi = 64( 2460 + 20 + 2)*60 #
+        # Check validated logs-file size - 9Mo = one minute of record on eyesis4pi = 60 * 64 * ( 2460 + 20 + 2) #
         if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt 9542400 ]; then
 
             # Retrieve auto-segment timestamp #
