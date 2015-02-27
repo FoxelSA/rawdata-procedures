@@ -90,64 +90,34 @@ process() {
     >&2 echo "rawdata-autoseg : creating directories ..."
     mkdir -p $AS_SEG
     mkdir -p $AS_RAW/csps
-    mkdir -p $AS_RAW/csps/repaired
-    mkdir -p $AS_RAW/csps/sorted
-    mkdir -p $AS_RAW/csps/decomposed-a
     mkdir -p $AS_RAW/csps/merged
-    mkdir -p $AS_RAW/csps/decomposed-b
-    mkdir -p $AS_RAW/csps/validated
 
     # Performs audit #
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
     csps-elphel-audit -p $AS_RAW/mov/1/ > $AS_RAW/csps/audit-raw.log
 
     # Perform logs-files processing #
-    >&2 echo "rawdata-autoseg : repairing logs-files ..."
-    csps-elphel-validate -s $AS_RAW/mov/1/ -d $AS_RAW/csps/repaired > $AS_RAW/csps/logs-repaired.log
-
-    # Performs audit #
-    >&2 echo "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/repaired > $AS_RAW/csps/audit-repaired.log
-
-    # Perform logs-files processing #
-    >&2 echo "rawdata-autoseg : sorting logs-files ..."
-    csps-elphel-sort -s $AS_RAW/csps/repaired -d $AS_RAW/csps/sorted > $AS_RAW/csps/logs-sorted.log    
-
-    # Performs audit #
-    >&2 echo "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/sorted > $AS_RAW/csps/audit-sorted.log
-
-    # Perform logs-files processing #
-    >&2 echo "rawdata-autoseg : decomposing logs-files ..."
-    csps-elphel-decompose -s $AS_RAW/csps/sorted -d $AS_RAW/csps/decomposed-a -i $AS_SEGS > $AS_RAW/csps/logs-decomposed-a.log
-
-    # Performs audit #
-    >&2 echo "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/decomposed-a > $AS_RAW/csps/audit-decomposed-a.log
-
-    # Perform logs-files processing #
     >&2 echo "rawdata-autoseg : merging logs-files ..."
-    csps-elphel-merge -s $AS_RAW/csps/decomposed-a -d $AS_RAW/csps/merged > $AS_RAW/csps/logs-merged.log
+    csps-elphel-merge -s $AS_RAW/mov/1/ -d $AS_RAW/csps/merged > $AS_RAW/csps/logs-merged.log
 
     # Performs audit #
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
     csps-elphel-audit -p $AS_RAW/csps/merged > $AS_RAW/csps/audit-merged.log
-   
-    # Perform logs-files processing #
-    >&2 echo "rawdata-autoseg : decomposing logs-files ..."
-    csps-elphel-decompose -s $AS_RAW/csps/merged -d $AS_RAW/csps/decomposed-b -i $AS_SEGS > $AS_RAW/csps/logs-decomposed-b.log
 
-    # Performs audit #
-    >&2 echo "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/decomposed-b > $AS_RAW/csps/audit-decomposed-b.log
+    # Delete intermediates #
+    if [ "$AS_KEEP" == "FALSE" ]; then
 
-    # Perform logs-files processing #
-    >&2 echo "rawdata-autoseg : reconstructing logs-files timestamps ..."
-    csps-elphel-gps -s $AS_RAW/csps/decomposed-b -d $AS_RAW/csps/validated > $AS_RAW/csps/logs-validated.log
+        rm -rf $AS_RAW/csps/merged
 
-    # Performs audit #
-    >&2 echo "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/validated > $AS_RAW/csps/audit-validated.log    
+    fi
+
+    # State file #
+    touch $AS_RAW/csps/logs-processed.log
+
+}
+
+# Auto-segmentation : auto-segments broadcasting #
+broadcast() {
 
     # Perform auto-segment broadcasting #
     >&2 echo "rawdata-autoseg : broadcasting auto-segments ..."
@@ -196,20 +166,6 @@ process() {
         fi
 
     done
-
-    # Delete intermediates #
-    if [ "$AS_KEEP" == "FALSE" ]; then
-
-        rm -rf $AS_RAW/csps/repaired
-        rm -rf $AS_RAW/csps/sorted
-        rm -rf $AS_RAW/csps/decomposed-a
-        rm -rf $AS_RAW/csps/merged
-        rm -rf $AS_RAW/csps/decomposed-b
-
-    fi
-
-    # State file #
-    touch $AS_RAW/csps/logs-processed.log
 
 }
 
