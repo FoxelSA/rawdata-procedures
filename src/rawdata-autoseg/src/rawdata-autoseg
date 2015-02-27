@@ -200,10 +200,11 @@ process() {
     # Delete intermediates #
     if [ "$AS_KEEP" == "FALSE" ]; then
 
-        rm -rf $AS_RAW/csps/dissolved
-        rm -rf $AS_RAW/csps/approved
+        rm -rf $AS_RAW/csps/repaired
+        rm -rf $AS_RAW/csps/sorted
+        rm -rf $AS_RAW/csps/decomposed-a
         rm -rf $AS_RAW/csps/merged
-        rm -rf $AS_RAW/csps/decomposed
+        rm -rf $AS_RAW/csps/decomposed-b
 
     fi
 
