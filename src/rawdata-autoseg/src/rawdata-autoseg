@@ -91,6 +91,7 @@ process() {
     mkdir -p $AS_SEG
     mkdir -p $AS_RAW/csps
     mkdir -p $AS_RAW/csps/merged
+    mkdir -p $AS_RAW/csps/sorted
 
     # Performs audit #
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
@@ -104,10 +105,21 @@ process() {
     >&2 echo "rawdata-autoseg : auditing logs-files ..."
     csps-elphel-audit -p $AS_RAW/csps/merged > $AS_RAW/csps/audit-merged.log
 
+    # Perform logs-files processing #
+    >&2 echo "rawdata-autoseg : sorting logs-files ..."
+    csps-elphel-sort -s $AS_RAW/csps/merged -d $AS_RAW/csps/sorted > $AS_RAW/csps/logs-sorted.log
+
+    # Performs audit #
+    >&2 echo "rawdata-autoseg : auditing logs-files ..."
+    csps-elphel-audit -p $AS_RAW/csps/sorted > $AS_RAW/csps/audit-sorted.log
+
+
+
     # Delete intermediates #
     if [ "$AS_KEEP" == "FALSE" ]; then
 
         rm -rf $AS_RAW/csps/merged
+        rm -rf $AS_RAW/csps/sorted
 
     fi
 
