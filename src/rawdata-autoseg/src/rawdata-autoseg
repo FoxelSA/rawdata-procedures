@@ -234,7 +234,6 @@ unprocess() {
                 if [ -d $AS_SEG/$AS_ENUM/csps ]; then
                     rm -rf $AS_SEG/$AS_ENUM/csps
                 fi
-                rmdir --ignore-fail-on-non-empty $AS_SEG/$AS_ENUM
             fi
             rmdir --ignore-fail-on-non-empty $AS_SEG/$AS_ENUM
         done
