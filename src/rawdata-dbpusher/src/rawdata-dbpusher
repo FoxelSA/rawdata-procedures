@@ -75,8 +75,10 @@ def errorToCode(error):
         return 0
     elif 'trash' in error:
         return 1
-    elif 'corrupt' in error:
+    elif 'miss' in error:
         return 2
+    elif 'corrupt' in error:
+        return 3
 
 # Function to convert a preview status message to error code
 def previewToCode(state):

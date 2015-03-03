@@ -161,6 +161,7 @@ def main(argv):
             _TotalPosesCount          = 0
             _TotalValidPosesCount     = 0
             _TotalTrashedPosesCount   = 0
+            _TotalMissingPosesCount   = 0
             _TotalCorruptedPosesCount = 0
 
             # Iterate over segments
@@ -178,8 +179,12 @@ def main(argv):
                 cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 1" % seg[ 0 ])
                 _TotalTrashedPosesCount += cur.fetchone()[ 0 ]
 
-                # Get number of corrupted pose(s)
+                # Get number of missing pose(s)
                 cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 2" % seg[ 0 ])
+                _TotalMissingPosesCount += cur.fetchone()[ 0 ]
+
+                # Get number of corrupted pose(s)
+                cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 3" % seg[ 0 ])
                 _TotalCorruptedPosesCount += cur.fetchone()[ 0 ]
 
             # Display type
@@ -191,8 +196,9 @@ def main(argv):
             print("\t\tPoses(s) count: %d" % (_TotalPosesCount))
             print("\t\tValid pose(s): %d" % _TotalValidPosesCount)
             print("\t\tTrashed pose(s): %d" % _TotalTrashedPosesCount)
+            print("\t\tMissing pose(s): %d" % _TotalMissingPosesCount)
             print("\t\tCorrupted pose(s): %d" % _TotalCorruptedPosesCount)
-            print("\t\tInvalid images percentage: %.02f%%" % ((( _TotalTrashedPosesCount +  _TotalCorruptedPosesCount ) * 100.0) / _TotalPosesCount))
+            print("\t\tInvalid images percentage: %.02f%%" % ((( _TotalTrashedPosesCount +  _TotalCorruptedPosesCount + _TotalMissingPosesCount ) * 100.0) / _TotalPosesCount))
 
             # Tree output
             print("\t\tMaster(s):")
@@ -224,16 +230,21 @@ def main(argv):
                         cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 1" % seg[ 0 ])
                         _TrashedPosesCount = cur.fetchone()
 
-                        # Get number of corrupted pose(s)
+                        # Get number of missing pose(s)
                         cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 2" % seg[ 0 ])
+                        _MissingPosesCount = cur.fetchone()
+
+                        # Get number of corrupted pose(s)
+                        cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 3" % seg[ 0 ])
                         _CorruptedPosesCount = cur.fetchone()
 
                         # Display stats
                         print("\t\t\t\t\tPose(s): %d" % _PosesCount)
                         print("\t\t\t\t\tValid pose(s): %d" % _ValidPosesCount)
                         print("\t\t\t\t\tTrashed pose(s): %d" % _TrashedPosesCount)
+                        print("\t\t\t\t\tMissing pose(s): %d" % _MissingPosesCount)
                         print("\t\t\t\t\tCorrupted pose(s): %d" % _CorruptedPosesCount)
-                        print("\t\t\t\t\tInvalid images percentage: %.02f%%" % ((( _TrashedPosesCount[ 0 ] + _CorruptedPosesCount[ 0 ] ) * 100.0) / _PosesCount[ 0 ]))
+                        print("\t\t\t\t\tInvalid images percentage: %.02f%%" % ((( _TrashedPosesCount[ 0 ] + _CorruptedPosesCount[ 0 ] + _MissingPosesCount[ 0 ] ) * 100.0) / _PosesCount[ 0 ]))
 
     # Error handler
     except MySQLdb.Error, e:
