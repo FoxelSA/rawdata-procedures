@@ -88,7 +88,7 @@ arguments() {
 # Auto-segmentation : echos #
 echos() {
 
-    >&2 echo $1
+    >&2 echo "$1"
 
 }
 
@@ -183,7 +183,7 @@ broadcast() {
         if [ $(stat -c%s $AS_RAW/csps/validated/$AS_ENUM) -lt $AS_SIZE ]; then
 
             # Broadcasting logs #
-            echos "$AS_ENUM discared    with $AS_ASTS"
+            echos "    $AS_ENUM discared    with $AS_ASTS"
 
             # Display broadcasting information #
             echo "    $AS_ENUM discared    with $AS_ASTS" >> $AS_RAW/csps/logs-broadcasting.log
@@ -191,7 +191,7 @@ broadcast() {
         else
 
             # Broadcasting logs #
-            echos "$AS_ENUM broadcasted with $AS_ASTS"
+            echos "    $AS_ENUM broadcasted with $AS_ASTS"
 
             # Display broadcasting information #
             echo "    $AS_ENUM broadcasted with $AS_ASTS" >> $AS_RAW/csps/logs-broadcasting.log
