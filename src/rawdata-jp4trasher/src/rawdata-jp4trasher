@@ -205,6 +205,7 @@ def main(argv):
         # Initialize variables
         Offset = MAIN_SIZE
         COMPLETE_TIMESTAMPS = []
+        TIMESTAMPS_LIST = []
 
         # Iterate over entries count
         TEMP_LIST = {}
@@ -215,6 +216,12 @@ def main(argv):
 
             # Compute string timestamp
             TimeStamp = "%10d_%06d" % (Unpacked[0], Unpacked[1])
+
+            # Check presence of timestamp in list
+            if not TimeStamp in TIMESTAMPS_LIST:
+
+                # Insert timestamp to list
+                TIMESTAMPS_LIST.append( TimeStamp )
 
             # Check presence of timestamp in list
             if not (TimeStamp in TEMP_LIST):
@@ -255,14 +262,12 @@ def main(argv):
 
     # Debug output
     ShowMessage("Listing corrupted images timestamps(integrity)...")
-
-    # Corrupted image(s) counter
     Corr_Count = 0
 
     # Iterate over corrupted files
     for filePath in glob.glob("%s/*.jp4" % CorruptedPath):
 
-        # Increment corrupted image(s) counter
+        # Increment counter
         Corr_Count += 1
 
         # Get file name
@@ -317,15 +322,23 @@ def main(argv):
 
             else:
 
-                # Check if pose in complete
-                if PoseTS in COMPLETE_TIMESTAMPS:
+                # Check if Pose have associated images
+                if PoseTS in TIMESTAMPS_LIST:
 
-                    # Tag as valid
-                    j['raw'] = "valid"
+                    # Check if pose in complete
+                    if PoseTS in COMPLETE_TIMESTAMPS:
+
+                        # Tag as valid
+                        j['raw'] = "valid"
+                    else:
+
+                        # Tag as trashed
+                        j['raw'] = "trash"
+
                 else:
 
-                    # Tag as trashed
-                    j['raw'] = "trash"
+                    # Tag as miss
+                    j['raw'] = "miss"
 
         # Write validated JSON file
         with open(i, 'w') as outfile:
