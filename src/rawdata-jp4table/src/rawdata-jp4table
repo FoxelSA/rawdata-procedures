@@ -529,7 +529,9 @@ def _usage():
     --master-timestamp   Master timestamp
 
     [Optional arguments]
-    --auto-segmented     Auto segmentation executed (master script)
+    --disk-threads      Process localy with specified number of threads
+    --auto-segmented    Auto segmentation executed (master script)
+    --help              Show this message
 
     """ % sys.argv[0]
 
@@ -563,9 +565,10 @@ def main(argv):
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __DiskThreads__     = (None if not 'disk-threads' in Arguments else Arguments['disk-threads'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
+    __Help__            = (1 if 'help' in Arguments else 0)
 
     # Arguments check
-    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+    if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
         _usage()
         sys.exit(0)
 

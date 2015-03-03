@@ -134,6 +134,7 @@ def _usage():
     [Optional arguments]
     --auto-segmented     Auto segmentation executed (master script)
     --output             Show STDOUT logs
+    --help               Show this message
 
     """ % sys.argv[0]
 
@@ -168,10 +169,11 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
+    __Help__            = (1 if 'help' in Arguments else 0)
     STD_OUTPUT          = (1 if 'output' in Arguments else 0)
 
     # Arguments check
-    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+    if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
         _usage()
         sys.exit(0)
 

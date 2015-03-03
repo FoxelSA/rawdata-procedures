@@ -64,6 +64,7 @@ def _usage():
     --update-split-flag   Update split flag in DB
     --update-preview-flag Update preview flag in DB
     --update-corrupted    Update corrupted images raw status in DB
+    --help                Show this message
 
     """ % sys.argv[0]
 
@@ -128,9 +129,10 @@ def main(argv):
     __Update_Split_Flag__     = (False if not 'update-split-flag' in Arguments else True)
     __Update_Preview_Flag__   = (False if not 'update-preview-flag' in Arguments else True)
     __Update_Corrupted_Flag__ = (False if not 'update-corrupted' in Arguments else True)
+    __Help__                  = (1 if 'help' in Arguments else 0)
 
     # Arguments check
-    if not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__:
+    if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
         _usage()
         sys.exit(0)
 

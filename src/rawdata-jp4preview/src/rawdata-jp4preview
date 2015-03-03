@@ -60,7 +60,7 @@ _help() {
     --segment-timestamp Segment timestamp
     --no-split          Exit program
     --no-debayer        Write grayscale images (without debayer)
-    --disk-threads      Process localy with specified number of threads
+    --cpu-threads       Process localy with specified number of threads
     --help              Show this message
     """
 }
