@@ -610,8 +610,9 @@ def main(argv):
         ShowMessage("FastCal key file '%s' does not exist" % FastCalKeyFile, 2, 1)
 
     # Debug output
-    ShowMessage("Imput MOV path: %s" % InputFolder)
-    ShowMessage("Output state file: %s" % OutputFile)
+    ShowMessage("Input MOV path: %s" % InputFolder)
+    ShowMessage("Output table file: %s" % OutputFile)
+    ShowMessage("Output state file: %s" % StateFile)
 
     # Check if file exists
     if os.path.isfile( StateFile ):
