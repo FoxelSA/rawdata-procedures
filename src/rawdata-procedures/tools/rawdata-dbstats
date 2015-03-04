@@ -238,7 +238,15 @@ def main(argv):
                         cur.execute("SELECT COUNT(*) from pose WHERE segment_id = %d AND flag_errcode = 3" % seg[ 0 ])
                         _CorruptedPosesCount = cur.fetchone()
 
+                        # Get split flag
+                        __Split__ = ("Yes" if seg[ 4 ] else "No")
+
+                        # Get preview flag
+                        __Preview__ = ("Yes" if seg[ 5 ] else "No")
+
                         # Display stats
+                        print("\t\t\t\t\tSplitted(s): %s" % __Split__)
+                        print("\t\t\t\t\tPreviews(s): %s" % __Preview__)
                         print("\t\t\t\t\tPose(s): %d" % _PosesCount)
                         print("\t\t\t\t\tValid pose(s): %d" % _ValidPosesCount)
                         print("\t\t\t\t\tTrashed pose(s): %d" % _TrashedPosesCount)
