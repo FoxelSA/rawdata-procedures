@@ -49,24 +49,15 @@ import sys
 from cStringIO import StringIO
 from datetime import datetime
 
-# Global variables
-STD_OUTPUT = 0
-
 # Main binary file structure parameters
 MAIN_TYPE   = 'i i i i h'
 MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
 MAIN_STRUCT = struct.Struct(MAIN_TYPE)
 
 # Function to print debug messages
-def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
+def ShowMessage(Message, Type=0, Halt=0, SameLine=0):
 
-    # Global variables
-    global STD_OUTPUT
-
-    # Check if output is enabled
-    if not STD_OUTPUT:
-        return
-
+    # Colors by default
     NO_COLORS = 0
 
     # Flush stdout
@@ -75,32 +66,32 @@ def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
     # Get current date
     DateNow = datetime.now().strftime("%H:%M:%S")
 
-    # Display proper message
-    Prepend = ""
+    # Return type
+    RetChar = '\n'
 
-    if ThreadID != -1:
-        Prepend = "[Thread %d]" % (ThreadID+1)
+    if SameLine:
+        RetChar = '\r'
 
     if Type == 0:
         if NO_COLORS:
-            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [INFO] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[32m[INFO]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 1:
         if NO_COLORS:
-            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [WARNING] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[33m[WARNING]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 2:
         if NO_COLORS:
-            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [ERROR] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[31m[ERROR]\033[39m %s%s" % (DateNow, Message, RetChar))
     elif Type == 3:
         if NO_COLORS:
-            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s [DEBUG] %s%s" % (DateNow, Message, RetChar))
         else:
-            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stdout.write("\033[K%s \033[34m[DEBUG]\033[39m %s%s" % (DateNow, Message, RetChar))
 
     # Flush stdout
     sys.stdout.flush()
@@ -141,9 +132,6 @@ def _usage():
 # Program entry point function
 def main(argv):
 
-    # Global variables
-    global STD_OUTPUT
-
     # Parse arguments
     Arguments = {}
     Argv_Concat = ' '.join(argv)
@@ -170,7 +158,6 @@ def main(argv):
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
     __Help__            = (1 if 'help' in Arguments else 0)
-    STD_OUTPUT          = (1 if 'output' in Arguments else 0)
 
     # Arguments check
     if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
@@ -192,10 +179,12 @@ def main(argv):
     ModuleCount = GetCameraModules(FastCalKeyFile)
 
     # Debug output
-    ShowMessage("Loading jp4table.bin file...")
+    ShowMessage("Loading jp4table.bin file...", 0, 0, 1)
 
     # Read state file
     with open(InputFile, "rb") as bin_file:
+
+        # Read binary file
         BINARY_DATA = bin_file.read()
 
         # Determine data length
@@ -257,13 +246,13 @@ def main(argv):
     COMPLETE_TIMESTAMPS = sorted(COMPLETE_TIMESTAMPS)
 
     # Debug output
-    ShowMessage("%d entries loaded" % Count)
+    ShowMessage("%d entries loaded from jp4table.bin" % Count)
 
     # Local integrity corrupted timestamps container
     Integrity_TimeStamps = []
 
     # Debug output
-    ShowMessage("Listing corrupted images timestamps(integrity)...")
+    ShowMessage("Listing corrupted images timestamps(integrity)...", 0, 0, 1)
     Corr_Count = 0
 
     # Iterate over corrupted files
@@ -287,16 +276,19 @@ def main(argv):
 
 
     # Debug output
-    ShowMessage("%d timestamp(s) found in %d image(s)." % (len( Integrity_TimeStamps ), Corr_Count))
+    ShowMessage("%d timestamp(s) found in %d corrupted image(s)." % (len( Integrity_TimeStamps ), Corr_Count))
 
     # Find all JSON files
     JSON_Files = glob.glob("%s/rawdata/%s/master/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
 
     # Debug output
-    ShowMessage("Updating JSON files...")
+    ShowMessage("Updating JSON files...", 0, 0, 1)
 
     # Iterate over JSON files
-    for i in JSON_Files:
+    for index, i in enumerate(JSON_Files):
+
+        # Debug output
+        ShowMessage("Updating JSON %d/%d %s" % (index + 1, len( JSON_Files ), i), 0, 0, 1)
 
         # Open file
         SourceJSON = open(i, 'r')
