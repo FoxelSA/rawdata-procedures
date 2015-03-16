@@ -113,7 +113,7 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
 
     # Run procedure #
     echo "[$(date '+%F %R')] rawdata-procedures : downloading raw data ..."
-    RETURN=$(sudo -i $(which rawdata-downloader) $PARAM_MOUNT/camera/ )
+    RETURN=$(sudo -i $(which rawdata-downloader) $PARAM_MOUNT/ )
     STATUS=$?
 
     # Check procedure status #
