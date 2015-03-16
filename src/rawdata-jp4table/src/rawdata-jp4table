@@ -284,7 +284,7 @@ def indexMOV(InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid=0):
     JPEG_Offsets     = list(find_all(mov_data, JPEGHeader))
 
     # Variable to store results
-    Result = [[], tid]
+    Result = [[], tid, InputFile]
 
     # Iterate over all images
     for _Index, _Offset in enumerate(JPEG_Offsets):
@@ -419,23 +419,31 @@ def WorkerThread_indexCollector(Source, OutputFile, StateFile):
             # Unlock thread slot
             QUEUE_Slots[Ret[1]] = 0
 
-            # Compute MOV timestamp
-            Entry = [ Results[ 0 ][ 2 ], Results[ 0 ][ 3 ], Results[ 0 ][ 4 ] ]
+            # Check if results contains any data
+            if Results:
 
-            # Insert in state list if not present
-            if not Entry in PROCESSED_LIST:
+                # Compute MOV timestamp
+                Entry = [ Results[ 0 ][ 2 ], Results[ 0 ][ 3 ], Results[ 0 ][ 4 ] ]
 
-                # Append element to state list
-                PROCESSED_LIST.append( Entry )
+                # Insert in state list if not present
+                if not Entry in PROCESSED_LIST:
 
-                # Write state file results
-                with open(StateFile, "ab") as f:
-                    f.write(STATE_DATA.pack(*Entry))
+                    # Append element to state list
+                    PROCESSED_LIST.append( Entry )
 
-            # Merge results
-            with open(OutputFile, "ab") as f:
-                for i in Results:
-                    f.write(MAIN_DATA.pack(*i))
+                    # Write state file results
+                    with open(StateFile, "ab") as f:
+                        f.write(STATE_DATA.pack(*Entry))
+
+                # Merge results
+                with open(OutputFile, "ab") as f:
+                    for i in Results:
+                        f.write(MAIN_DATA.pack(*i))
+
+            else:
+
+                # Debug output
+                ShowMessage("Corrupted MOV file with no images %s" % Ret[ 2 ].filename, 1)
 
             # Increment processed MOVs index
             QUEUE_Done  += 1
