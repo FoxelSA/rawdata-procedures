@@ -443,7 +443,7 @@ def WorkerThread_indexCollector(Source, OutputFile, StateFile):
             else:
 
                 # Debug output
-                ShowMessage("Corrupted MOV file with no images %s" % Ret[ 2 ].filename, 1)
+                ShowMessage("Corrupted MOV file with no images %s" % Ret[ 2 ].path, 1)
 
             # Increment processed MOVs index
             QUEUE_Done  += 1
