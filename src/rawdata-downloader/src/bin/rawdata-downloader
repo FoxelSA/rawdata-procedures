@@ -10,6 +10,11 @@
 #       Luc Deschenaux <l.deschenaux@foxel.ch>
 #
 #
+# Contributor(s):
+#
+#       Kevin Velickovic <k.velickovic@foxel.ch>
+#
+#
 # This file is part of the FOXEL project <http://foxel.ch>.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -57,50 +62,28 @@ DESTINATION=$1
 
 # download rawdata from camera modules
 DEST=$(rawdata-download $DESTINATION)
+
 EXIT_CODE=$?
+
+# set permissions for directories
+chown $_UID.$_GID $DEST $DEST/mov
+chown -R $_UID.$_GID $DEST/mov
+chmod 0777 $DEST/mov
+chmod -R 0777 $DEST/mov
+
+# Decompose destination
+IFS='/' read -a DEST_DECOMPOSED <<< "$DEST"
+
+# Extract master timestamp
+MASTER_TS=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 1]}
+
+# Extract MAC address
+MAC_ADDR=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 3]}
+
+# return mac address and first timestamp
+echo $MAC_ADDR $MASTER_TS
+
 if [ $EXIT_CODE -ne 0 ] ; then
  log ${LINENO} rawdata-download exit code $EXIT_CODE
  exit $EXIT_CODE
 fi
-
-
-firsttimestamp() {
-  find $1 |
-  grep -E -e '\/[0-9_]{17}' |
-  while read f ; do
-    b=$(basename $f)
-    echo ${b:0:10}
-  done |
-  sort -u |
-  head -n 1
-}
-
-# get first timestamp in rsync folder
-TIMESTAMP=$(firsttimestamp $DEST/rsync)
-
-if [ -z "$TIMESTAMP" ] ; then
-  log ${LINENO} first timestamp not found
-  exit 1
-fi
-
-# move files
-mkdir -p $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout || exit 1
-log ${LINENO} moving files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
-if ! rsync -av --inplace --exclude='lost+found' --remove-source-files --chmod=u+w,a+rX $DEST/rsync/ $DEST/raw/sync/$TIMESTAMP/mov/ 2>&1 | logstdout ${LINENO} ; then
-  exit 1
-  log ${LINENO} error: failed to move files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
-fi
-log ${LINENO} success: moved files from $DEST/rsync/ to $DEST/raw/sync/$TIMESTAMP/mov/
-
-# remove remaining source files
-log ${LINENO} removing source rsync folder
-rm /$DEST/rsync -r
-
-# set permissions for directories
-chown $_UID.$_GID $DEST/raw $DEST/raw/sync $DEST/raw/sync/$TIMESTAMP $DEST/raw/sync/$TIMESTAMP/mov
-chown -R $_UID.$_GID $DEST/raw/sync/$TIMESTAMP/mov
-chmod 0777 $DEST/raw $DEST/raw/sync $DEST/raw/sync/$TIMESTAMP $DEST/raw/sync/$TIMESTAMP/mov
-chmod -R 0777 $DEST/raw/sync/$TIMESTAMP/mov
-
-# return mac address and first timestamp
-echo $(basename $DEST) $TIMESTAMP

@@ -10,6 +10,11 @@
 #       Luc Deschenaux <l.deschenaux@foxel.ch>
 #
 #
+# Contributor(s):
+#
+#       Kevin Velickovic <k.velickovic@foxel.ch>
+#
+#
 # This file is part of the FOXEL project <http://foxel.ch>.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -215,7 +220,7 @@ remove_scsi_device() {
     log ${LINENO} set device $DEVICE  offline and delete it
     echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
     echo 1 | tee /sys/block/$(basename $DEVICE)/device/delete 2>&1 | logstdout ${LINENO}
-  else 
+  else
     log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
     echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
   fi
@@ -351,11 +356,62 @@ backup() {
      return 1
   fi
 
+  # Get module index
+  MODULE_INDEX=$(get_module_index $SERIAL)
+
+  # Check if master timestamp is already defined
+  if [ ! -f $TMP/MASTER_TS ]; then
+
+      # Check if download needs to be completed or downloaded entierly
+      # Get the oldest MOV file on CAM
+      CAM_OLDEST_FILE=$(basename `find $MOUNTPOINT/ -iname '*.mov' | sort | head -n1`)
+
+      # Get the most recent master timestamp on destination
+      DEST_NEWEST_TS=$(basename `find $DEST/ -maxdepth 1 -type d | sort | tail -1`)
+
+      # Extract the timestamp form file
+      CAM_OLD_TS="${CAM_OLDEST_FILE%.*}"
+
+      # Compute master timestamp
+      MASTER_TS=$(echo $CAM_OLD_TS | cut -d'_' -f1)
+
+      # Check if the file already exists in the destination folder
+      if [ -f "$DEST/$DEST_NEWEST_TS/mov/$MODULE_INDEX/$CAM_OLDEST_FILE" ]; then
+
+          log ${LINENO} "MASTER $DEST_NEWEST_TS already present"
+
+          # Assign master timestamp to folder
+          MASTER_TS=$DEST_NEWEST_TS
+
+      else
+          log ${LINENO} "Allocating new master $MASTER_TS"
+      fi
+
+      # Save master timestamp
+      echo $MASTER_TS > $TMP/MASTER_TS
+  else
+
+      # Load master timestamo from saved file
+      MASTER_TS=$(cat $TMP/MASTER_TS)
+  fi
+
+  # Compute destination folder
+  RSYNCDEST=$DEST/$MASTER_TS/mov/$MODULE_INDEX
+  DEST=$DEST/$MASTER_TS
+
   # backup files
   log ${LINENO} backuping mux $MUX_INDEX index $REMOTE_SSD_INDEX serial $SERIAL partition ${DEVICE}$PARTNUM
-  RSYNCDEST=$DEST/rsync/$(get_module_index $SERIAL)
-  rsync --exclude='lost+found' --inplace -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
+
+  # Create destination folder if not exists
+  if [ ! -d "$RSYNCDEST" ]; then
+      mkdir -p "$RSYNCDEST"
+  fi
+
+  rsync --exclude='lost+found' --inplace --ignore-existing -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
   STATUS=$?
+
+  # Just give some time to other scripts to initialize
+  sleep 5
 
   log ${LINENO} backup_status $STATUS module $(get_module_index $SERIAL) mux ${MUX_INDEX} index ${REMOTE_SSD_INDEX}
 
@@ -586,6 +642,7 @@ if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
 fi
 
 MACADDR=$(macaddr $BASE_IP.$MASTER_IP)
+
 if [ -z "$MACADDR" ] ; then
   log ${LINENO} unable to get MAC address for $BASE_IP.$MASTER_IP
   exit 1
@@ -637,14 +694,16 @@ else
   touch $SCSIHOST_TMP
 fi
 
-# set destination folder
-DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
+MAC_ADDR=$(echo $MACADDR | tr 'a-f' 'A-F')
 
-if ! mkdir -p "$DEST/rsync" 2>&1 | logstdout ${LINENO} ; then
+# set destination folder
+DEST="$DESTINATION/rawdata/$MAC_ADDR/master"
+
+if ! mkdir -p "$DEST" 2>&1 | logstdout ${LINENO} ; then
    exit 1
 fi
 
-export MODULES_FILE=$DEST/info/rawdata-downloader/modules
+export MODULES_FILE=$DESTINATION/camera/$MAC_ADDR/rawdata-downloader/modules
 if [ ! -f $MODULES_FILE ] ; then
   log ${LINENO} error file not found: $MODULES_FILE
   log ${LINENO} "=> run 'build-modules-file $DESTINATION' first"
@@ -664,7 +723,7 @@ get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
   msg=($l)
   if [ ${msg[0]} != "sshall:" ] ; then
     log ${LINENO} get_remote_disk_serial: $l
-    continue 
+    continue
   fi
   [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
   LOGIN=${msg[1]}
@@ -733,6 +792,7 @@ if [ -z "$HOTSWAP_USING_SYS" ] ; then
 fi
 
 EXIT_CODE=$(cat $EXIT_CODE_TMP)
+MASTER_TS=$(cat $TMP/MASTER_TS)
 
 # remove temporary files
 rm $TMP/$$ -r 2> /dev/null
@@ -740,9 +800,8 @@ rm $TMP/$$ -r 2> /dev/null
 # kill zombies
 killtree -KILL $MYPID
 
-# on success, print destination folder
-[ $EXIT_CODE -eq 0 ] && echo $DEST
+# Print destination folder
+echo "$DEST/$MASTER_TS"
 
 log ${LINENO} exit $EXIT_CODE
 exit $EXIT_CODE
-
