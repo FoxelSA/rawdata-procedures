@@ -65,6 +65,12 @@ DEST=$(rawdata-download $DESTINATION)
 
 EXIT_CODE=$?
 
+# Check exit code
+if [ $EXIT_CODE -ne 0 ] ; then
+ log ${LINENO} rawdata-download exit code $EXIT_CODE
+ exit $EXIT_CODE
+fi
+
 # set permissions for directories
 chown $_UID.$_GID $DEST $DEST/mov
 chown -R $_UID.$_GID $DEST/mov
@@ -82,8 +88,3 @@ MAC_ADDR=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 3]}
 
 # return mac address and first timestamp
 echo $MAC_ADDR $MASTER_TS
-
-if [ $EXIT_CODE -ne 0 ] ; then
- log ${LINENO} rawdata-download exit code $EXIT_CODE
- exit $EXIT_CODE
-fi
