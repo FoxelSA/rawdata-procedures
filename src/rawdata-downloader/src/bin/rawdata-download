@@ -407,7 +407,7 @@ backup() {
       mkdir -p "$RSYNCDEST"
   fi
 
-  rsync --exclude='lost+found' --inplace --ignore-existing -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
+  rsync --exclude='lost+found' --exclude='**nodownload*' --inplace --ignore-existing -av $MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} $RSYNCDEST $MOUNTPOINT
   STATUS=$?
 
   # Just give some time to other scripts to initialize
