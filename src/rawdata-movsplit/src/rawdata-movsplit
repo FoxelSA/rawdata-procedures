@@ -168,80 +168,88 @@ LIST_SCRIPT="rawdata-movsplit-movlist"
 # Check if a segment is specified
 if [ -z "$PARAM_SEGMENT" ]; then
 
-    # Iterate over segments
-    for d in $SEGMENTS_DIR/* ; do
+    # Check if master have segments
+    if [ "$(ls -A $SEGMENTS_DIR)" ]; then
 
-        # Determine segment folder
-        SEGMENT_TIMESTAMP=$(basename $d)
-        SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
+        # Iterate over segments
+        for d in $SEGMENTS_DIR/* ; do
 
-        # Check if segment is already splitted
-        $STATE_SCRIPT $PARAM_MOUNT \
-        $PARAM_MAC \
-        $PARAM_MASTER \
-        $SEGMENT_TIMESTAMP
+            # Determine segment folder
+            SEGMENT_TIMESTAMP=$(basename $d)
+            SEGMENT_FOLDER=$SEGMENTS_DIR/$SEGMENT_TIMESTAMP
 
-        if [ $? -eq 1 ]; then
-            echo "Segment $SEGMENT_TIMESTAMP already splitted, skipping"
-        else
+            # Check if segment is already splitted
+            $STATE_SCRIPT $PARAM_MOUNT \
+            $PARAM_MAC \
+            $PARAM_MASTER \
+            $SEGMENT_TIMESTAMP
 
-            # Build MOV list
-            MOV_LIST="$(
-                $LIST_SCRIPT \
-                $PARAM_MOUNT \
-                $PARAM_MAC \
-                $PARAM_MASTER \
-                $SEGMENT_TIMESTAMP | sort
-            )"
-
-            # Check MOV list length
-            if [ ${#MOV_LIST} -gt 0 ]; then
-
-                # Split segment
-                echo Splitting segment $SEGMENT_TIMESTAMP...
-
-                if [ -z "$PARAM_DISK_THREADS" ]; then
-                    echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
-                    $PARAM_MOUNT \
-                    $PARAM_MAC \
-                    $PARAM_MASTER \
-                    $SEGMENT_TIMESTAMP
-                else
-                    echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
-                    $PARAM_MOUNT \
-                    $PARAM_MAC \
-                    $PARAM_MASTER \
-                    $SEGMENT_TIMESTAMP
-                fi
-
-                # Loop break checker
-                if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                # Update JSON file
-                echo "Updating segment JSON file..."
-                $JSONUPDATE_SCRIPT $PARAM_MOUNT \
-                $PARAM_MAC \
-                $PARAM_MASTER \
-                $SEGMENT_TIMESTAMP
-
-                # Loop break checker
-                if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                # Update split flag in database
-                echo "Updating segment split flag in database..."
-                rawdata-dbpusher --mount-point $PARAM_MOUNT \
-                --mac-address $PARAM_MAC \
-                --master-timestamp $PARAM_MASTER \
-                --segment-timestamp $SEGMENT_TIMESTAMP \
-                --update-split-flag
-
+            if [ $? -eq 1 ]; then
+                echo "Segment $SEGMENT_TIMESTAMP already splitted, skipping"
             else
 
-                # Display warning segment
-                echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
+                # Build MOV list
+                MOV_LIST="$(
+                    $LIST_SCRIPT \
+                    $PARAM_MOUNT \
+                    $PARAM_MAC \
+                    $PARAM_MASTER \
+                    $SEGMENT_TIMESTAMP | sort
+                )"
+
+                # Check MOV list length
+                if [ ${#MOV_LIST} -gt 0 ]; then
+
+                    # Split segment
+                    echo Splitting segment $SEGMENT_TIMESTAMP...
+
+                    if [ -z "$PARAM_DISK_THREADS" ]; then
+                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
+                        $PARAM_MOUNT \
+                        $PARAM_MAC \
+                        $PARAM_MASTER \
+                        $SEGMENT_TIMESTAMP
+                    else
+                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
+                        $PARAM_MOUNT \
+                        $PARAM_MAC \
+                        $PARAM_MASTER \
+                        $SEGMENT_TIMESTAMP
+                    fi
+
+                    # Loop break checker
+                    if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                    # Update JSON file
+                    echo "Updating segment JSON file..."
+                    $JSONUPDATE_SCRIPT $PARAM_MOUNT \
+                    $PARAM_MAC \
+                    $PARAM_MASTER \
+                    $SEGMENT_TIMESTAMP
+
+                    # Loop break checker
+                    if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                    # Update split flag in database
+                    echo "Updating segment split flag in database..."
+                    rawdata-dbpusher --mount-point $PARAM_MOUNT \
+                    --mac-address $PARAM_MAC \
+                    --master-timestamp $PARAM_MASTER \
+                    --segment-timestamp $SEGMENT_TIMESTAMP \
+                    --update-split-flag
+
+                else
+
+                    # Display warning
+                    echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
+                fi
             fi
-        fi
-    done
+        done
+    else
+
+        # Display warning
+        echo "Master $PARAM_MASTER have no segments, skipping"
+    fi
 
 else
 
