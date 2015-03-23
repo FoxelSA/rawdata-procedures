@@ -42,6 +42,7 @@ PARAM_MASTER=""
 PARAM_SEGMENT=""
 PARAM_CPU_THREADS=""
 PARAM_NO_DEBAYER="0"
+PARAM_FORCE="0"
 
 # Loop breaker
 LOOP_BREAK="0"
@@ -60,6 +61,7 @@ _help() {
     --segment-timestamp Segment timestamp
     --no-split          Exit program
     --no-debayer        Write grayscale images (without debayer)
+    --force             Bypass preview flag in JSON
     --cpu-threads       Process localy with specified number of threads
     --help              Show this message
     """
@@ -86,6 +88,9 @@ arguments() {
         case $args in
             --no-debayer)
                 PARAM_NO_DEBAYER="1"
+            ;;
+            --force)
+                PARAM_FORCE="1"
             ;;
             --no-split)
                 echo "--no-split given exiting..."
@@ -168,6 +173,7 @@ PREVIEW_SCRIPT="rawdata-jp4preview-generator"
 MOVIE_SCRIPT="rawdata-jp4preview-moviegenerator"
 JSONUPDATE_SCRIPT="rawdata-jp4preview-jsonupdater"
 STATE_SCRIPT="rawdata-jp4preview-state"
+VALIDATE_SCRIPT="rawdata-jp4preview-validate"
 
 # Check if a segment is specified
 if [ -z "$PARAM_SEGMENT" ]; then
@@ -190,7 +196,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
             $PARAM_NO_DEBAYER
 
             # Check if previews are already generated
-            if [ $? -eq 1 ]; then
+            if [ $? -eq 1 ] && [ $PARAM_FORCE -eq 0 ]; then
                 echo "Previews already generated for segment $SEGMENT_TIMESTAMP, skipping"
             else
 
@@ -226,6 +232,22 @@ if [ -z "$PARAM_SEGMENT" ]; then
                             $PARAM_MASTER \
                             $SEGMENT_TIMESTAMP \
                             $PARAM_NO_DEBAYER
+                        fi
+
+                        # Loop break checker
+                        if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                        # Generate preview movie
+                        echo "Verifying previews..."
+                        $VALIDATE_SCRIPT $PARAM_MOUNT \
+                        $PARAM_MAC \
+                        $PARAM_MASTER \
+                        $SEGMENT_TIMESTAMP \
+                        $PARAM_NO_DEBAYER
+
+                        if [ $? -eq 1 ]; then
+                            echo -e "\e[31m[Error]\e[39m: Some previews are not generated!"
+                            exit 1
                         fi
 
                         # Loop break checker
@@ -290,7 +312,7 @@ else
     $PARAM_SEGMENT \
     $PARAM_NO_DEBAYER
 
-    if [ $? -eq 1 ]; then
+    if [ $? -eq 1 ] && [ $PARAM_FORCE -eq 0 ]; then
         echo "Previews already generated for segment $PARAM_SEGMENT, skipping"
     else
 
@@ -326,6 +348,22 @@ else
                     $PARAM_MASTER \
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER
+                fi
+
+                # Loop break checker
+                if [ $LOOP_BREAK -ne 0 ]; then break; fi
+
+                # Generate preview movie
+                echo "Verifying previews..."
+                $VALIDATE_SCRIPT $PARAM_MOUNT \
+                $PARAM_MAC \
+                $PARAM_MASTER \
+                $PARAM_SEGMENT \
+                $PARAM_NO_DEBAYER
+
+                if [ $? -eq 1 ]; then
+                    echo -e "\e[31m[Error]\e[39m: Some previews are not generated!"
+                    exit 1
                 fi
 
                 # Loop break checker
