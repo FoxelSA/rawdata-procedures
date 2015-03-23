@@ -245,9 +245,19 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         $SEGMENT_TIMESTAMP \
                         $PARAM_NO_DEBAYER
 
+                        # Check exit code
                         if [ $? -eq 1 ]; then
+
+                            # Error message
                             echo -e "\e[31m[Error]\e[39m: Some previews are not generated!"
+
+                            # Exit script
                             exit 1
+
+                        else
+
+                            # Debug message
+                            echo "Previews OK for segment $SEGMENT_TIMESTAMP"
                         fi
 
                         # Loop break checker
@@ -361,9 +371,19 @@ else
                 $PARAM_SEGMENT \
                 $PARAM_NO_DEBAYER
 
+                # Check exit code
                 if [ $? -eq 1 ]; then
+
+                    # Error message
                     echo -e "\e[31m[Error]\e[39m: Some previews are not generated!"
+
+                    # Exit script
                     exit 1
+
+                else
+
+                    # Debug message
+                    echo "Previews OK for segment $SEGMENT_TIMESTAMP"
                 fi
 
                 # Loop break checker
