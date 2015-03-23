@@ -379,6 +379,9 @@ def main(argv):
                 # Get poses
                 poses = json_data['pose']
 
+                # Init index counter
+                segment_index = 1
+
                 # Iterate over poses
                 for pose in poses:
 
@@ -404,6 +407,7 @@ def main(argv):
                     # Build query
                     query = ('INSERT INTO pose ('
                             'segment_id,'
+                            'segment_index,'
                             'timestamp_sec,'
                             'timestamp_usec,'
                             'flag_still,'                             # true/false | 0: not still, 1: still
@@ -427,6 +431,7 @@ def main(argv):
                             '%d,'
                             '%d,'
                             '%d,'
+                            '%d,'
                             '%s,'
                             'PointFromText(\'%s\'),'
                             '%f,'
@@ -441,6 +446,7 @@ def main(argv):
                             '%f,'
                             '%f'
                          ')') % (_segment_id,
+                             segment_index,
                              timestamp_sec,
                              timestamp_usec,
                              flag_still,
@@ -458,6 +464,9 @@ def main(argv):
                              orientation_rotation_20,
                              orientation_rotation_21,
                              orientation_rotation_22)
+
+                    # Increment segment index
+                    segment_index += 1
 
                     # Execute query
                     cur.execute( query )
