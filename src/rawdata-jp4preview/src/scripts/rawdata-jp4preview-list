@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+# Imports
+import json
+import sys
+import os
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
+    """ % os.path.basename( sys.argv[ 0 ] )
+
+# Program entry point function
+# pylint: disable=W0603
+def main(argv):
+
+    # Check arguments
+    if( len( argv ) < 3 ):
+        _usage()
+        sys.exit( 0 )
+
+    # Parse arguments
+    __Param_Mount__     = argv[ 0 ]
+    __Param_MAC__       = argv[ 1 ]
+    __Param_Master__    = argv[ 2 ]
+    __Param_Segment__   = argv[ 3 ]
+
+    # Compute base path
+    __BasePath__ = "%s/rawdata/%s/master/%s" % (__Param_Mount__, __Param_MAC__, __Param_Master__)
+
+    # Compute JSON file path
+    __JSONFile__ = "%s/segment/%s/info/segment.json" % (__BasePath__, __Param_Segment__)
+
+    # Open file
+    SourceJSON = open(__JSONFile__, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # Array to store results
+    PathList = []
+
+    # Iterate over JSON poses
+    for pose in json_data['pose']:
+
+        # Check if pose is valid
+        if 'valid' in pose['raw']:
+
+            # Append path to list
+            PathList.append( "%s/rawdata/%s/master/%s/segment/%s/raw/%s/%10d_%06d_1.jp4" % (__Param_Mount__,
+            __Param_MAC__,
+            __Param_Master__,
+            __Param_Segment__,
+            str(pose['sec'])[:-2],
+            pose['sec'],
+            pose['usec']))
+
+    # Sort path list
+    PathList = sorted( PathList )
+
+    # Display over paths
+    for p in PathList:
+
+        # Display path
+        print( p )
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])
