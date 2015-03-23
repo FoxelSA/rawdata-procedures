@@ -199,14 +199,14 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     echo "Generating previews for segment $SEGMENT_TIMESTAMP..."
 
                     if [ -z "$PARAM_CPU_THREADS" ]; then
-                        find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
+                        find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                         $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
                         $SEGMENT_TIMESTAMP \
                         $PARAM_NO_DEBAYER
                     else
-                        find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
+                        find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                         $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
@@ -282,14 +282,14 @@ else
             echo "Generating previews for segment $PARAM_SEGMENT..."
 
             if [ -z "$PARAM_CPU_THREADS" ]; then
-                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $PARAM_SEGMENT \
                 $PARAM_NO_DEBAYER
             else
-                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
+                find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \

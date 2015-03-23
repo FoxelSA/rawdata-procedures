@@ -204,13 +204,13 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     echo Splitting segment $SEGMENT_TIMESTAMP...
 
                     if [ -z "$PARAM_DISK_THREADS" ]; then
-                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
+                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
                         $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
                         $SEGMENT_TIMESTAMP
                     else
-                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
+                        echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
                         $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
@@ -282,13 +282,13 @@ else
             echo Splitting segment $PARAM_SEGMENT...
 
             if [ -z "$PARAM_DISK_THREADS" ]; then
-                echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
+                echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $PARAM_SEGMENT
             else
-                echo "$MOV_LIST" | $PARALLEL_SCRIPT --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
+                echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --will-cite --eta -j$PARAM_DISK_THREADS $SPLIT_SCRIPT {} \
                 $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
