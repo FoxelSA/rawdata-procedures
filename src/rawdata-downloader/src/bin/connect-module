@@ -61,7 +61,6 @@ no_concurrency() {
 
 }
 
-
 # extract MAC address from arp cache for given IP
 macaddr() {
   local _ADDR=$1
@@ -85,7 +84,7 @@ init() {
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line
-  if ! options=$(getopt -o hvm:I:i:snd -l help,verbose,mountpoint:,baseip:,masterip,hotswap-use-sys,no-checklist,debug: -- "$@")
+  if ! options=$(getopt -o hvm:I:i:nd -l help,verbose,mountpoint:,baseip:,masterip,no-checklist,debug: -- "$@")
   then
       # something went wrong, getopt will put out an error message for us
       exit 1
@@ -97,10 +96,9 @@ init() {
       case $1 in
       -h|--help) usage $1 ;;
       -v|--verbose) export VERBOSE=-v ;;
-      -m|--mountpoint) export MOUNTPOINT=$2 ; shift ;;
-      -I|--baseip) export BASE_IP=$2 ; shift ;;
-      -i|--masterip) export MASTER_IP=$2 ; shift ;;
-      -s|--hotswap-use-sys) export HOTSWAP_USING_SYS=yes ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
       -n|--no-checklist) export NO_CHECKLIST=true ;;
       -d|--debug) export DEBUG=1 ;;
       (--) shift; break;;
@@ -373,8 +371,6 @@ wait_watches_established() {
 # request esata connection for MUX_INDEX / REMOTE_SSD_INDEX
 request_ssd() {
 
-  log ${LINENO} "<= run"
-
     MUX_INDEX=$MUX_INDEX
     REMOTE_SSD_INDEX=$REMOTE_SSD_INDEX
     ISRETRY=
@@ -502,6 +498,7 @@ touch $SCSIHOST_TMP
 MODULE_INFO=($(get_module_info $MODULE))
 SERIAL=${MODULE_INFO[3]}
 
+# return device path if already connected
 for pair in $(get_local_disk_serials) ; do 
 
   pair=($(echo $pair | tr ',' ' '))
@@ -515,13 +512,17 @@ for pair in $(get_local_disk_serials) ; do
     
 done
 
-USER_AT_HOST="$USER_AT_HOST "root@$BASE_IP.$((MASTER_IP + MODULE - 1))
 
+# read serials from cache
 [ -f "$SSD_SERIAL_TMP" ] && . $SSD_SERIAL_TMP
 
+# if serial is not known yet
 if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
 
-  # get camera ssd serials
+  # configure sshall login "list" for requested module
+  USER_AT_HOST="$USER_AT_HOST "root@$BASE_IP.$((MASTER_IP + MODULE - 1))
+
+  # get camera ssd serial
   STATUS=()
   log ${LINENO} get ssd serial
   export SSD_SERIAL=()
@@ -543,6 +544,7 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
       [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} "error: $l" && log ${LINENO} "error: hdparm failed on camera $IP with exit code ${STATUS[$INDEX]}" && killtree -KILL $MYPID
       ;;
     stdout)
+      # save serial cache for parent process
       SERIAL=${msg[3]}
       echo SSD_SERIAL[$INDEX]=$SERIAL >> $SSD_SERIAL_TMP
       ;;
@@ -551,10 +553,10 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
 
 fi
 
+# load serials cache
 . $SSD_SERIAL_TMP
 
-#[ ${#SSD_SERIAL[@]} - 1 ] && exit 1
-
+# assert serial returned by the camera match the one in MODULES_FILE
 if [ "${SSD_SERIAL[$((MODULE-1))]}" != "$SERIAL" ] ; then
   log ${LINENO} error: ssd serial mismatch "(${SSD_SERIAL[$((MODULE-1))]}" '!=' "$SERIAL)"
   exit 1
@@ -564,15 +566,16 @@ fi
 log ${LINENO} umount CF
 umount_all | logstdout ${LINENO}
 
+# export module address
 export MUX_INDEX=${MODULE_INFO[1]}
 export REMOTE_SSD_INDEX=${MODULE_INFO[2]}
 
-# run backgroud task waiting for disks and launching backups
+# run backgroud task waiting for disk
 wait_and_exit &
 
-# run queue in background
 log ${LINENO} starting processing
 
+# request disk
 request_ssd &
 
 # wait background jobs termination

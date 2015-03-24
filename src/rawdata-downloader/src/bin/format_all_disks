@@ -44,6 +44,10 @@ trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 init() {
 
+  export MOUNTPOINT=/data
+  export BASE_IP=192.168.0
+  export MASTER_IP=221
+
   # parse command line options
   if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
   then
@@ -56,11 +60,11 @@ init() {
   while [ $# -gt 0 ] ; do
       case $1 in
       -h|--help) usage $1 ;;
-      -m|--mountpoint) export MOUNTPOINT=$2 ; shift ;;
-      -v|--verbose) export VERBOSE=-v ;;
-      -I|--baseip) export BASE_IP=$2 ; shift ;;
-      -i|--masterip) export MASTER_IP=$2 ; shift ;;
-      -d|--debug) export DEBUG=-d ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -v|--verbose) VERBOSE=-v ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -d|--debug) DEBUG=-d ;;
       (--) shift; break;;
       (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
       (*) break;;
@@ -74,10 +78,6 @@ init() {
     export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
   fi         
 
-  [ -z "$MOUNTPOINT" ] &&  export MOUNTPOINT=/data
-  [ -z "$BASE_IP" ] && export BASE_IP=192.168.0
-  [ -z "$MASTER_IP" ] && export MASTER_IP=221
-
   export MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
     log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
@@ -86,7 +86,7 @@ init() {
 
   export MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
 
-  export TMPDIR=/tmp/format_all_disks/$$
+  export TMPDIR=/tmp/$__FORMAT_ALL_DISKS__/$$
   mkdir -p $TMPDIR || exit
 
   export FORMATTED_LIST=$(mktemp --tmpdir=/tmp/format_all_disks/$$)
