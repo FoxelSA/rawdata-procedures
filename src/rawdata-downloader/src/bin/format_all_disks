@@ -1,0 +1,191 @@
+#!/bin/bash
+#
+# reformat_all_disks - reformat eyesis disks
+#
+# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Luc Deschenaux <l.deschenaux@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+
+export __FORMAT_ALL_DISKS__=$(basename $0)
+export MYPID=$BASHPID
+
+trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
+
+init() {
+
+  export MOUNTPOINT=/data
+  export BASE_IP=192.168.0
+  export MASTER_IP=221
+
+  # parse command line options
+  if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
+  then
+      # something went wrong, getopt will put out an error message for us
+      exit 1
+  fi
+
+  eval set -- "$options"
+
+  while [ $# -gt 0 ] ; do
+      case $1 in
+      -h|--help) usage $1 ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -v|--verbose) VERBOSE=-v ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -d|--debug) DEBUG=-d ;;
+      (--) shift; break;;
+      (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
+      (*) break;;
+      esac
+      shift
+  done
+
+  if [ -n "$DEBUG" ] ; then
+    set -x   
+    set -v   
+    export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+  fi         
+
+  export MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
+  if [ -z "$MACADDR" ] ; then
+    log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+    exit 1
+  fi
+
+  export MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+
+  export TMPDIR=/tmp/$__FORMAT_ALL_DISKS__/$$
+  mkdir -p $TMPDIR || exit
+
+  export FORMATTED_LIST=$(mktemp --tmpdir=/tmp/format_all_disks/$$)
+  export LOGFILE=/tmp/format_all_disks/$$.log
+
+}
+
+get_modules_list_for_multiplexer() {
+  local multiplexer=$1
+  local line
+  grep -E -e "^[0-9]+ $multiplexer " $MODULES_FILE | while read line; do
+    line=($line)
+    [ "${line[1]}" == "$multiplexer" ] && echo ${line[0]}
+  done
+}
+
+macaddr() {
+  local _ADDR=$1
+  arp -n $_ADDR | awk '/[0-9a-f]+:/{gsub(":","-",$3);print $3}'
+}
+
+usage() {
+  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>]"
+  exit $1
+}
+
+# kill child processes, and optionally the root process
+killtree() {
+
+    # disable ctrl-c
+    trap '' SIGINT
+
+    local _pid=$2
+    local _sig=$1
+    local killroot=$3
+
+    # stop parents children production between child killing and parent killing
+    #[ "${_pid}" != "$MYPID" ] && kill -STOP ${_pid}
+    for _child in $(ps -o pid --no-headers --ppid ${_pid} 2>/dev/null); do
+        killtree ${_sig} ${_child} yes
+    done
+    [ -n "$killroot" ] && (kill ${_sig} ${_pid} >/dev/null 2>&1 && wait ${_pid} > /dev/null 2>&1) > /dev/null 2>&1
+}
+
+log() {
+  [ -z "$VERBOSE" ] && return
+  echo $(date +%F_%r) $__FORMAT_ALL_DISKS__ $BASHPID $@ >&2
+}
+
+logstdout() {
+  [ -z "$VERBOSE" ] && return
+  while read l ; do
+    echo $(date +%F_%r) $__FORMAT_ALL_DISKS__ $BASHPID $@ $l >&2
+  done
+}
+
+format_module_list() {
+
+  module_list=$@
+
+  for module in $module_list  ; do
+
+    log ${LINENO} connecting esata multiplexer to module $module
+
+    DEVICE=$(connect-module $VERBOSE $nochecklist $module --mountpoint $MOUNTPOINT 2>> $LOGFILE)
+    [ -z "$DEVICE" ] && exit 1
+
+    nochecklist=--no-checklist
+
+    if mount | grep -q ${DEVICE}1 ; then
+      log ${LINENO} unmount ${DEVICE}1
+      umount ${DEVICE}1 || killtree -KILL $MYPID yes
+    fi
+
+    log ${LINENO} formatting module $module
+    sync
+    mkfs.ext2 -q ${DEVICE}1
+    if [ $? -eq 0 ] ; then
+      echo "${DEVICE}" >> $FORMATTED_LIST
+    else
+       killtree -KILL $MYPID yes
+    fi
+    sync
+
+  done
+}
+
+init "$@"
+
+  muxindex=0
+
+  while true ; do
+    module_list=$(get_modules_list_for_multiplexer $muxindex)
+    [ -z "$module_list" ] && break
+    format_module_list $module_list &
+    ((++muxindex))
+  done
+
+  wait
+
+  cat $FORMATTED_LIST | wc -l
+  rm $FORMATTED_LIST
