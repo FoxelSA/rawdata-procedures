@@ -83,7 +83,7 @@ arguments() {
         shift
         case $args in
             --no-split)
-                echo --no-split given exiting...
+                >&2 echo "[$(date '+%F %R')] rawdata-movsplit : --no-split given exiting..."
                 exit
             ;;
             --mount-point)

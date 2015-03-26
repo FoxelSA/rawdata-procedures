@@ -44,11 +44,51 @@ import json
 import sys
 import os
 
+from datetime import datetime
+
 # Usage display function
 def _usage():
     print """
     Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <no debayer 0 | 1>
     """ % os.path.basename( sys.argv[ 0 ] )
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, NO_COLORS=False):
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stderr.write("%s [INFO] %s\n" % (DateNow, Message))
+        else:
+            sys.stderr.write("%s \033[32m[INFO]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stderr.write("%s [WARNING] %s\n" % (DateNow, Message))
+        else:
+            sys.stderr.write("%s \033[33m[WARNING]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stderr.write("%s [ERROR] %s\n" % (DateNow, Message))
+        else:
+            sys.stderr.write("%s \033[31m[ERROR]\033[39m %s\n" % (DateNow, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stderr.write("%s [DEBUG] %s\n" % (DateNow, Message))
+        else:
+            sys.stderr.write("%s \033[34m[DEBUG]\033[39m %s\n" % (DateNow, Message))
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
 
 # Program entry point function
 def main(argv):
@@ -118,7 +158,7 @@ def main(argv):
             if not os.path.isfile( p ):
 
                 # Warning message
-                print("Warning, output preview not found: %s" % p)
+                ShowMessage("Output preview not found: %s" % p, 1)
 
                 # Update state
                 State = 1
@@ -126,7 +166,7 @@ def main(argv):
     else:
 
         # Warning message
-        print("Warning, segment %s have no previews" % (__Param_Segment__))
+        ShowMessage("Segment %s have no previews" % (__Param_Segment__), 1)
 
     exit( State )
 
