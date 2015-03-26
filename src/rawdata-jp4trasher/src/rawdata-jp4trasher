@@ -64,7 +64,10 @@ def ShowMessage(Message, Type=0, Halt=0, SameLine=0):
     sys.stderr.flush()
 
     # Get current date
-    DateNow = datetime.now().strftime("%H:%M:%S")
+    DateNow = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
 
     # Return type
     RetChar = '\n'
@@ -74,24 +77,24 @@ def ShowMessage(Message, Type=0, Halt=0, SameLine=0):
 
     if Type == 0:
         if NO_COLORS:
-            sys.stderr.write("\033[K%s [INFO] %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s INFO] %s %s%s" % (DateNow, scriptName, Message, RetChar))
         else:
-            sys.stderr.write("\033[K%s \033[32m[INFO]\033[39m %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s \033[32mINFO\033[39m] %s %s%s" % (DateNow, scriptName, Message, RetChar))
     elif Type == 1:
         if NO_COLORS:
-            sys.stderr.write("\033[K%s [WARNING] %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s WARNING] %s %s%s" % (DateNow, scriptName, Message, RetChar))
         else:
-            sys.stderr.write("\033[K%s \033[33m[WARNING]\033[39m %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s \033[33mWARNING\033[39m] %s %s%s" % (DateNow, scriptName, Message, RetChar))
     elif Type == 2:
         if NO_COLORS:
-            sys.stderr.write("\033[K%s [ERROR] %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s ERROR] %s %s%s" % (DateNow, scriptName, Message, RetChar))
         else:
-            sys.stderr.write("\033[K%s \033[31m[ERROR]\033[39m %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s \033[31mERROR\033[39m] %s %s%s" % (DateNow, scriptName, Message, RetChar))
     elif Type == 3:
         if NO_COLORS:
-            sys.stderr.write("\033[K%s [DEBUG] %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s DEBUG] %s %s%s" % (DateNow, scriptName, Message, RetChar))
         else:
-            sys.stderr.write("\033[K%s \033[34m[DEBUG]\033[39m %s%s" % (DateNow, Message, RetChar))
+            sys.stderr.write("\033[K[%s \033[34mDEBUG\033[39m] %s %s%s" % (DateNow, scriptName, Message, RetChar))
 
     # Flush stderr
     sys.stderr.flush()
