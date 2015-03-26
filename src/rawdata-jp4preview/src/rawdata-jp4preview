@@ -93,7 +93,7 @@ arguments() {
                 PARAM_FORCE="1"
             ;;
             --no-split)
-                echo "--no-split given exiting..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : --no-split given exiting..."
                 exit
             ;;
             --mount-point)
@@ -197,7 +197,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
 
             # Check if previews are already generated
             if [ $? -eq 1 ] && [ $PARAM_FORCE -eq 0 ]; then
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Previews already generated for segment $SEGMENT_TIMESTAMP, skipping"
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Previews already generated for segment $SEGMENT_TIMESTAMP, skipping"
             else
 
                 # Build JP4 list
@@ -216,7 +216,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     if [ -d "$SEGMENT_FOLDER/raw" ]; then
 
                         # Generate previews for segment
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Generating previews for segment $SEGMENT_TIMESTAMP..."
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Generating previews for segment $SEGMENT_TIMESTAMP..."
 
                         if [ -z "$PARAM_CPU_THREADS" ]; then
                             echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
@@ -238,7 +238,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                         # Generate preview movie
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Verifying previews..."
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Verifying previews..."
                         $VALIDATE_SCRIPT $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
@@ -249,7 +249,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         if [ $? -eq 1 ]; then
 
                             # Error message
-                            echo -e "[$(date '+%F %R')] rawdata-jp4preview : \e[31m[Error]\e[39m: Some previews are not generated!"
+                            >&2 echo -e "[$(date '+%F %R')] rawdata-jp4preview : \e[31m[Error]\e[39m: Some previews are not generated!"
 
                             # Exit script
                             exit 1
@@ -257,14 +257,14 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         else
 
                             # Debug message
-                            echo "[$(date '+%F %R')] rawdata-jp4preview : Previews OK for segment $SEGMENT_TIMESTAMP"
+                            >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Previews OK for segment $SEGMENT_TIMESTAMP"
                         fi
 
                         # Loop break checker
                         if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                         # Generate preview movie
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Generating preview movie..."
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Generating preview movie..."
                         $MOVIE_SCRIPT $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
@@ -275,7 +275,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                         # Update JSON file
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment JSON file..."
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment JSON file..."
                         $JSONUPDATE_SCRIPT $PARAM_MOUNT \
                         $PARAM_MAC \
                         $PARAM_MASTER \
@@ -286,7 +286,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                         # Update preview flag in database
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
                         rawdata-dbpusher --mount-point $PARAM_MOUNT \
                         --mac-address $PARAM_MAC \
                         --master-timestamp $PARAM_MASTER \
@@ -296,19 +296,19 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     else
 
                         # Display warning segment
-                        echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $SEGMENT_TIMESTAMP have no JP4 images, skipping"
+                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $SEGMENT_TIMESTAMP have no JP4 images, skipping"
                     fi
                 else
 
                     # Display warning
-                    echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $SEGMENT_TIMESTAMP have no JP4 images, skipping"
+                    >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $SEGMENT_TIMESTAMP have no JP4 images, skipping"
                 fi
             fi
         done
     else
 
         # Display warning
-        echo "[$(date '+%F %R')] rawdata-jp4preview : Master $PARAM_MASTER have no segments, skipping"
+        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Master $PARAM_MASTER have no segments, skipping"
     fi
 else
 
@@ -323,7 +323,7 @@ else
     $PARAM_NO_DEBAYER
 
     if [ $? -eq 1 ] && [ $PARAM_FORCE -eq 0 ]; then
-        echo "[$(date '+%F %R')] rawdata-jp4preview : Previews already generated for segment $PARAM_SEGMENT, skipping"
+        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Previews already generated for segment $PARAM_SEGMENT, skipping"
     else
 
         # Build JP4 list
@@ -342,17 +342,17 @@ else
             if [ -d "$SEGMENT_FOLDER/raw" ]; then
 
                 # Generate previews for segment
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Generating previews for segment $PARAM_SEGMENT..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Generating previews for segment $PARAM_SEGMENT..."
 
                 if [ -z "$PARAM_CPU_THREADS" ]; then
-                    find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
+                    echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
                     $PARAM_MAC \
                     $PARAM_MASTER \
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER
                 else
-                    find $SEGMENT_FOLDER/raw -type f -iname "*_1.jp4" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
+                    echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
                     $PARAM_MAC \
                     $PARAM_MASTER \
@@ -364,7 +364,7 @@ else
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                 # Generate preview movie
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Verifying previews..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Verifying previews..."
                 $VALIDATE_SCRIPT $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
@@ -375,7 +375,7 @@ else
                 if [ $? -eq 1 ]; then
 
                     # Error message
-                    echo -e "[$(date '+%F %R')] rawdata-jp4preview : \e[31m[Error]\e[39m: Some previews are not generated!"
+                    >&2 echo -e "[$(date '+%F %R')] rawdata-jp4preview : \e[31m[Error]\e[39m: Some previews are not generated!"
 
                     # Exit script
                     exit 1
@@ -383,14 +383,14 @@ else
                 else
 
                     # Debug message
-                    echo "[$(date '+%F %R')] rawdata-jp4preview : Previews OK for segment $SEGMENT_TIMESTAMP"
+                    >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Previews OK for segment $SEGMENT_TIMESTAMP"
                 fi
 
                 # Loop break checker
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                 # Generate preview movie
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Generating preview movie..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Generating preview movie..."
                 $MOVIE_SCRIPT $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
@@ -401,7 +401,7 @@ else
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                 # Update JSON file
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment JSON file..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment JSON file..."
                 $JSONUPDATE_SCRIPT $PARAM_MOUNT \
                 $PARAM_MAC \
                 $PARAM_MASTER \
@@ -412,7 +412,7 @@ else
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                 # Update preview flag in database
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
                 rawdata-dbpusher --mount-point $PARAM_MOUNT \
                 --mac-address $PARAM_MAC \
                 --master-timestamp $PARAM_MASTER \
@@ -422,12 +422,12 @@ else
             else
 
                 # Display warning segment
-                echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $PARAM_SEGMENT have no JP4 images, skipping"
+                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $PARAM_SEGMENT have no JP4 images, skipping"
             fi
         else
 
             # Display warning
-            echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $PARAM_SEGMENT have no JP4 images, skipping"
+            >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Segment $PARAM_SEGMENT have no JP4 images, skipping"
         fi
     fi
 
