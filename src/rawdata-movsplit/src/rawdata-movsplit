@@ -185,7 +185,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
             $SEGMENT_TIMESTAMP
 
             if [ $? -eq 1 ]; then
-                echo "Segment $SEGMENT_TIMESTAMP already splitted, skipping"
+                echo "[$(date '+%F %R')] Segment $SEGMENT_TIMESTAMP already splitted, skipping"
             else
 
                 # Build MOV list
@@ -201,7 +201,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 if [ ${#MOV_LIST} -gt 0 ]; then
 
                     # Split segment
-                    echo Splitting segment $SEGMENT_TIMESTAMP...
+                    echo "[$(date '+%F %R')] Splitting segment $SEGMENT_TIMESTAMP..."
 
                     if [ -z "$PARAM_DISK_THREADS" ]; then
                         echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
@@ -221,7 +221,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                     # Update JSON file
-                    echo "Updating segment JSON file..."
+                    echo "[$(date '+%F %R')] Updating segment JSON file..."
                     $JSONUPDATE_SCRIPT $PARAM_MOUNT \
                     $PARAM_MAC \
                     $PARAM_MASTER \
@@ -231,7 +231,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
                     # Update split flag in database
-                    echo "Updating segment split flag in database..."
+                    echo "[$(date '+%F %R')] Updating segment split flag in database..."
                     rawdata-dbpusher --mount-point $PARAM_MOUNT \
                     --mac-address $PARAM_MAC \
                     --master-timestamp $PARAM_MASTER \
@@ -241,14 +241,14 @@ if [ -z "$PARAM_SEGMENT" ]; then
                 else
 
                     # Display warning
-                    echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
+                    echo "[$(date '+%F %R')] Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
                 fi
             fi
         done
     else
 
         # Display warning
-        echo "Master $PARAM_MASTER have no segments, skipping"
+        echo "[$(date '+%F %R')] Master $PARAM_MASTER have no segments, skipping"
     fi
 
 else
@@ -263,7 +263,7 @@ else
     $PARAM_SEGMENT
 
     if [ $? -eq 1 ]; then
-        echo "Segment $PARAM_SEGMENT already splitted, skipping"
+        echo "[$(date '+%F %R')] Segment $PARAM_SEGMENT already splitted, skipping"
     else
 
         # Build MOV list
@@ -279,7 +279,7 @@ else
         if [ ${#MOV_LIST} -gt 0 ]; then
 
             # Split segment
-            echo Splitting segment $PARAM_SEGMENT...
+            echo "[$(date '+%F %R')] Splitting segment $PARAM_SEGMENT..."
 
             if [ -z "$PARAM_DISK_THREADS" ]; then
                 echo "$MOV_LIST" | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta --ungroup --sshloginfile $SSH_CONFIG_FILE $SPLIT_SCRIPT {} \
@@ -300,7 +300,7 @@ else
 
 
             # Update JSON file
-            echo "Updating segment JSON file..."
+            echo "[$(date '+%F %R')] Updating segment JSON file..."
             $JSONUPDATE_SCRIPT $PARAM_MOUNT \
             $PARAM_MAC \
             $PARAM_MASTER \
@@ -310,7 +310,7 @@ else
             if [ $LOOP_BREAK -ne 0 ]; then break; fi
 
             # Update split flag in database
-            echo "Updating segment split flag in database..."
+            echo "[$(date '+%F %R')] Updating segment split flag in database..."
             rawdata-dbpusher --mount-point $PARAM_MOUNT \
             --mac-address $PARAM_MAC \
             --master-timestamp $PARAM_MASTER \
@@ -320,7 +320,7 @@ else
         else
 
             # Display warning segment
-            echo "Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
+            echo "[$(date '+%F %R')] Segment $SEGMENT_TIMESTAMP have no MOV files, skipping"
         fi
     fi
 
