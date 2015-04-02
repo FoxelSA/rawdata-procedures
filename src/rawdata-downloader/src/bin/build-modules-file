@@ -1,7 +1,8 @@
 #!/bin/bash
+#
 # rawdata-procedures - Camera raw data procedures
 #
-# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
 #
 #
@@ -161,8 +162,9 @@ wait_and_register() {
     log ${LINENO} device_connected $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SSD_SERIAL $DEVICE
 
     # assert previously saved module address match the connecting disk
-    if ! check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SSD_SERIAL 2>&1 | logstdout ${LINENO} ; then
-      log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching $SSD_SERIAL"
+    check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SSD_SERIAL 2>&1 | logstdout ${LINENO}
+    if [ ${PIPESTATUS[0]} -ne 0 ] ; then
+      log ${LINENO} error: "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching $SSD_SERIAL"
       killtree -KILL $MYPID
     fi
 

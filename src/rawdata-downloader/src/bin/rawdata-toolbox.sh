@@ -2,7 +2,7 @@
 #
 # rawdata-toolbox.sh - rawdata-downloader library
 #
-# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
 #
 #
@@ -225,6 +225,15 @@ assertcommands() {
   done
 }
 
+# exit if modules file not found
+assert_modulesfile() {
+  if [ ! -f $MODULES_FILE ] ; then
+    log ${LINENO} error file not found: $MODULES_FILE
+    log ${LINENO} "=> run 'build-modules-file -m <mount_point>' first"
+    exit 1
+  fi
+}
+
 # reset multiplexers
 reset_eyesis_ide() {
   log ${LINENO} reset eyesis_ide
@@ -260,7 +269,7 @@ get_remote_disk_serial() {
   HOSTS=$SSHALL_HOSTS sshall /sbin/hdparm -i $dev \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
 }
 
-# fill SSD_SERIAL and STATUS arrays for logins listed in USER_AT_HOST variable 
+# fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable 
 get_camera_ssd_serials() {
   # get camera ssd serials
   log ${LINENO} get ssd serials
@@ -379,6 +388,16 @@ get_scsihost() {
 get_module_index() {
   local SERIAL=$1
   echo $(($(get_ssd_index $SERIAL)+1))
+}
+
+# return modules list for given multiplexer
+get_modules_list_for_multiplexer() {
+  local multiplexer=$1
+  local line
+  grep -E -e "^[0-9]+ $multiplexer " $MODULES_FILE | while read line; do
+    line=($line)
+    [ "${line[1]}" == "$multiplexer" ] && echo ${line[0]}
+  done
 }
 
 # log every line in specified file, until specified regexp is matched

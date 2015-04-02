@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# format-all-disks - reformat eyesis disks
+# process-all-modules - run the specified command for every eyesis module
 #
-# Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
 #
 #
@@ -38,9 +38,9 @@
 
 
 . $(dirname $0)/rawdata-toolbox.sh                                                                                    
-__FORMAT_ALL_DISKS__=$(basename $0)
+__PROCESS_ALL_DISKS__=$(basename $0)
 
-MYPID=$BASHPID
+export MYPID=$BASHPID
 
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
@@ -92,56 +92,66 @@ init() {
 
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
 
-  TMPDIR=/tmp/$__FORMAT_ALL_DISKS__/$$
+  TMPDIR=/tmp/$__PROCESS_ALL_DISKS__/$$
   mkdir -p $TMPDIR || exit
 
-  FORMATTED_LIST=$(mktemp --tmpdir=/tmp/format_all_disks/$$)
-  LOGFILE=/tmp/format_all_disks/$$.log
+  PROCESSED_LIST=$(mktemp --tmpdir=$TMPDIR)
+  LOGFILE=/tmp/$__PROCESS_ALL_DISKS__/$$.log
 
-}
+  COMMAND=$1
+  shift
 
-get_modules_list_for_multiplexer() {
-  local multiplexer=$1
-  local line
-  grep -E -e "^[0-9]+ $multiplexer " $MODULES_FILE | while read line; do
-    line=($line)
-    [ "${line[1]}" == "$multiplexer" ] && echo ${line[0]}
-  done
+  if [ ! -f "$COMMAND" ] ; then
+    log ${LINENO} "error: command not found: $COMMAND"
+    exit 1
+  fi
+
+  if [ $# -gt 0 ] ; then
+    log ${LINENO} error: "extra parameters: $@"
+    exit 1
+  fi
+
 }
 
 usage() {
-  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>]"
+  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>] <command>"
   exit $1
 }
 
-format_module_list() {
+process_module_list() {
 
   module_list=$@
 
-  for module in $module_list  ; do
+  for MODULE in $module_list  ; do
 
-    log ${LINENO} connecting esata multiplexer $(get_mux_index $module) to module $module
+    log ${LINENO} connecting module $MODULE
 
-    DEVICE=$(connect-module $VERBOSE $nochecklist $module --mountpoint $MOUNTPOINT 2>> $LOGFILE)
-    [ -z "$DEVICE" ] && exit 1
+    DEVICE=$(connect-module $VERBOSE $nochecklist $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
+    if [ -z "$DEVICE" ] ; then
+      log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
+      killtree -KILL $MYPID
+    fi
 
+    log ${LINENO} connecting module $MODULE : success
     # dont lose time with camera checklist before requesting next modules
     nochecklist=--no-checklist
 
     if mount | grep -q ${DEVICE}1 ; then
       log ${LINENO} unmount ${DEVICE}1
-      umount ${DEVICE}1 || killtree -KILL $MYPID yes
+      if ! umount ${DEVICE}1 ; then
+        log ${LINENO} error: "could not unmount ${DEVICE}"
+        killtree -KILL $MYPID
+      fi
     fi
 
-    log ${LINENO} formatting module $module
-    sync
-    mkfs.ext2 -q ${DEVICE}1
-    if [ $? -eq 0 ] ; then
-      echo "${DEVICE}" >> $FORMATTED_LIST
+    log ${LINENO} processing module $MODULE
+    if source $COMMAND ; then
+      log ${LINENO} "processing module $MODULE with command $COMMAND : success"
+      echo "${MODULE}" >> $PROCESSED_LIST
     else
-       killtree -KILL $MYPID yes
+      log ${LINENO} "error: failed to process module $MODULE with command $COMMAND"
+       killtree -KILL $MYPID
     fi
-    sync
 
   done
 }
@@ -155,25 +165,24 @@ main() {
   while true ; do
     module_list=$(get_modules_list_for_multiplexer $_muxindex)
     [ -z "$module_list" ] && break
-    format_module_list $module_list &
+    process_module_list $module_list &
     ((++_muxindex))
   done
 
   wait
 
-  FORMATTED_COUNT=$(cat $FORMATTED_LIST | wc -l)
+  PROCESSED_COUNT=$(cat $PROCESSED_LIST | wc -l)
   MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
-  rm $FORMATTED_LIST
 
-  EXIT_STATUS=$(test "$COUNT" == "$MODULES_COUNT")
+  rm $PROCESSED_LIST
 
-  if [ "$EXIT_STATUS" -eq 0 ] ; then
-    log ${LINENO} success: $COUNT disks formatted
-  else
-    log ${LINENO} failed: $COUNT disks formatted
+  if [ "$MODULES_COUNT" != "$PROCESSED_COUNT" ] ; then
+    log ${LINENO} failed: $PROCESSED_COUNT disks processed $(cat $PROCESSED_LIST)
+    exit 1
   fi
 
-  exit $EXIT_STATUS
+  log ${LINENO} success: $PROCESSED_COUNT disks processed
+  exit 0
 
 }
 

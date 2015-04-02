@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# rawdata-procedures - Camera raw data procedures
+# format-module - reformat eyesis module
+# This script is intended to be used as the <command> parameter for process-all-modules
 #
 # Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -9,11 +10,6 @@
 # Author(s):
 #
 #       Luc Deschenaux <l.deschenaux@foxel.ch>
-#
-#
-# Contributor(s):
-#
-#       Kevin Velickovic <k.velickovic@foxel.ch>
 #
 #
 # This file is part of the FOXEL project <http://foxel.ch>.
@@ -41,51 +37,5 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
-_UID=$UID
-_GID=1000
-
-SCRIPT=$(basename $0)
-
-log() {
-  echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ >&2
-}
-
-# format stdin for logginG
-logstdout() {
-  while read l ; do
-    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ $l >&2
-  done
-}
-
-DESTINATION=$1
-
-[ -z "$DESTINATION" ] && exit 1
-
-# download rawdata from camera modules
-DEST=$(process-all-modules --mountpoint $DESTINATION backup-module)
-
-EXIT_CODE=$?
-
-# Check exit code
-if [ $EXIT_CODE -ne 0 ] ; then
- log ${LINENO} rawdata-download exit code $EXIT_CODE
- exit $EXIT_CODE
-fi
-
-# set permissions for directories
-chown $_UID.$_GID $DEST $DEST/mov
-chown -R $_UID.$_GID $DEST/mov
-chmod 0777 $DEST/mov
-chmod -R 0777 $DEST/mov
-
-# Decompose destination
-IFS='/' read -a DEST_DECOMPOSED <<< "$DEST"
-
-# Extract master timestamp
-MASTER_TS=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 1]}
-
-# Extract MAC address
-MAC_ADDR=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 3]}
-
-# return mac address and first timestamp
-echo $MAC_ADDR $MASTER_TS
+mkfs.ext2 -q -m0 -T largefile4 ${DEVICE}1 | logstdout ${LINENO} mkfs
+return ${PIPESTATUS[0]}

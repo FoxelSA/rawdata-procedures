@@ -1,5 +1,6 @@
 #!/bin/bash
-# connect-modules - connect requested eyesis module
+#
+# connect-module - connect requested eyesis module
 #
 # Copyright (c) 2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -368,18 +369,22 @@ for pair in $(get_local_disk_serials) ; do
 done
 
 # read serials from cache
-[ -f "$SSD_SERIAL_TMP" ] && . $SSD_SERIAL_TMP
+[ -s "$SSD_SERIAL_TMP" ] && . $SSD_SERIAL_TMP
 
 # if serial is not known yet
 if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
 
   # configure sshall login "list" for requested module
-  USER_AT_HOST="$USER_AT_HOST "root@$BASE_IP.$((MASTER_IP + MODULE - 1))
+  export SSHALL_HOSTS="root@$BASE_IP.$((MASTER_IP + MODULE - 1))"
 
   # get camera ssd serial
-  STATUS=()
   log ${LINENO} get ssd serial
   SSD_SERIAL=()
+  export SSD_SERIAL_TMP
+  export MASTER_IP
+  export MYPID
+  touch $SSD_SERIAL_TMP || exit 1
+
   get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
     msg=($l)
     if [ ${msg[0]} != "sshall:" ] ; then
@@ -394,8 +399,12 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
     WHAT=${msg[2]}
     case "$WHAT" in
     status)
-      STATUS[$INDEX]=${msg[3]}
-      [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} "error: $l" && log ${LINENO} "error: hdparm failed on camera $IP with exit code ${STATUS[$INDEX]}" && killtree -KILL $MYPID
+      STATUS=${msg[3]}
+      if [ "$STATUS" != "0" ] ; then
+        log ${LINENO} error: "$l"
+        log ${LINENO} error: "hdparm failed on camera $IP with exit code $STATUS"
+        killtree -KILL $MYPID yes
+      fi
       ;;
     stdout)
       # save serial cache for parent process
