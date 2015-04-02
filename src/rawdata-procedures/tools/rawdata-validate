@@ -54,7 +54,7 @@ MAIN_SIZE   = struct.calcsize(MAIN_TYPE)
 MAIN_STRUCT = struct.Struct(MAIN_TYPE)
 
 # Function to print debug messages
-def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
+def ShowMessage(Message, Type=0, Halt=0):
 
     NO_COLORS = 0
 
@@ -64,32 +64,30 @@ def ShowMessage(Message, Type=0, Halt=0, ThreadID=-1):
     # Get current date
     DateNow = datetime.now().strftime("%H:%M:%S")
 
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
+
     # Display proper message
-    Prepend = ""
-
-    if ThreadID != -1:
-        Prepend = "[Thread %d]" % (ThreadID+1)
-
     if Type == 0:
         if NO_COLORS:
-            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s [INFO] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s] \033[32m[INFO]\033[39m %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 1:
         if NO_COLORS:
-            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s [WARNING] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s \033[33m[WARNING]\033[39m %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 2:
         if NO_COLORS:
-            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s [ERROR] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s \033[31m[ERROR]\033[39m %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 3:
         if NO_COLORS:
-            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s [DEBUG] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("%s \033[34m[DEBUG]\033[39m %s %s\n" % (DateNow, scriptName, Message))
 
     # Flush stdout
     sys.stdout.flush()

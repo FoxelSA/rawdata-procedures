@@ -169,7 +169,7 @@ get_mux_index() {
 
 # remove scsi host (will be added in connect_q_run after requesting connection for next ssd of this mux)
 remove_scsi_device() {
-  [ -n "REMOVE_SCSI_DEVICE" ] || return
+  [ -n "$REMOVE_SCSI_DEVICE" ] || return
   if [ -n "$HOTSWAP_USING_SYS" ] ; then
     log ${LINENO} set device $DEVICE  offline and delete it
     echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
@@ -183,7 +183,7 @@ remove_scsi_device() {
 
 # add scsi device, if previously removed
 add_scsi_device() {
-  [ -n "REMOVE_SCSI_DEVICE" ] || return
+  [ -n "$REMOVE_SCSI_DEVICE" ] || return
   hbtl=$(get_scsihost $MUX_INDEX)
   if [ -n "$hbtl" ] ; then
     log ${LINENO} "adding scsi device using values from cache"

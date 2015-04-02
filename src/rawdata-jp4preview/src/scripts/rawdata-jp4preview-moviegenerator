@@ -43,6 +43,8 @@
 import multiprocessing
 import sys
 import os
+import tempfile
+import json
 
 # Usage display function
 def _usage():
@@ -66,12 +68,16 @@ def main(argv):
     __SegmentTimestamp__ = argv[ 3 ]
     __Param_NoDebayer__  = "0"
 
+    # Arguments check
     if( len( argv ) > 4 ):
         __Param_NoDebayer__ = argv[ 4 ]
 
     # Compute JSON file path
     __Segment_Folder__ = "%s/rawdata/%s/master/%s/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__, __SegmentTimestamp__)
     __NoDebayer__ = (int( __Param_NoDebayer__ ) == 1)
+
+    # Compute JSON file path
+    __JSONFile__ = "%s/info/segment.json" % (__Segment_Folder__)
 
     # Compute source folder
     PreviewsFolder = "%s/preview/%s/img" % (__Segment_Folder__, ('no-debayer' if __NoDebayer__ else 'debayer'))
@@ -86,9 +92,48 @@ def main(argv):
     if not os.path.isdir(VideoFolder):
         os.makedirs(VideoFolder)
 
+    # Create a temp path list file
+    list_File = tempfile.NamedTemporaryFile(prefix="preview_list_", dir="/run/shm/", delete=False)
+
+    # Open file
+    SourceJSON = open(__JSONFile__, 'r')
+
+    # Load JSON file
+    json_data = json.load(SourceJSON)
+
+    # sadasd
+    PathList = []
+
+    # Iterate over JSON poses
+    for pose in json_data['pose']:
+
+        # Check if pose is valid
+        if 'valid' in pose['raw']:
+
+            # Append path to list
+            PathList.append( "%s/%s/%10d_%06d.jpeg" % (PreviewsFolder,
+            str(pose['sec'])[:-2],
+            pose['sec'],
+            pose['usec']))
+
+    # Sort path list
+    PathList = sorted( PathList )
+
+    # Iterate over paths
+    for e in PathList:
+
+        # Write path to temp file
+        list_File.write("%s\n" % e)
+
+    # Close temp file
+    list_File.close()
+
     # Create preview movie if not exists
     if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
-        os.system('mencoder mf://%s/*/*.jpeg -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (PreviewsFolder, CoreCount, VideoFolder))
+        os.system('mencoder mf://@%s -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+
+    # Remove temp file
+    os.unlink( list_File.name )
 
 # Program entry point
 if __name__ == "__main__":

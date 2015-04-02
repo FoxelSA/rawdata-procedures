@@ -59,33 +59,34 @@ def ShowMessage(Message, Type=0, Halt=0):
     sys.stdout.flush()
 
     # Get current date
-    DateNow = datetime.now().strftime("%H:%M:%S")
+    DateNow = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     NO_COLORS = False
 
-    # Display proper message
-    Prepend = ""
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
 
+    # Display proper message
     if Type == 0:
         if NO_COLORS:
-            sys.stdout.write("%s %s[INFO] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s INFO] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[32m%s[INFO]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s \033[32mINFO\033[39m] %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 1:
         if NO_COLORS:
-            sys.stdout.write("%s %s[WARNING] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s WARNING] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[33m%s[WARNING]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s \033[33mWARNING\033[39m] %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 2:
         if NO_COLORS:
-            sys.stdout.write("%s %s[ERROR] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s ERROR] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[31m%s[ERROR]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s \033[31mERROR\033[39m] %s %s\n" % (DateNow, scriptName, Message))
     elif Type == 3:
         if NO_COLORS:
-            sys.stdout.write("%s %s[DEBUG] %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s DEBUG] %s %s\n" % (DateNow, scriptName, Message))
         else:
-            sys.stdout.write("%s \033[34m%s[DEBUG]\033[39m %s\n" % (DateNow, Prepend, Message))
+            sys.stderr.write("[%s \033[34mDEBUG\033[39m] %s %s\n" % (DateNow, scriptName, Message))
 
     # Flush stdout
     sys.stdout.flush()

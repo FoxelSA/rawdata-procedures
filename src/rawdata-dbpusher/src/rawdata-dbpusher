@@ -47,6 +47,7 @@ import os
 
 from warnings import filterwarnings
 from cStringIO import StringIO
+from datetime import datetime
 import MySQLdb
 
 # Usage display function
@@ -67,6 +68,47 @@ def _usage():
     --help                Show this message
 
     """ % sys.argv[0]
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, NO_COLORS=False):
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stderr.write("[%s INFO] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[32mINFO\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stderr.write("[%s WARNING] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[33mWARNING\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stderr.write("[%s ERROR] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[31mERROR\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stderr.write("[%s DEBUG] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[34mDEBUG\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
 
 # Function to convert a raw status message to error code
 def errorToCode(error):
@@ -304,7 +346,7 @@ def main(argv):
                 if not __Update_Split_Flag__ and not __Update_Preview_Flag__ and not __Update_Corrupted_Flag__:
 
                     # Debug output
-                    print('Segment %s already pushed, skipping' % Segment)
+                    ShowMessage('Segment %s already pushed, skipping' % Segment)
                 else:
 
                     # Check presence of --segment-timestamp option
@@ -317,19 +359,19 @@ def main(argv):
                     if __Update_Split_Flag__ and not __SegmentTimestamp__:
 
                         # Debug output
-                        print("Updating split flag for segment %s..." % (Segment))
+                        ShowMessage("Updating split flag for segment %s..." % (Segment))
 
                     # Check --update-preview-flag option presence, don't output on segment timestamp
                     if __Update_Preview_Flag__ and not __SegmentTimestamp__:
 
                         # Debug output
-                        print("Updating preview flag for segment %s..." % (Segment))
+                        ShowMessage("Updating preview flag for segment %s..." % (Segment))
 
                     # Check --update-corrupted option presence, don't output on segment timestamp
                     if __Update_Corrupted_Flag__ and not __SegmentTimestamp__:
 
                         # Debug output
-                        print("Updating corrupted flag for segment %s..." % (Segment))
+                        ShowMessage("Updating corrupted flag for segment %s..." % (Segment))
 
                     # Check if update split flag is given
                     if __Update_Split_Flag__:
@@ -368,7 +410,7 @@ def main(argv):
             else:
 
                 # Debug output
-                print( "Pushing segment %s..." % Segment )
+                ShowMessage( "Pushing segment %s..." % Segment )
 
                 # Insert segment
                 cur.execute("INSERT INTO segment (camera_id, timestamp_master, timestamp_segment, flag_split, flag_preview) VALUES (%d, '%s', '%s', %d, %d)" % (_cam_id, __MasterTimestamp__, Segment, _split_flag, _preview_flag))
@@ -478,7 +520,7 @@ def main(argv):
     except MySQLdb.Error, e:
 
         # Error handler
-        print "Database error %d: %s" % (e.args[0], e.args[1])
+        ShowMessage( "Database error %d: %s" % (e.args[0], e.args[1]), 2)
         sys.exit(1)
 
 # Program entry point

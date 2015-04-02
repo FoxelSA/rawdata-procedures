@@ -44,11 +44,54 @@ import json
 import sys
 import os
 
+from datetime import datetime
+
 # Usage display function
 def _usage():
     print """
     Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <no debayer 0 | 1>
     """ % os.path.basename( sys.argv[ 0 ] )
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0, NO_COLORS=False):
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stderr.write("[%s INFO] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[32mINFO\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stderr.write("[%s WARNING] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[33mWARNING\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stderr.write("[%s ERROR] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[31mERROR\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stderr.write("[%s DEBUG] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s \033[34mDEBUG\033[39m] %s %s\n" % (DateNow, scriptName, Message))
+
+    # Flush stderr
+    sys.stderr.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
 
 # Program entry point function
 def main(argv):
@@ -118,7 +161,7 @@ def main(argv):
             if not os.path.isfile( p ):
 
                 # Warning message
-                print("Warning, output preview not found: %s" % p)
+                ShowMessage("Output preview not found: %s" % p, 1)
 
                 # Update state
                 State = 1
@@ -126,7 +169,7 @@ def main(argv):
     else:
 
         # Warning message
-        print("Warning, segment %s have no previews" % (__Param_Segment__))
+        ShowMessage("Segment %s have no previews" % (__Param_Segment__), 1)
 
     exit( State )
 
