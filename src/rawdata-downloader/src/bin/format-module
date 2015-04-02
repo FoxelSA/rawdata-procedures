@@ -37,5 +37,5 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
-mkfs.ext2 -q -m0 -T largefile4 ${DEVICE}1 | logstdout ${LINENO} mkfs
+mkfs.ext2 -q -m0 -T largefile4 ${DEVICE}1 2>&1 | logstdout ${LINENO} mkfs $MODULE :
 return ${PIPESTATUS[0]}

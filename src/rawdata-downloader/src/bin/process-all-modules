@@ -124,15 +124,16 @@ process_module_list() {
 
   for MODULE in $module_list  ; do
 
-    log ${LINENO} connecting module $MODULE
+    log ${LINENO} module $MODULE connecting
 
     DEVICE=$(connect-module $VERBOSE $nochecklist $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
     if [ -z "$DEVICE" ] ; then
       log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
       killtree -KILL $MYPID
+      break
     fi
 
-    log ${LINENO} connecting module $MODULE : success
+    log ${LINENO}  module $MODULE connecting : success
     # dont lose time with camera checklist before requesting next modules
     nochecklist=--no-checklist
 
@@ -141,16 +142,18 @@ process_module_list() {
       if ! umount ${DEVICE}1 ; then
         log ${LINENO} error: "could not unmount ${DEVICE}"
         killtree -KILL $MYPID
+        break
       fi
     fi
 
-    log ${LINENO} processing module $MODULE
+    log ${LINENO} "module $MODULE $COMMAND"
     if source $COMMAND ; then
-      log ${LINENO} "processing module $MODULE with command $COMMAND : success"
+      log ${LINENO} "module $MODULE $COMMAND : success"
       echo "${MODULE}" >> $PROCESSED_LIST
     else
-      log ${LINENO} "error: failed to process module $MODULE with command $COMMAND"
-       killtree -KILL $MYPID
+      log ${LINENO} "error: module $MODULE $COMMAND : failed"
+      killtree -KILL $MYPID
+      break
     fi
 
   done
