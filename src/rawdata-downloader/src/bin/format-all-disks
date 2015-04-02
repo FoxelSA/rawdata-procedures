@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# reformat_all_disks - reformat eyesis disks
+# format-all-disks - reformat eyesis disks
 #
 # Copyright (c) 2013-2014 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -37,16 +37,22 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 
-export __FORMAT_ALL_DISKS__=$(basename $0)
-export MYPID=$BASHPID
+. $(dirname $0)/rawdata-toolbox.sh                                                                                    
+__FORMAT_ALL_DISKS__=$(basename $0)
+
+MYPID=$BASHPID
 
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 init() {
 
-  export MOUNTPOINT=/data
-  export BASE_IP=192.168.0
-  export MASTER_IP=221
+  # defaults
+  MOUNTPOINT=/data
+  BASE_IP=192.168.0
+  MASTER_IP=221
+
+  # load rawdata-downloader preferences
+  [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line options
   if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
@@ -75,22 +81,22 @@ init() {
   if [ -n "$DEBUG" ] ; then
     set -x   
     set -v   
-    export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+    PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
   fi         
 
-  export MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
+  MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
     log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
     exit 1
   fi
 
-  export MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
 
-  export TMPDIR=/tmp/$__FORMAT_ALL_DISKS__/$$
+  TMPDIR=/tmp/$__FORMAT_ALL_DISKS__/$$
   mkdir -p $TMPDIR || exit
 
-  export FORMATTED_LIST=$(mktemp --tmpdir=/tmp/format_all_disks/$$)
-  export LOGFILE=/tmp/format_all_disks/$$.log
+  FORMATTED_LIST=$(mktemp --tmpdir=/tmp/format_all_disks/$$)
+  LOGFILE=/tmp/format_all_disks/$$.log
 
 }
 
@@ -103,44 +109,9 @@ get_modules_list_for_multiplexer() {
   done
 }
 
-macaddr() {
-  local _ADDR=$1
-  arp -n $_ADDR | awk '/[0-9a-f]+:/{gsub(":","-",$3);print $3}'
-}
-
 usage() {
   echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>]"
   exit $1
-}
-
-# kill child processes, and optionally the root process
-killtree() {
-
-    # disable ctrl-c
-    trap '' SIGINT
-
-    local _pid=$2
-    local _sig=$1
-    local killroot=$3
-
-    # stop parents children production between child killing and parent killing
-    #[ "${_pid}" != "$MYPID" ] && kill -STOP ${_pid}
-    for _child in $(ps -o pid --no-headers --ppid ${_pid} 2>/dev/null); do
-        killtree ${_sig} ${_child} yes
-    done
-    [ -n "$killroot" ] && (kill ${_sig} ${_pid} >/dev/null 2>&1 && wait ${_pid} > /dev/null 2>&1) > /dev/null 2>&1
-}
-
-log() {
-  [ -z "$VERBOSE" ] && return
-  echo $(date +%F_%r) $__FORMAT_ALL_DISKS__ $BASHPID $@ >&2
-}
-
-logstdout() {
-  [ -z "$VERBOSE" ] && return
-  while read l ; do
-    echo $(date +%F_%r) $__FORMAT_ALL_DISKS__ $BASHPID $@ $l >&2
-  done
 }
 
 format_module_list() {
@@ -149,11 +120,12 @@ format_module_list() {
 
   for module in $module_list  ; do
 
-    log ${LINENO} connecting esata multiplexer to module $module
+    log ${LINENO} connecting esata multiplexer $(get_mux_index $module) to module $module
 
     DEVICE=$(connect-module $VERBOSE $nochecklist $module --mountpoint $MOUNTPOINT 2>> $LOGFILE)
     [ -z "$DEVICE" ] && exit 1
 
+    # dont lose time with camera checklist before requesting next modules
     nochecklist=--no-checklist
 
     if mount | grep -q ${DEVICE}1 ; then
@@ -174,18 +146,35 @@ format_module_list() {
   done
 }
 
-init "$@"
+main() {
 
-  muxindex=0
+  init "$@"
+
+  _muxindex=0
 
   while true ; do
-    module_list=$(get_modules_list_for_multiplexer $muxindex)
+    module_list=$(get_modules_list_for_multiplexer $_muxindex)
     [ -z "$module_list" ] && break
     format_module_list $module_list &
-    ((++muxindex))
+    ((++_muxindex))
   done
 
   wait
 
-  cat $FORMATTED_LIST | wc -l
+  FORMATTED_COUNT=$(cat $FORMATTED_LIST | wc -l)
+  MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
   rm $FORMATTED_LIST
+
+  EXIT_STATUS=$(test "$COUNT" == "$MODULES_COUNT")
+
+  if [ "$EXIT_STATUS" -eq 0 ] ; then
+    log ${LINENO} success: $COUNT disks formatted
+  else
+    log ${LINENO} failed: $COUNT disks formatted
+  fi
+
+  exit $EXIT_STATUS
+
+}
+
+main "$@"
