@@ -1,0 +1,461 @@
+#!/bin/bash
+#
+# rawdata-toolbox.sh - rawdata-downloader library
+#
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Luc Deschenaux <l.deschenaux@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+
+MYPID=$BASHPID
+
+trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
+
+# template for init procedure
+init() {
+
+  # defaults
+  MOUNTPOINT=/data
+  BASE_IP=192.168.0
+  MASTER_IP=221
+
+  # load rawdata-downloader preferences
+  [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
+
+  # parse command line options
+  if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
+  then
+      # something went wrong, getopt will put out an error message for us
+      exit 1
+  fi
+
+  eval set -- "$options"
+
+  while [ $# -gt 0 ] ; do
+      case $1 in
+      -h|--help) usage $1 ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -v|--verbose) VERBOSE=-v ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -d|--debug) DEBUG=-d ;;
+      (--) shift; break;;
+      (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
+      (*) break;;
+      esac
+      shift
+  done
+
+  debugmode
+
+  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+  MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
+
+  TMP=/tmp/$(basename $0)/$$
+  mkdir -p $TMP || exit
+
+  LOGFILE=/tmp/$(basename $0)/$$.log
+
+}
+
+# return camera MAC address using BASE_IP and MASTER_IP
+get_camera_macaddr() {
+  MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
+  if [ -z "$MACADDR" ] ; then
+    log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+    exit 1
+  fi
+}
+
+debugmode_update() {
+  if [ -n "$DEBUG" ] ; then
+    set -x   
+    set -v   
+    PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+  else
+    set +x   
+    set +v   
+    PS4='+'
+  fi         
+}
+
+get_modules_list_for_multiplexer() {
+  local multiplexer=$1
+  local line
+  grep -E -e "^[0-9]+ $multiplexer " $MODULES_FILE | while read line; do
+    line=($line)
+    [ "${line[1]}" == "$multiplexer" ] && echo ${line[0]}
+  done
+}
+
+# return MAC address for givent IP
+macaddr() {
+  local _ADDR=$1
+  arp -n $_ADDR | awk '/[0-9a-f]+:/{gsub(":","-",$3);print $3}'
+}
+
+# return generic usage string
+get_usage() {
+  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>]"
+}
+
+# kill child processes, and optionally the root process
+killtree() {
+
+    # disable ctrl-c
+    trap '' SIGINT
+
+    local _pid=$2
+    local _sig=$1
+    local killroot=$3
+
+    # stop parents children production between child killing and parent killing
+    #[ "${_pid}" != "$MYPID" ] && kill -STOP ${_pid}
+    for _child in $(ps -o pid --no-headers --ppid ${_pid} 2>/dev/null); do
+        killtree ${_sig} ${_child} yes
+    done
+    [ -n "$killroot" ] && (kill ${_sig} ${_pid} >/dev/null 2>&1 && wait ${_pid} > /dev/null 2>&1) > /dev/null 2>&1
+}
+
+# send log message to stderr
+log() {
+  [ -z "$VERBOSE" ] && return
+  echo $(date +%F_%R) $(basename $0) $BASHPID $@ >&2
+}
+
+# format stdout as log messages
+logstdout() {
+  [ -z "$VERBOSE" ] && return
+  while read l ; do
+    echo $(date +%F_%R) $(basename $0) $BASHPID $@ $l >&2
+  done
+}
+
+# return multiplexer index for given module
+get_mux_index() {
+  local module=$1
+  grep -E -e "^$module " $MODULES_FILE | cut -f 2 -d ' '
+}
+
+# remove scsi host (will be added in connect_q_run after requesting connection for next ssd of this mux)
+remove_scsi_device() {
+  [ -n "$REMOVE_SCSI_DEVICE" ] || return
+  if [ -n "$HOTSWAP_USING_SYS" ] ; then
+    log ${LINENO} set device $DEVICE  offline and delete it
+    echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
+    echo 1 | tee /sys/block/$(basename $DEVICE)/device/delete 2>&1 | logstdout ${LINENO}
+  else
+    log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
+    echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+  fi
+  echo $SCSIHOST >> $REMOVED_SCSI_TMP
+}
+
+# add scsi device, if previously removed
+add_scsi_device() {
+  [ -n "$REMOVE_SCSI_DEVICE" ] || return
+  hbtl=$(get_scsihost $MUX_INDEX)
+  if [ -n "$hbtl" ] ; then
+    log ${LINENO} "adding scsi device using values from cache"
+    if [ -n "$HOTSWAP_USING_SYS" ] ; then
+      hbtl=($hbtl)
+      echo "${hbtl[1]} ${hbtl[2]} ${hbtl[3]}" | tee /sys/class/scsi_host/host${hbtl[0]}/scan 2>&1 | logstdout ${LINENO}
+    else
+      echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+    fi
+  fi
+}
+
+# add previously removed scsi devices
+restore_scsi_devices() {
+  local htbl
+  if [ -z "$HOTSWAP_USING_SYS" ] ; then
+    sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
+      log ${LINENO} "adding previously removed scsi devices"
+      echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
+      sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP
+    done
+  fi
+}
+
+# assert user is root
+assert_root() {
+  if [ $UID -ne 0 ] ; then
+    echo error: $(basename $0) must be run as root >&2
+    exit 1
+  fi
+}
+
+# exit if specified commands not in path
+assertcommands() {
+  while [ $# -ne 0 ] ; do
+    local CMD=$1
+    shift
+    [ -z "$(which $CMD)" ] && echo command $CMD not found && exit 1
+  done
+}
+
+# exit if modules file not found
+assert_modulesfile() {
+  if [ ! -f $MODULES_FILE ] ; then
+    log ${LINENO} error file not found: $MODULES_FILE
+    log ${LINENO} "=> run 'build-modules-file -m <mount_point>' first"
+    exit 1
+  fi
+}
+
+# reset multiplexers
+reset_eyesis_ide() {
+  log ${LINENO} reset eyesis_ide
+  for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
+    log ${LINENO} wget http://${MUXES[$i]}/eyesis_ide.php
+    wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null || exit 1
+  done
+}
+
+get_camera_uptime() {
+  ssh root@$BASE_IP.$MASTER_IP cat /proc/uptime | cut -f 1 -d '.'
+}
+
+# sleep until camera uptime is greater than 120sec
+wait_until_camera_awake() {
+
+  log ${LINENO} get camera uptime
+  CAMERA_UPTIME=$(get_camera_uptime)
+  if [ -z "$CAMERA_UPTIME" ] ; then
+    log ${LINENO} cannot get camera uptime
+    exit 1
+  fi
+
+  if [ $CAMERA_UPTIME -lt 120 ] ; then
+    log ${LINENO} wait $((120-CAMERA_UPTIME)) seconds for camera wake up
+    sleep $((120-CAMERA_UPTIME))
+  fi
+}
+
+# run hdparm on SSHALL_HOSTS (using sshall) for specified device 
+get_remote_disk_serial() {
+  local dev=$1
+  HOSTS=$SSHALL_HOSTS sshall /sbin/hdparm -i $dev \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
+}
+
+# fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable 
+get_camera_ssd_serials() {
+  # get camera ssd serials
+  log ${LINENO} get ssd serials
+
+  STATUS=()
+  SSD_SERIAL=()
+
+  local FIFO=$(mktemp -u).$$
+  mkfifo $FIFO
+  get_remote_disk_serial /dev/hda > $FIFO 2>&1 &
+  local PIPE_PID=$!
+
+  local l
+  local msg
+  local LOGIN
+  local INDEX
+  local WHAT
+  local SERIAL
+
+  while read l ; do
+    msg=($l)
+    [ ${msg[0]} = "sshall:" ] || continue
+    [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
+    LOGIN=${msg[1]}
+    [ -z "$LOGIN" ] && log ${LINENO} get_remote_disk_serial: $l && killtree -KILL $MYPID
+    IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
+    INDEX=$(expr $IP - $MASTER_IP)
+    WHAT=${msg[2]}
+    case "$WHAT" in
+    status)
+      STATUS[$INDEX]=${msg[3]}
+      [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} get_remote_serial: $IP && killtree -KILL $MYPID
+      ;;
+    stdout)
+      SERIAL=${msg[3]}
+      SSD_SERIAL[$INDEX]=$SERIAL
+      ;;
+    esac
+  done < $FIFO
+
+  kill $PIPE_PID > /dev/null 2>&1
+}
+
+# unmount /usr/html/CF for SSHALL_HOSTS
+umount_cf() {
+  HOSTS=$SSHALL_HOSTS sshall << 'EOF'
+if grep -q ' /usr/html/CF ' /proc/mounts ; then
+  sync
+  umount /usr/html/CF || exit 1
+  sync
+fi
+exit 0
+EOF
+}
+
+# wrapper for umount_cf
+umount_all() {
+  umount_cf 2>&1 | tee | while read l ; do
+    msg=($l)
+    [ ${msg[0]} = "sshall:" ] || continue
+    LOGIN=${msg[1]}
+    [ -z "$LOGIN" ] && echo error: umount_all: $l && killtree -KILL $MYPID yes
+    WHAT=${msg[2]}
+    [ "$WHAT" != "status" ] && continue
+    IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
+    INDEX=$(expr $IP - $MASTER_IP)
+    STATUS=${msg[3]}
+    if [ "$STATUS" != "0" ] ; then
+      log ${LINENO} error: "could not unmount disk on module $INDEX ($IP)"
+      killtree -KILL $MYPID yes
+    fi
+  done
+}
+
+# queue first ssd for each mux, in connect queue
+connect_queue_init() {
+  local i
+  for (( i=0 ; i < ${#MUXES[@]} ; ++i )) ; do
+    echo $i 1 >> $CONNECT_Q_TMP
+  done
+}
+
+# return array index of ssd serial
+get_ssd_index() {
+  local _SERIAL=$1
+  local i
+  for (( i=0 ; $i < ${#SSD_SERIAL[@]} ; ++i )) ; do
+    if [ "${SSD_SERIAL[$i]}" = "$_SERIAL" ] ; then
+      echo $i
+      break
+    fi
+  done
+}
+
+# retrun number of seconds since last modification of specified file
+modtime() {
+  local filename="$1"
+  expr $(date +%s) - $(stat -c %Y "$filename")
+}
+
+# cache scsi address associated with mux index
+save_scsihost() {
+  local MUX_INDEX=$1
+  shift
+  local SCSIHOST=$@
+  grep -q $MUX_INDEX $SCSIHOST_TMP || echo $MUX_INDEX $SCSIHOST >> $SCSIHOST_TMP
+}
+
+# read cached scsi address associated with mux index
+get_scsihost() {
+  local MUX_INDEX=$1
+  grep $MUX_INDEX $SCSIHOST_TMP | sed -r -e 's/^[0-9]+ (.*)/\1/'
+}
+
+# get module number for ssd serial
+get_module_index() {
+  local SERIAL=$1
+  echo $(($(get_ssd_index $SERIAL)+1))
+}
+
+# return modules list for given multiplexer
+get_modules_list_for_multiplexer() {
+  local multiplexer=$1
+  local line
+  grep -E -e "^[0-9]+ $multiplexer " $MODULES_FILE | while read line; do
+    line=($line)
+    [ "${line[1]}" == "$multiplexer" ] && echo ${line[0]}
+  done
+}
+
+# log every line in specified file, until specified regexp is matched
+wait_regexp() {
+
+  local TMP_INPUT=$1
+  local REGEXP="$2"
+  local msg
+
+  local FIFO=$(mktemp -u).$$
+  mkfifo $FIFO
+  tail -f $TMP_INPUT > $FIFO 2>&1 &
+  local TAIL_PID=$!
+
+  while read msg ; do
+    echo $msg | logstdout ${LINENO}
+    [[ "$msg" =~ "$REGEXP" ]] && break
+  done < $FIFO
+
+  kill $TAIL_PID > /dev/null 2>&1
+
+  rm $TMP_INPUT $FIFO
+}
+
+build_sshall_login_list() {
+  local MODULES_COUNT=$1
+  for (( i=0 ; $i < $MODULES_COUNT ; ++i )) ; do
+    SSHALL_HOSTS="$SSHALL_HOSTS "root@$BASE_IP.$((MASTER_IP + i))
+  done
+}
+
+# delay script execution or exit if another instance is running yet
+no_concurrency() {
+
+  local ACTION=$1
+  local PIDFILE="$2"
+
+  local NAME=$(basename $0)
+
+  [ -z "$PIDFILE" ] && PIDFILE=/var/run/$NAME.pid
+
+  # wait for concurrent process exit
+  [ -s "$PIDFILE" ] && OLDPID=$(cat $PIDFILE)
+  [ -n "$OLDPID" -a "$OLDPID" != "$MYPID" ] && while [ "$(grep Name /proc/$OLDPID/status 2>/dev/null | cut -f 2)" == "$NAME" ] ; do
+    case $ACTION in
+      sleep) sleep 1 ;;
+      *) killtree -KILL $MYPID yes ;;
+    esac
+  done 
+
+  # lock this process
+  echo $MYPID > $PIDFILE
+
+}
+
+# return scsi address (host bus target lun) from specified UDEVINFO line
+get_hbtl() {                                                                                                          
+  grep DEVPATH= $1 | sed -r -n -e 's#.*/([0-9]:[0-9]:[0-9]:[0-9])/.*#\1#' -e T -e 's/:/ /gp'
+}
+   
+

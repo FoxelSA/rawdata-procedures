@@ -1,0 +1,192 @@
+#!/bin/bash
+#
+# process-all-modules - run the specified command for every eyesis module
+#
+# Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+# Please read <http://foxel.ch/license> for more information.
+#
+#
+# Author(s):
+#
+#       Luc Deschenaux <l.deschenaux@foxel.ch>
+#
+#
+# This file is part of the FOXEL project <http://foxel.ch>.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# Additional Terms:
+#
+#       You are required to preserve legal notices and author attributions in
+#       that material or in the Appropriate Legal Notices displayed by works
+#       containing it.
+#
+#       You are required to attribute the work as explained in the "Usage and
+#       Attribution" section of <http://foxel.ch/license>.
+
+
+. $(dirname $0)/rawdata-toolbox.sh                                                                                    
+__PROCESS_ALL_DISKS__=$(basename $0)
+
+export MYPID=$BASHPID
+
+trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
+
+init() {
+
+  # defaults
+  MOUNTPOINT=/data
+  BASE_IP=192.168.0
+  MASTER_IP=221
+
+  # load rawdata-downloader preferences
+  [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
+
+  # parse command line options
+  if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
+  then
+      # something went wrong, getopt will put out an error message for us
+      exit 1
+  fi
+
+  eval set -- "$options"
+
+  while [ $# -gt 0 ] ; do
+      case $1 in
+      -h|--help) usage $1 ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -v|--verbose) VERBOSE=-v ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -d|--debug) DEBUG=-d ;;
+      (--) shift; break;;
+      (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
+      (*) break;;
+      esac
+      shift
+  done
+
+  if [ -n "$DEBUG" ] ; then
+    set -x   
+    set -v   
+    PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+  fi         
+
+  MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
+  if [ -z "$MACADDR" ] ; then
+    log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+    exit 1
+  fi
+
+  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+
+  TMPDIR=/tmp/$__PROCESS_ALL_DISKS__/$$
+  mkdir -p $TMPDIR || exit
+
+  PROCESSED_LIST=$(mktemp --tmpdir=$TMPDIR)
+  LOGFILE=/tmp/$__PROCESS_ALL_DISKS__/$$.log
+
+  COMMAND=$1
+  shift
+
+  if [ ! -f "$COMMAND" ] ; then
+    log ${LINENO} "error: command not found: $COMMAND"
+    exit 1
+  fi
+
+  if [ $# -gt 0 ] ; then
+    log ${LINENO} error: "extra parameters: $@"
+    exit 1
+  fi
+
+}
+
+usage() {
+  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>] <command>"
+  exit $1
+}
+
+process_module_list() {
+
+  module_list=$@
+
+  for MODULE in $module_list  ; do
+
+    log ${LINENO} module $MODULE connecting
+
+    DEVICE=$(connect-module $VERBOSE $nochecklist $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
+    if [ -z "$DEVICE" ] ; then
+      log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
+      killtree -KILL $MYPID
+      break
+    fi
+
+    log ${LINENO}  module $MODULE connecting : success
+    # dont lose time with camera checklist before requesting next modules
+    nochecklist=--no-checklist
+
+    if mount | grep -q ${DEVICE}1 ; then
+      log ${LINENO} unmount ${DEVICE}1
+      if ! umount ${DEVICE}1 ; then
+        log ${LINENO} error: "could not unmount ${DEVICE}"
+        killtree -KILL $MYPID
+        break
+      fi
+    fi
+
+    log ${LINENO} "module $MODULE $COMMAND"
+    if source $COMMAND ; then
+      log ${LINENO} "module $MODULE $COMMAND : success"
+      echo "${MODULE}" >> $PROCESSED_LIST
+    else
+      log ${LINENO} "error: module $MODULE $COMMAND : failed"
+      killtree -KILL $MYPID
+      break
+    fi
+
+  done
+}
+
+main() {
+
+  init "$@"
+
+  _muxindex=0
+
+  while true ; do
+    module_list=$(get_modules_list_for_multiplexer $_muxindex)
+    [ -z "$module_list" ] && break
+    process_module_list $module_list &
+    ((++_muxindex))
+  done
+
+  wait
+
+  PROCESSED_COUNT=$(cat $PROCESSED_LIST | wc -l)
+  MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
+
+  rm $PROCESSED_LIST
+
+  if [ "$MODULES_COUNT" != "$PROCESSED_COUNT" ] ; then
+    log ${LINENO} failed: $PROCESSED_COUNT disks processed $(cat $PROCESSED_LIST)
+    exit 1
+  fi
+
+  log ${LINENO} success: $PROCESSED_COUNT disks processed
+  exit 0
+
+}
+
+main "$@"
