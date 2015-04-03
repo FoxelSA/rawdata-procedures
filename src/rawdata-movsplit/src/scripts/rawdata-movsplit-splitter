@@ -130,9 +130,12 @@ def ValidateEXIFData(EXIFData):
     # Verify image date entry presence
     if 'Image DateTime' in EXIFData:
 
+        # Midnight fix
+        _DateTime = str(EXIFData["Image DateTime"]).replace('24:00:00', '00:00:00')
+
         # Verify image date
         _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
-        if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+        if not _Exp.match( _DateTime ):
             return False
     else:
         return False
@@ -182,8 +185,11 @@ def extractMOV(InputFile, ModuleName, OutputFolder, Valid_Timestamps):
             Output_Name = ""
             Output_Image = None
 
+            # Midnight fix
+            _DateTime = str(EXIF_Tags["Image DateTime"]).replace('24:00:00', '00:00:00')
+
             # Calculate the output filename
-            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
+            date_object = datetime.strptime(_DateTime, '%Y:%m:%d %H:%M:%S')
             epoch = calendar.timegm(date_object.utctimetuple())
             timestamp = "%d_%06d" % (epoch, int(str(EXIF_Tags["EXIF SubSecTimeOriginal"])))
             Output_Name = "%d_%s_%s" % (epoch, EXIF_Tags["EXIF SubSecTimeOriginal"], ModuleName)
