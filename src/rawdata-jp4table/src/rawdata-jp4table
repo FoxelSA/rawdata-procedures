@@ -263,10 +263,14 @@ def ValidateEXIFData(EXIFData):
     # Verify image date entry presence
     if 'Image DateTime' in EXIFData:
 
+        # Midnight fix
+        _DateTime = str(EXIFData["Image DateTime"]).replace('24:00:00', '00:00:00')
+
         # Verify image date
         _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
-        if not _Exp.match( str(EXIFData["Image DateTime"]) ):
+        if not _Exp.match( _DateTime ):
             return False
+
     else:
         return False
 
@@ -320,8 +324,11 @@ def indexMOV(InputFile, EXIFTrashFolder, IntegrityTrashFolder, tid=0):
             # Chceck image integrity
             jpeg_messages = validate_jpeg_from_buffer(ImageData)
 
+            # Midnight fix
+            _DateTime = str(EXIF_Tags["Image DateTime"]).replace('24:00:00', '00:00:00')
+
             # Get date object
-            date_object = datetime.strptime(str(EXIF_Tags["Image DateTime"]), '%Y:%m:%d %H:%M:%S')
+            date_object = datetime.strptime(_DateTime, '%Y:%m:%d %H:%M:%S')
 
             # Get timestamp
             Timestamp    = calendar.timegm(date_object.utctimetuple())
