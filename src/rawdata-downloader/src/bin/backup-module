@@ -97,6 +97,14 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
 fi
 
 # backup
-rsync --exclude='lost+found' --exclude='**nodownload*' --inplace --ignore-existing -av $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
+# WARNING: since somebody added --ignore-existing and we are syncing --inplace, resuming backup could result in truncated files  - is it desirable and should we delete the target directory before rsync ?
+rsync \
+  --exclude='lost+found' \
+  --exclude='**nodownload*' \
+  --inplace \
+  --ignore-existing \
+  --archive \
+  --verbose \
+  $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
 return  ${PIPESTATUS[0]}
 
