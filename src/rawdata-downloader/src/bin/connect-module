@@ -109,7 +109,7 @@ init() {
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/info/rawdata-downloader/modules
   if [ ! -f $MODULES_FILE ] ; then
     log ${LINENO} error file not found: $MODULES_FILE
-    log ${LINENO} "=> run 'build-modules-file $MOUNTPOINT' first"
+    log ${LINENO} "specify the proper mount point with -m or run 'build-modules-file $MOUNTPOINT' first"
     exit 1
   fi
 
@@ -147,7 +147,29 @@ checkdependencies() {
 }
 
 usage() {
-  echo "usage: $(basename $0) <camera_module_index>" >&2
+  cat >&2 << EOF
+
+SYNOPSIS:
+
+  $(basename $0) [OPTION ...] <camera_module_index>
+
+DESCRIPTION: 
+  
+  Request the Eysesis4PI esata multiplexer to activate the SSD related to
+  the specified camera module index, and return the device path.
+
+OPTIONS SUMMARY:
+
+  -h|--help                   display this
+  -v|--verbose                verbose output
+  -d|--debug                  enable debugging mode
+  -m|--mountpoint <path>      parent location of the 'camera' directory
+  -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+  -i|--masterip <master_ip>   master camera ip, defaults to 221
+  -n|--nochecklist            dont check camera uptime first
+  <camera_module_index>       the camera module index wanted
+
+EOF
   exit $1
 }
 

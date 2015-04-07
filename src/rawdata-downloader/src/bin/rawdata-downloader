@@ -61,8 +61,21 @@ DESTINATION=$1
 
 [ -z "$DESTINATION" ] && exit 1
 
+# get the master timestamp from module 1
+export MASTER_TS=$(process-modules --verbose --mountpoint $DESTINATION get-module-master_timestamp 1)
+
+# or die
+STATUS=$?
+if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
+  log ${LINENO} "error: could not get the master timestamp"
+  exit 1
+fi
+
+# after getting master timestamp from module 1, no need to check camera uptime anymore
+export NOCHECKLIST=--no-checklist
+
 # download rawdata from camera modules
-DEST=$(process-all-modules --mountpoint $DESTINATION backup-module)
+DEST=$(process-modules --all --verbose --mountpoint $DESTINATION backup-module)
 
 EXIT_CODE=$?
 
@@ -80,9 +93,6 @@ chmod -R 0777 $DEST/mov
 
 # Decompose destination
 IFS='/' read -a DEST_DECOMPOSED <<< "$DEST"
-
-# Extract master timestamp
-MASTER_TS=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 1]}
 
 # Extract MAC address
 MAC_ADDR=${DEST_DECOMPOSED[${#DEST_DECOMPOSED} - 3]}

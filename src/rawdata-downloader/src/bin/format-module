@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # format-module - reformat eyesis module
-# This script is intended to be used as the <command> parameter for process-all-modules
+# This script is intended to be used as the <script> parameter for process-modules
 #
 # Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.

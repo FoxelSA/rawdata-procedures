@@ -99,14 +99,14 @@ get_camera_macaddr() {
 
 debugmode_update() {
   if [ -n "$DEBUG" ] ; then
-    set -x   
-    set -v   
+    set -x
+    set -v
     PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
   else
-    set +x   
-    set +v   
+    set +x
+    set +v
     PS4='+'
-  fi         
+  fi
 }
 
 get_modules_list_for_multiplexer() {
@@ -263,13 +263,13 @@ wait_until_camera_awake() {
   fi
 }
 
-# run hdparm on SSHALL_HOSTS (using sshall) for specified device 
+# run hdparm on SSHALL_HOSTS (using sshall) for specified device
 get_remote_disk_serial() {
   local dev=$1
   HOSTS=$SSHALL_HOSTS sshall /sbin/hdparm -i $dev \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
 }
 
-# fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable 
+# fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable
 get_camera_ssd_serials() {
   # get camera ssd serials
   log ${LINENO} get ssd serials
@@ -446,7 +446,7 @@ no_concurrency() {
       sleep) sleep 1 ;;
       *) killtree -KILL $MYPID yes ;;
     esac
-  done 
+  done
 
   # lock this process
   echo $MYPID > $PIDFILE
@@ -454,8 +454,29 @@ no_concurrency() {
 }
 
 # return scsi address (host bus target lun) from specified UDEVINFO line
-get_hbtl() {                                                                                                          
+get_hbtl() {
   grep DEVPATH= $1 | sed -r -n -e 's#.*/([0-9]:[0-9]:[0-9]:[0-9])/.*#\1#' -e T -e 's/:/ /gp'
 }
-   
 
+get_master_timestamp() {
+  # Get the oldest MOV file on CAM
+  CAM_OLDEST_MOV=$(basename `find $MOUNTPOINT/ -iname '*.mov' | sort | head -n1`)
+
+  # Extract the master timestamp
+  MASTER_TS=${CAM_OLDEST_MOV%%_*}
+
+  # Get the most recent master timestamp directory on destination
+  DEST_NEWEST_TS=$(basename `find $DEST/ -maxdepth 1 -type d | grep -E -e '^[0-9]+$' | sort | tail -n1`)
+
+  # If MOVs older than CAM_OLDEST_MOV were deleted manually on the camera,
+  # maybe CAM_OLDEST_MOV is already in the the last segment directory.
+  # In that case, reuse this directory. (This should not happend if the camera
+  # has been reformatted properly according to the standard procedure)
+  if [ -f "$DEST/$DEST_NEWEST_TS/mov/$MODULE_INDEX/$CAM_OLDEST_MOV" ]; then
+      log ${LINENO} "Reusing existing master $DEST_NEWEST_TS"
+      MASTER_TS=$DEST_NEWEST_TS
+
+  else
+      log ${LINENO} "Allocating new master $MASTER_TS"
+  fi
+}

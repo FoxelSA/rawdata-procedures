@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# process-all-modules - run the specified command for every eyesis module
+# process-modules - run the specified command for every Eyesis4PI module specified
 #
 # Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -44,6 +44,7 @@ export MYPID=$BASHPID
 
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
+# parse command line and set default values
 init() {
 
   # defaults
@@ -55,7 +56,7 @@ init() {
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line options
-  if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
+  if ! options=$(getopt -o hm:I:i:vda -l help,mountpoint:,baseip:,masterip:,verbose,debug,all -- "$@")
   then
       # something went wrong, getopt will put out an error message for us
       exit 1
@@ -71,6 +72,7 @@ init() {
       -I|--baseip) BASE_IP=$2 ; shift ;;
       -i|--masterip) MASTER_IP=$2 ; shift ;;
       -d|--debug) DEBUG=-d ;;
+      -a|--all) ALL=yes ;;
       (--) shift; break;;
       (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
       (*) break;;
@@ -78,12 +80,14 @@ init() {
       shift
   done
 
+  # enable debug mode if requested
   if [ -n "$DEBUG" ] ; then
     set -x   
     set -v   
     PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
   fi         
 
+  # retrieve camera mac address from arp cache
   MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
     log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
@@ -91,6 +95,11 @@ init() {
   fi
 
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+  if ! [ -f "$MODULES_FILE" ] ; then
+    log ${LINENO} error: "file not found: $MODULES_FILE"
+    log ${LINENO} "run build-modules-file first or specify the proper mountpoint with -m"
+    exit 1
+  fi
 
   TMPDIR=/tmp/$__PROCESS_ALL_DISKS__/$$
   mkdir -p $TMPDIR || exit
@@ -98,26 +107,71 @@ init() {
   PROCESSED_LIST=$(mktemp --tmpdir=$TMPDIR)
   LOGFILE=/tmp/$__PROCESS_ALL_DISKS__/$$.log
 
-  COMMAND=$1
+  if [ $# -eq 0 ] ; then
+    log ${LINENO} error: "missing parameter: <script>"
+    usage 1
+  fi
+  SCRIPT=$1
   shift
 
-  if [ ! -f "$COMMAND" ] ; then
-    log ${LINENO} "error: command not found: $COMMAND"
+  if [ ! -f "$SCRIPT" ] ; then
+    log ${LINENO} "error: script not found: $SCRIPT"
     exit 1
   fi
 
-  if [ $# -gt 0 ] ; then
-    log ${LINENO} error: "extra parameters: $@"
-    exit 1
+  # set modules count from modules file if --all specified,
+  if [ -n "$ALL" ] ; then
+
+    if [ $# -gt 0 ] ; then
+      log ${LINENO} error: "extra parameters: $@"
+      usage 1
+    fi
+
+    MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
+
+  else
+
+    # get module list and count from command line
+
+    if [ $# -eq 0 ] ; then
+      log ${LINENO} error: "missing parameter: <module_index>"
+      usage 1
+    fi
+
+    MODULE_LIST=$@
+    MODULE_COUNT=$#
+
   fi
 
 }
 
 usage() {
-  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>] <command>"
+  cat >&2 << EOF
+
+SYNOPSIS:
+
+  $(basename $0) [OPTION ...] <script> [ -a|--all | <module_index> ...]"
+
+DESCRIPTION: 
+  
+  Source the specified script for every Eyesis4PI module specified
+
+OPTIONS SUMMARY:
+
+  -h|--help                   display this
+  -v|--verbose                verbose output
+  -m|--mountpoint <path>      parent location of the 'camera' directory
+  -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+  -i|--masterip <master_ip>   master camera ip, defaults to 221
+  -a|--all                    process all modules
+  <script>                    script to be sourced
+  <module_index>              camera module index (mutually exclusive with -a)
+
+EOF
   exit $1
 }
 
+# source $SCRIPT for each module index specified as parameter
 process_module_list() {
 
   module_list=$@
@@ -126,7 +180,8 @@ process_module_list() {
 
     log ${LINENO} module $MODULE connecting
 
-    DEVICE=$(connect-module $VERBOSE $nochecklist $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
+    # request module to multiplexer and get device path
+    DEVICE=$(connect-module $VERBOSE $NOCHECKLIST $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
     if [ -z "$DEVICE" ] ; then
       log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
       killtree -KILL $MYPID
@@ -135,28 +190,31 @@ process_module_list() {
 
     log ${LINENO}  module $MODULE connecting : success
     # dont lose time with camera checklist before requesting next modules
-    nochecklist=--no-checklist
+    NOCHECKLIST=--no-checklist
 
+    # if already mounted, try to unmount device
     if mount | grep -q ${DEVICE}1 ; then
       log ${LINENO} unmount ${DEVICE}1
-      if ! umount ${DEVICE}1 ; then
+      if ! umount ${DEVICE}1 || umount -f ${DEVICE}1 ; then
         log ${LINENO} error: "could not unmount ${DEVICE}"
         killtree -KILL $MYPID
         break
       fi
     fi
 
-    log ${LINENO} "module $MODULE $COMMAND"
-    if source $COMMAND ; then
-      log ${LINENO} "module $MODULE $COMMAND : success"
+    # run specified script using "source" so that it can access to everything defined here
+    log ${LINENO} "module $MODULE $SCRIPT"
+    if source $SCRIPT ; then
+      log ${LINENO} "module $MODULE $SCRIPT : success"
       echo "${MODULE}" >> $PROCESSED_LIST
     else
-      log ${LINENO} "error: module $MODULE $COMMAND : failed"
+      log ${LINENO} "error: module $MODULE $SCRIPT : failed"
       killtree -KILL $MYPID
       break
     fi
 
   done
+
 }
 
 main() {
@@ -165,18 +223,29 @@ main() {
 
   _muxindex=0
 
-  while true ; do
-    module_list=$(get_modules_list_for_multiplexer $_muxindex)
-    [ -z "$module_list" ] && break
-    process_module_list $module_list &
-    ((++_muxindex))
-  done
+  if [ -n "$ALL" ] ; then
 
+    # process all modules
+    while true ; do
+      module_list=$(get_modules_list_for_multiplexer $_muxindex)
+      [ -z "$module_list" ] && break
+      process_module_list $module_list &
+      ((++_muxindex))
+    done
+
+  else
+    # process specified modules
+    process_module_list $MODULE_LIST  &
+
+  fi
+
+  # wait for background processes
   wait
 
-  PROCESSED_COUNT=$(cat $PROCESSED_LIST | wc -l)
-  MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
+  # display processing status and exit
+  #
 
+  PROCESSED_COUNT=$(cat $PROCESSED_LIST | wc -l)
   rm $PROCESSED_LIST
 
   if [ "$MODULES_COUNT" != "$PROCESSED_COUNT" ] ; then

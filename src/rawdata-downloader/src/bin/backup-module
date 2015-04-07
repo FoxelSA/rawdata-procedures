@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # backup-module - backup eyesis module ssd 
-# This script is intended to be used as the <command> parameter for process-all-modules
+# This script is intended to be used as the <script> parameter for process-modules
 #
 # Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
 # Please read <http://foxel.ch/license> for more information.
@@ -87,7 +87,11 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
 fi
 
 # set destination folder
-[ -z "$MASTER_TS" ] && log ${LINENO} error: master timestamp undefined && return 1
+if [ -z "$MASTER_TS" ] ; then
+  log ${LINENO} error: master timestamp undefined
+  return 1
+fi
+
 RSYNCDEST=$DEST/$MASTER_TS/mov/$MODULE_INDEX
 
 # create destination folder
@@ -97,12 +101,10 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
 fi
 
 # backup
-# WARNING: since somebody added --ignore-existing and we are syncing --inplace, resuming backup could result in truncated files  - is it desirable and should we delete the target directory before rsync ?
 rsync \
   --exclude='lost+found' \
   --exclude='**nodownload*' \
   --inplace \
-  --ignore-existing \
   --archive \
   --verbose \
   $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
