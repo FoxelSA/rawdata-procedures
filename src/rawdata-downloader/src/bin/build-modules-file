@@ -393,8 +393,8 @@ fi
 # set destination folder
 DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
 
-mkdir -p "$DEST/info/rawdata-downloader" || exit 1
-export MODULES_FILE="$DEST/info/rawdata-downloader/modules"
+mkdir -p "$DEST/rawdata-downloader" || exit 1
+export MODULES_FILE="$DEST/rawdata-downloader/modules"
 
 build_sshall_login_list $MODULES_COUNT
 

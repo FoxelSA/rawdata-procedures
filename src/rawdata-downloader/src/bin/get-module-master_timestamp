@@ -38,12 +38,12 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 PARTNUM=1
-PARTITION=${DEVICE}/$PARTNUM
+PARTITION=${DEVICE}$PARTNUM
 MODULE_INDEX=$MODULE
 FSTYPE=ext2
 
 # create mountpoint directory
-PARTITION_MOUNTPOINT=/mnt/$PARTITION
+PARTITION_MOUNTPOINT=/mnt/$(basename $PARTITION)
 mkdir -p $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 [ ${PIPESTATUS[0]} -ne 0 ] && return 1
 
@@ -79,15 +79,19 @@ fi
 #            128  - Shared-library error
 
 # mount device read-only
-log ${LINENO} mount disk of module $MODULE_INDEX
+log ${LINENO} mount disk of module $MODULE_INDEX on $PARTITION_MOUNTPOINT
 mount -t $FSTYPE -o ro $PARTITION $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 if [ ${PIPESTATUS[0]} -ne 0 ] ; then
    log ${LINENO} error: "mount disk failed for module $MODULE_INDEX"
    return 1
 fi
 
+log ${LINENO} search for master timestamp
 MASTER_TS=$(get_master_timestamp $PARTITION_MOUNTPOINT)
 if [ -z "$MASTER_TS" ] ; then
   log ${LINENO} error: "cannot get master timestamp from $PARTITION_MOUNTPOINT"
   return 1
 fi
+
+echo $MASTER_TS
+log ${LINENO} master timestamp is $MASTER_TS

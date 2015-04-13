@@ -37,8 +37,6 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 
-MYPID=$BASHPID
-
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
 # template for init procedure
@@ -441,15 +439,18 @@ no_concurrency() {
 
   # wait for concurrent process exit
   [ -s "$PIDFILE" ] && OLDPID=$(cat $PIDFILE)
-  [ -n "$OLDPID" -a "$OLDPID" != "$MYPID" ] && while [ "$(grep Name /proc/$OLDPID/status 2>/dev/null | cut -f 2)" == "$NAME" ] ; do
+  [ -n "$OLDPID" -a "$OLDPID" != "$$" ] && while kill -0 $OLDPID 2>/dev/null && [ "$(grep Name /proc/$OLDPID/status 2>/dev/null | cut -f 2)" == "$NAME" ] ; do
     case $ACTION in
-      sleep) sleep 1 ;;
+      sleep)
+        sleep 1
+        OLDPID=$(cat $PIDFILE)
+      ;;
       *) killtree -KILL $MYPID yes ;;
     esac
   done
 
   # lock this process
-  echo $MYPID > $PIDFILE
+  echo $$ > $PIDFILE
 
 }
 
@@ -459,24 +460,32 @@ get_hbtl() {
 }
 
 get_master_timestamp() {
-  # Get the oldest MOV file on CAM
-  CAM_OLDEST_MOV=$(basename `find $MOUNTPOINT/ -iname '*.mov' | sort | head -n1`)
 
-  # Extract the master timestamp
+  local DESTINATION=$MOUNTPOINT/rawdata/$MACADDR/master
+  if [ -z "$DESTINATION" ] ; then
+    log ${LINENO} "Destination not specified"
+    exit 1
+  fi
+  log ${LINENO} get the oldest MOV file on $PARTITION_MOUNTPOINT
+  CAM_OLDEST_MOV=$(basename `find $PARTITION_MOUNTPOINT/ -iname '*.mov' | sort | head -n1` 2>/dev/null)
+
+  log ${LINENO} extract the master timestamp
   MASTER_TS=${CAM_OLDEST_MOV%%_*}
 
-  # Get the most recent master timestamp directory on destination
-  DEST_NEWEST_TS=$(basename `find $DEST/ -maxdepth 1 -type d | grep -E -e '^[0-9]+$' | sort | tail -n1`)
+  log ${LINENO} get the most recent master timestamp directory on $DESTINATION
+  DEST_NEWEST_TS=$(basename `find $DESTINATION/ -maxdepth 1 -type d | grep -E -e '^[0-9]+$' | sort | tail -n1` 2>/dev/null)
 
   # If MOVs older than CAM_OLDEST_MOV were deleted manually on the camera,
   # maybe CAM_OLDEST_MOV is already in the the last segment directory.
   # In that case, reuse this directory. (This should not happend if the camera
   # has been reformatted properly according to the standard procedure)
-  if [ -f "$DEST/$DEST_NEWEST_TS/mov/$MODULE_INDEX/$CAM_OLDEST_MOV" ]; then
+  if [ -f "$DESTINATION/$DEST_NEWEST_TS/mov/$MODULE_INDEX/$CAM_OLDEST_MOV" ]; then
       log ${LINENO} "Reusing existing master $DEST_NEWEST_TS"
       MASTER_TS=$DEST_NEWEST_TS
 
   else
       log ${LINENO} "Allocating new master $MASTER_TS"
   fi
+
+  echo "$MASTER_TS"
 }

@@ -43,6 +43,8 @@
 
 #set -e
 
+MYPID=$BASHPID
+
 . $(dirname $0)/rawdata-toolbox.sh
 
 # parse command line options and set environment variables
@@ -106,7 +108,7 @@ init() {
 
 
   # check modules file exist
-  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/info/rawdata-downloader/modules
+  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
   if [ ! -f $MODULES_FILE ] ; then
     log ${LINENO} error file not found: $MODULES_FILE
     log ${LINENO} "specify the proper mount point with -m or run 'build-modules-file $MOUNTPOINT' first"
@@ -174,7 +176,7 @@ EOF
 }
 
 get_local_disk_serials() {
-  for DEV in /dev/sd? ; do
+  for DEV in $(ls /dev/sd* | egrep -v '[0-9]$') ; do
     echo $DEV,$(hdparm -i $DEV | sed -r -n -e 's/.*SerialNo=([^ ]+).*/\1/p')
   done
 }
@@ -449,7 +451,7 @@ fi
 
 # unmount camera ssd
 log ${LINENO} umount CF
-umount_all | logstdout ${LINENO}
+umount_all 2>&1 | logstdout ${LINENO}
 
 # module address
 MUX_INDEX=${MODULE_INFO[1]}

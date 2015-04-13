@@ -38,12 +38,12 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 PARTNUM=1
-PARTITION=${DEVICE}/$PARTNUM
+PARTITION=${DEVICE}$PARTNUM
 MODULE_INDEX=$MODULE
 FSTYPE=ext2
 
 # create mountpoint directory
-PARTITION_MOUNTPOINT=/mnt/$PARTITION
+PARTITION_MOUNTPOINT=/mnt/$(basename $PARTITION)
 mkdir -p $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 [ ${PIPESTATUS[0]} -ne 0 ] && return 1
 
@@ -79,7 +79,7 @@ fi
 #            128  - Shared-library error
 
 # mount device read-only
-log ${LINENO} mount disk of module $MODULE_INDEX
+log ${LINENO} mount disk of module $MODULE_INDEX on $PARTITION_MOUNTPOINT
 mount -t $FSTYPE -o ro $PARTITION $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 if [ ${PIPESTATUS[0]} -ne 0 ] ; then
    log ${LINENO} error: "mount disk failed for module $MODULE_INDEX"
@@ -92,7 +92,8 @@ if [ -z "$MASTER_TS" ] ; then
   return 1
 fi
 
-RSYNCDEST=$DEST/$MASTER_TS/mov/$MODULE_INDEX
+DESTINATION=$MOUNTPOINT/rawdata/$MACADDR/master
+RSYNCDEST=$DESTINATION/$MASTER_TS/mov/$MODULE_INDEX
 
 # create destination folder
 mkdir -p "$RSYNCDEST" 2>&1 | logstdout ${LINENO}
@@ -100,6 +101,7 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
   return 1
 fi
 
+log ${LINENO} backup disk of module $MODULE_INDEX
 # backup
 rsync \
   --exclude='lost+found' \
@@ -108,5 +110,10 @@ rsync \
   --archive \
   --verbose \
   $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
+
+EXIT_CODE=${PIPESTATUS[0]}
+
+echo $DESTINATION/$MASTER_TS
+
 return  ${PIPESTATUS[0]}
 

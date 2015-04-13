@@ -57,15 +57,15 @@ logstdout() {
   done
 }
 
-DESTINATION=$1
+export MOUNTPOINT=$1
 
-[ -z "$DESTINATION" ] && exit 1
+[ -z "$MOUNTPOINT" ] && exit 1
 
 # get the master timestamp from module 1
-export MASTER_TS=$(process-modules --verbose --mountpoint $DESTINATION get-module-master_timestamp 1)
-
+export MASTER_TS=$(process-modules --verbose --mountpoint $MOUNTPOINT get-module-master_timestamp 1)
 # or die
 STATUS=$?
+
 if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
   log ${LINENO} "error: could not get the master timestamp"
   exit 1
@@ -75,7 +75,7 @@ fi
 export NOCHECKLIST=--no-checklist
 
 # download rawdata from camera modules
-DEST=$(process-modules --all --verbose --mountpoint $DESTINATION backup-module)
+DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module)
 
 EXIT_CODE=$?
 

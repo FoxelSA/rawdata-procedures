@@ -51,6 +51,7 @@ init() {
   MOUNTPOINT=/data
   BASE_IP=192.168.0
   MASTER_IP=221
+  VERBOSE=-v
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -111,7 +112,7 @@ init() {
     log ${LINENO} error: "missing parameter: <script>"
     usage 1
   fi
-  SCRIPT=$1
+  SCRIPT=$(which $1)
   shift
 
   if [ ! -f "$SCRIPT" ] ; then
@@ -139,7 +140,7 @@ init() {
     fi
 
     MODULE_LIST=$@
-    MODULE_COUNT=$#
+    MODULES_COUNT=$#
 
   fi
 
@@ -184,7 +185,7 @@ process_module_list() {
     DEVICE=$(connect-module $VERBOSE $NOCHECKLIST $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
     if [ -z "$DEVICE" ] ; then
       log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
-      killtree -KILL $MYPID
+      killtree -KILL $MYPID yes
       break
     fi
 
@@ -195,9 +196,9 @@ process_module_list() {
     # if already mounted, try to unmount device
     if mount | grep -q ${DEVICE}1 ; then
       log ${LINENO} unmount ${DEVICE}1
-      if ! umount ${DEVICE}1 || umount -f ${DEVICE}1 ; then
+      if ! umount ${DEVICE}1 2>/dev/null || umount -f ${DEVICE}1 2>/dev/null ; then
         log ${LINENO} error: "could not unmount ${DEVICE}"
-        killtree -KILL $MYPID
+        killtree -KILL $MYPID yes
         break
       fi
     fi
@@ -209,7 +210,7 @@ process_module_list() {
       echo "${MODULE}" >> $PROCESSED_LIST
     else
       log ${LINENO} "error: module $MODULE $SCRIPT : failed"
-      killtree -KILL $MYPID
+      killtree -KILL $MYPID yes
       break
     fi
 
@@ -235,7 +236,7 @@ main() {
 
   else
     # process specified modules
-    process_module_list $MODULE_LIST  &
+    process_module_list $MODULE_LIST &
 
   fi
 
@@ -249,7 +250,7 @@ main() {
   rm $PROCESSED_LIST
 
   if [ "$MODULES_COUNT" != "$PROCESSED_COUNT" ] ; then
-    log ${LINENO} failed: $PROCESSED_COUNT disks processed $(cat $PROCESSED_LIST)
+    log ${LINENO} failed: $PROCESSED_COUNT disks processed $PROCESSED_COUNT
     exit 1
   fi
 
