@@ -40,15 +40,14 @@
 
 . $(dirname $0)/rawdata-toolbox.sh
 
-assertroot
-
 init() {
+  export MOUNTPOINT=/data
   export HOTSWAP_USING_SYS=yes
   export BASE_IP=192.168.0
   export MASTER_IP=221
   export MODULES_COUNT=9
-  export MUXES=(192.168.0.224 192.168.0.228)
-  export MUX_MAX_INDEX=(4 5)
+  MUXES=(192.168.0.224 192.168.0.228)
+  MUX_MAX_INDEX=(4 5)
   export SPOOL=/var/spool/rawdata-downloader
 
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -77,6 +76,9 @@ init() {
       esac
       shift
   done
+
+  assert_root
+
   mkdir -p $SPOOL || exit 1
 
   debugmode_update
@@ -94,7 +96,26 @@ checkdependencies() {
 }
 
 usage() {
-  echo "$(basename $0) <destination>"
+cat << EOF
+  SYNOPSIS:
+
+    $(basename $0) [OPTION ...]
+  
+  DESCRIPTION: 
+    
+    Source the specified script for every Eyesis4PI module specified
+
+  OPTIONS SUMMARY:
+  
+    -h|--help                   display this
+    -v|--verbose                verbose output
+    -m|--mountpoint <path>      parent location of the 'camera' directory
+    -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+    -i|--masterip <master_ip>   master camera ip, defaults to 221
+    -d|--debug                  debug mode
+    -p|--proc                   hotswap using proc
+
+EOF
   exit $1
 }
 
@@ -351,9 +372,11 @@ connect_q_run() {
 
 SCSIHOST=()
 
-[ -z "$DESTINATION" ] && DESTINATION=$1 && shift
+init "$@"
 
-if [ -z "$DESTINATION" -o "$#" -gt 0 ] ; then
+[ -z "$MOUNTPOINT" ] && MOUNTPOINT=$1 && shift
+
+if [ -z "$MOUNTPOINT" -o "$#" -gt 0 ] ; then
   usage 1
 fi
 
@@ -391,7 +414,7 @@ else
 fi
 
 # set destination folder
-DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
+DEST="$MOUNTPOINT/$(echo $MACADDR | tr 'a-f' 'A-F')"
 
 mkdir -p "$DEST/rawdata-downloader" || exit 1
 export MODULES_FILE="$DEST/rawdata-downloader/modules"

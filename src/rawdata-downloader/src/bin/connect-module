@@ -74,7 +74,7 @@ init() {
 
   while [ $# -gt 0 ] ; do
       case $1 in
-      -h|--help) usage $1 ;;
+      -h|--help) usage 1 ;;
       -v|--verbose) VERBOSE=-v ;;
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;
@@ -137,8 +137,6 @@ init() {
   fi
 
 }
-
-init "$@"
 
 checkdependencies() {
   assertcommands inotifywait arp wget ssh sshall /usr/sbin/scsi-disk-udev-eventhandler
@@ -331,6 +329,8 @@ request_ssd() {
 } # run
 
 ########### main script
+
+init "$@"
 
 SCSIHOST=()
 
