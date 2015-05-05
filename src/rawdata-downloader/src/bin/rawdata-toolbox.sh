@@ -148,14 +148,14 @@ killtree() {
 # send log message to stderr
 log() {
   [ -z "$VERBOSE" ] && return
-  echo $(date +%F_%R) $(basename $0) $BASHPID $@ >&2
+  echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ >&2
 }
 
 # format stdout as log messages
 logstdout() {
   [ -z "$VERBOSE" ] && return
   while read l ; do
-    echo $(date +%F_%R) $(basename $0) $BASHPID $@ $l >&2
+    echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ $l >&2
   done
 }
 
