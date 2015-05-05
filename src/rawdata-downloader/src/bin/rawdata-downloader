@@ -67,7 +67,7 @@ export MASTER_TS=$(process-modules --verbose --mountpoint $MOUNTPOINT get-module
 STATUS=$?
 
 if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
-  log ${LINENO} "error: could not get the master timestamp"
+  log ${LINENO} error: "could not get the master timestamp"
   exit 1
 fi
 
@@ -75,13 +75,13 @@ fi
 export NOCHECKLIST=--no-checklist
 
 # download rawdata from camera modules
-DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module)
+DEST=$(process-modules --all --sequentially --debug --verbose --mountpoint $MOUNTPOINT backup-module)
 
 EXIT_CODE=$?
 
 # Check exit code
 if [ $EXIT_CODE -ne 0 ] ; then
- log ${LINENO} rawdata-download exit code $EXIT_CODE
+ log ${LINENO} error: rawdata-download exit code $EXIT_CODE
  exit $EXIT_CODE
 fi
 

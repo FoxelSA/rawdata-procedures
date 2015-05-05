@@ -49,14 +49,14 @@ mkdir -p $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 
 # disable NCQ
 if [ -n "$DISABLE_NCQ" ] ; then
-  log ${LINENO} disabling NCQ $SERIAL ${DEVICE}$PARTNUM
+  log ${LINENO} info: disabling NCQ $SERIAL ${DEVICE}$PARTNUM
   echo 1 > /sys/block/$(basename $DEVICE)/device/queue_depth
 fi
 
 # if process is exiting, just wait for kill
 [ -n "$QUITTING_TMP" ] &&  while [ "$(cat $QUITTING_TMP)" -eq 1 ] ; do sleep 100000 ; done
 
-log ${LINENO} checking module $MODULE disk integrity
+log ${LINENO} info: checking module $MODULE disk integrity
 
 # check / repair filesystem (-p is safe)
 fsck -p $PARTITION | logstdout ${LINENO}
@@ -79,14 +79,14 @@ fi
 #            128  - Shared-library error
 
 # mount device read-only
-log ${LINENO} mount disk of module $MODULE_INDEX on $PARTITION_MOUNTPOINT
+log ${LINENO} info: mount disk of module $MODULE_INDEX on $PARTITION_MOUNTPOINT
 mount -t $FSTYPE -o ro $PARTITION $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
 if [ ${PIPESTATUS[0]} -ne 0 ] ; then
    log ${LINENO} error: "mount disk failed for module $MODULE_INDEX"
    return 1
 fi
 
-log ${LINENO} search for master timestamp
+log ${LINENO} info: search for master timestamp
 MASTER_TS=$(get_master_timestamp $PARTITION_MOUNTPOINT)
 if [ -z "$MASTER_TS" ] ; then
   log ${LINENO} error: "cannot get master timestamp from $PARTITION_MOUNTPOINT"
@@ -94,4 +94,4 @@ if [ -z "$MASTER_TS" ] ; then
 fi
 
 echo $MASTER_TS
-log ${LINENO} master timestamp is $MASTER_TS
+log ${LINENO} info: master timestamp is $MASTER_TS

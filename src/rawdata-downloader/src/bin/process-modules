@@ -57,7 +57,7 @@ init() {
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line options
-  if ! options=$(getopt -o hm:I:i:vda -l help,mountpoint:,baseip:,masterip:,verbose,debug,all -- "$@")
+  if ! options=$(getopt -o hm:I:i:vdas -l help,mountpoint:,baseip:,masterip:,verbose,debug,all,sequentially -- "$@")
   then
       # something went wrong, getopt will put out an error message for us
       exit 1
@@ -92,14 +92,14 @@ init() {
   # retrieve camera mac address from arp cache
   MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
-    log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+    log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
     exit 1
   fi
 
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
   if ! [ -f "$MODULES_FILE" ] ; then
     log ${LINENO} error: "file not found: $MODULES_FILE"
-    log ${LINENO} "run build-modules-file first or specify the proper mountpoint with -m"
+    log ${LINENO} error: "run build-modules-file first or specify the proper mountpoint with -m"
     exit 1
   fi
 
@@ -117,7 +117,7 @@ init() {
   shift
 
   if [ ! -f "$SCRIPT" ] ; then
-    log ${LINENO} "error: script not found: $SCRIPT"
+    log ${LINENO} error: "script not found: $SCRIPT"
     exit 1
   fi
 
@@ -180,7 +180,7 @@ process_module_list() {
 
   for MODULE in $module_list  ; do
 
-    log ${LINENO} module $MODULE connecting
+    log ${LINENO} info: module $MODULE connecting
 
     # request module to multiplexer and get device path
     DEVICE=$(connect-module $VERBOSE $NOCHECKLIST $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
@@ -190,13 +190,13 @@ process_module_list() {
       break
     fi
 
-    log ${LINENO}  module $MODULE connecting : success
+    log ${LINENO} info: module $MODULE connecting : success
     # dont lose time with camera checklist before requesting next modules
     NOCHECKLIST=--no-checklist
 
     # if already mounted, try to unmount device
     if mount | grep -q ${DEVICE}1 ; then
-      log ${LINENO} unmount ${DEVICE}1
+      log ${LINENO} info: unmount ${DEVICE}1
       if ! umount ${DEVICE}1 2>/dev/null || umount -f ${DEVICE}1 2>/dev/null ; then
         log ${LINENO} error: "could not unmount ${DEVICE}"
         killtree -KILL $MYPID yes
@@ -205,12 +205,12 @@ process_module_list() {
     fi
 
     # run specified script using "source" so that it can access to everything defined here
-    log ${LINENO} "module $MODULE $SCRIPT"
+    log ${LINENO} info: "module $MODULE $SCRIPT"
     if source $SCRIPT ; then
-      log ${LINENO} "module $MODULE $SCRIPT : success"
+      log ${LINENO} info: "module $MODULE $SCRIPT : success"
       echo "${MODULE}" >> $PROCESSED_LIST
     else
-      log ${LINENO} "error: module $MODULE $SCRIPT : failed"
+      log ${LINENO} error: "module $MODULE $SCRIPT : failed"
       killtree -KILL $MYPID yes
       break
     fi
@@ -256,11 +256,11 @@ main() {
   rm $PROCESSED_LIST
 
   if [ "$MODULES_COUNT" != "$PROCESSED_COUNT" ] ; then
-    log ${LINENO} failed: $PROCESSED_COUNT disks processed $PROCESSED_COUNT
+    log ${LINENO} error: failed: $PROCESSED_COUNT disks processed $PROCESSED_COUNT
     exit 1
   fi
 
-  log ${LINENO} success: $PROCESSED_COUNT disks processed
+  log ${LINENO} info: success: $PROCESSED_COUNT disks processed
   exit 0
 
 }
