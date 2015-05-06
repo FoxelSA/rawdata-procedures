@@ -106,7 +106,6 @@ init() {
 
   fi
 
-
   # check modules file exist
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
   if [ ! -f $MODULES_FILE ] ; then
@@ -197,7 +196,7 @@ check_module_address() {
 # wait udev generated file in spool folder for requested module device  before exiting
 wait_and_exit() {
 
-  log ${LINENO} error: "<= wait_and_exit"
+  log ${LINENO} info: "waiting for udev generated file in $SPOOL"
 
   # use FIFO instead of PIPE, to exit loop smoothly and avoid messing with environment variables
   local FIFO=$(mktemp -u).$$
@@ -365,12 +364,6 @@ if [ -z "$NO_CHECKLIST" ] ; then
     sleep $((180-CAMERA_UPTIME))
   fi
 
-  # clear scsi hosts cache if modification time older than camera uptime
-  if [ -f $SCSIHOST_TMP ] ; then
-    if [ $CAMERA_UPTIME -lt $(modtime $SCSIHOST_TMP) ] ; then
-      echo -n > $SCSIHOST_TMP
-    fi
-  fi
 fi
 
 touch $SCSIHOST_TMP

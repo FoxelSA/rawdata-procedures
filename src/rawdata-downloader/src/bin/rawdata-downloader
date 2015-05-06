@@ -74,10 +74,30 @@ fi
 # after getting master timestamp from module 1, no need to check camera uptime anymore
 export NOCHECKLIST=--no-checklist
 
+# create log file
+LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
+RAWDATA_DOWNLOADER_LOG=/var/log/rawdata-downloader_${LOG_DATE}.log
+touch $RAWDATA_DOWNLOADER_LOG || exit
+
+# display log file
+tail -f $RAWDATA_DOWNLOADER_LOG >&2 &
+LOGTAIL_PID=$!
+
+# save kern.log
+KERNEL_LOG=/var/log/rawdata-downloader_${LOG_DATE}.kern.log
+tail -f /var/log/kern.log > $KERNEL_LOG &
+LOGTAIL2_PID=$!
+
 # download rawdata from camera modules
-DEST=$(process-modules --all --sequentially --debug --verbose --mountpoint $MOUNTPOINT backup-module)
+DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module 2> $RAWDATA_DOWNLOADER_LOG)
 
 EXIT_CODE=$?
+
+# stop kernel log backup
+kill $LOGTAIL2_PID > /dev/null 2>&1
+
+# stop log display
+kill $LOGTAIL_PID > /dev/null 2>&1
 
 # Check exit code
 if [ $EXIT_CODE -ne 0 ] ; then

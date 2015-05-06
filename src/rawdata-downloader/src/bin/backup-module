@@ -113,7 +113,13 @@ rsync \
 
 EXIT_CODE=${PIPESTATUS[0]}
 
-echo DEST=$DESTINATION/$MASTER_TS
+# unmount device
+log ${LINENO} info: unmounting $PARTITION_MOUNTPOINT
+umount $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
+if [ ${PIPESTATUS[0]} -ne 0 ] ; then
+   log ${LINENO} warning: unmounting $PARTITION_MOUNTPOINT failed
+fi
+
+echo $DESTINATION/$MASTER_TS
 
 return  ${PIPESTATUS[0]}
-

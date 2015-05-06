@@ -149,7 +149,7 @@ killtree() {
 log() {
   # only if $2 begins with "error" or in VERBOSE mode
   shopt -s nocasematch
-  [ -n "$VERBOSE" -o "$2" =~ "^error" ] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ >&2
+  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ >&2
   shopt -u nocasematch
 }
 
@@ -157,7 +157,7 @@ log() {
 logstdout() {
   shopt -s nocasematch
   while read l ; do
-    [ -n "$VERBOSE" -o "$2" =~ "^error" ] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ $l >&2
+    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ $l >&2
   done
   shopt -u nocasematch
 }
@@ -248,7 +248,7 @@ get_camera_uptime() {
   ssh root@$BASE_IP.$MASTER_IP cat /proc/uptime | cut -f 1 -d '.'
 }
 
-# sleep until camera uptime is greater than 120sec
+# sleep until camera uptime is greater than 180sec
 wait_until_camera_awake() {
 
   log ${LINENO} info: get camera uptime
@@ -258,9 +258,9 @@ wait_until_camera_awake() {
     exit 1
   fi
 
-  if [ $CAMERA_UPTIME -lt 120 ] ; then
-    log ${LINENO} info: "wait $((120-CAMERA_UPTIME)) seconds for camera wake up"
-    sleep $((120-CAMERA_UPTIME))
+  if [ $CAMERA_UPTIME -lt 180 ] ; then
+    log ${LINENO} info: "wait $((180-CAMERA_UPTIME)) seconds for camera wake up"
+    sleep $((180-CAMERA_UPTIME))
   fi
 }
 
