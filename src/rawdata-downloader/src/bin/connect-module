@@ -197,7 +197,7 @@ check_module_address() {
 # wait udev generated file in spool folder for requested module device  before exiting
 wait_and_exit() {
 
-  log ${LINENO} info: "waiting for udev generated file in $SPOOL"
+  log ${LINENO} debug: "waiting for udev generated file in $SPOOL"
 
   # use FIFO instead of PIPE, to exit loop smoothly and avoid messing with environment variables
   local FIFO=$(mktemp -u).$$
@@ -226,9 +226,9 @@ wait_and_exit() {
     ISRETRY=${DISK_CONNECTING_INFO[2]}
     DEVICE=$(grep DEVNAME "$UDEVINFO" | cut -f 2 -d '=')
 
-    log ${LINENO} info: device_connected $_MUX_INDEX $_REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
+    log ${LINENO} debug: device_connected $_MUX_INDEX $_REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
 
-    log ${LINENO} info: unpause connect queue         
+    log ${LINENO} debug: unpause connect queue         
     touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting || killtree -KILL $MYPID                                   
 
     [ "$_MUX_INDEX" != "$MUX_INDEX" ] && continue
@@ -284,7 +284,7 @@ request_ssd() {
     REMOTE_SSD_INDEX=$REMOTE_SSD_INDEX
     ISRETRY=
 
-    log ${LINENO} info: going to request mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
+    log ${LINENO} debug: going to request mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
 
     while true ; do
 
@@ -300,12 +300,12 @@ request_ssd() {
       echo $MUX_INDEX $REMOTE_SSD_INDEX $ISRETRY > $DISK_CONNECTING_TMP
 
       # request disk connection
-      log ${LINENO} info: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
-      log ${LINENO} info: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
+      log ${LINENO} debug: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
+      log ${LINENO} debug: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
       wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
       # wait for inotifywait and timeout setup above
-      log ${LINENO} info: waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
+      log ${LINENO} debug: waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
       wait $TIMEOUTPID 2> /dev/null
       timeout_status=$?
 
@@ -409,7 +409,7 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
   get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
     msg=($l)
     if [ ${msg[0]} != "sshall:" ] ; then
-      log ${LINENO} info: get_remote_disk_serial: $l
+      log ${LINENO} debug: get_remote_disk_serial: $l
       continue
     fi
     [ ${msg[2]} = "stderr" ] && log ${LINENO} error: get_remote_disk_serial: $l
