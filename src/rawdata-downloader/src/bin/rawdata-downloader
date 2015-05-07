@@ -46,6 +46,9 @@ _GID=1000
 
 SCRIPT=$(basename $0)
 
+LOGDIR=/var/log/rawdata-downloader
+mkdir -p $LOGDIR || exit
+
 log() {
   echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ >&2
 }
@@ -57,15 +60,31 @@ logstdout() {
   done
 }
 
+kill_old_job() {
+
+  local JOBNAME="$1"
+  local PIDFILE="$2"
+
+  # read PIDFILE
+  [ -s "$PIDFILE" ] && local OLDPID=$(cat $PIDFILE)
+
+  # kill running process with this id if job name matches $JOBNAME
+  if [ -n "$OLDPID" ] && [ -f /proc/$OLDPID/status ] && [ "$(grep Name /proc/$OLDPID/status 2>/dev/null | cut -f 2)" == "$JOBNAME" ] ; then
+    echo "killing old $JOBNAME process with PID $OLDPID"
+    kill $OLDPID
+  fi
+
+}
+
 export MOUNTPOINT=$1
 
 [ -z "$MOUNTPOINT" ] && exit 1
 
 # get the master timestamp from module 1
 export MASTER_TS=$(process-modules --verbose --mountpoint $MOUNTPOINT get-module-master_timestamp 1)
-# or die
-STATUS=$?
 
+# ... or die
+STATUS=$?
 if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
   log ${LINENO} error: "could not get the master timestamp"
   exit 1
@@ -76,17 +95,34 @@ export NOCHECKLIST=--no-checklist
 
 # create log file
 LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
-RAWDATA_DOWNLOADER_LOG=/var/log/rawdata-downloader_${LOG_DATE}.log
+RAWDATA_DOWNLOADER_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.log
 touch $RAWDATA_DOWNLOADER_LOG || exit
 
-# display log file
+# display rawdata-downloader log file on console
 tail -f $RAWDATA_DOWNLOADER_LOG >&2 &
 LOGTAIL_PID=$!
 
-# save kern.log
-KERNEL_LOG=/var/log/rawdata-downloader_${LOG_DATE}.kern.log
+# get rid of "terminated" message on kill
+disown $LOGTAIL_PID
+
+# kill old tail process used to display log on console, if any
+LOGTAIL_PIDFILE=/var/run/rawdata-downloader_logger.pid
+kill_old_job tail $LOGTAIL_PIDFILE
+echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
+
+# save /var/log/kern.log
+KERNEL_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.kern.log
+touch $RAWDATA_KERNEL_LOG || exit
 tail -f /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
+
+# get rid of "terminated" message on kill
+disown $LOGTAIL2_PID
+
+# kill old tail process used to copy kern.log, if any
+LOGTAIL2_PIDFILE=/var/run/rawdata-downloader_logger.kern.pid
+kill_old_job tail $LOGTAIL2_PIDFILE
+echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
 # download rawdata from camera modules
 DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module 2> $RAWDATA_DOWNLOADER_LOG)

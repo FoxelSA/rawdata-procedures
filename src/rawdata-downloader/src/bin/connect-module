@@ -364,6 +364,10 @@ if [ -z "$NO_CHECKLIST" ] ; then
     sleep $((180-CAMERA_UPTIME))
   fi
 
+  log ${LINENO} info: check camera ssh access
+  build_sshall_login_list
+  assert_remote_ssh_servers_functional
+
 fi
 
 touch $SCSIHOST_TMP

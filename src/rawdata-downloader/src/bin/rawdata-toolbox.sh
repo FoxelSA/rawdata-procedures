@@ -265,7 +265,8 @@ wait_until_camera_awake() {
 }
 
 # check whether the camera ssh server is functional for SSHALL_HOSTS
-check_remote_ssh_servers() {
+# or die
+assert_remote_ssh_servers_functional() {
 
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO
