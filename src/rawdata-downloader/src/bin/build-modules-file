@@ -40,15 +40,14 @@
 
 . $(dirname $0)/rawdata-toolbox.sh
 
-assertroot
-
 init() {
+  export MOUNTPOINT=/data
   export HOTSWAP_USING_SYS=yes
   export BASE_IP=192.168.0
   export MASTER_IP=221
   export MODULES_COUNT=9
-  export MUXES=(192.168.0.224 192.168.0.228)
-  export MUX_MAX_INDEX=(4 5)
+  MUXES=(192.168.0.224 192.168.0.228)
+  MUX_MAX_INDEX=(4 5)
   export SPOOL=/var/spool/rawdata-downloader
 
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -77,6 +76,9 @@ init() {
       esac
       shift
   done
+
+  assert_root
+
   mkdir -p $SPOOL || exit 1
 
   debugmode_update
@@ -94,7 +96,26 @@ checkdependencies() {
 }
 
 usage() {
-  echo "$(basename $0) <destination>"
+cat << EOF
+  SYNOPSIS:
+
+    $(basename $0) [OPTION ...]
+  
+  DESCRIPTION: 
+    
+    Source the specified script for every Eyesis4PI module specified
+
+  OPTIONS SUMMARY:
+  
+    -h|--help                   display this
+    -v|--verbose                verbose output
+    -m|--mountpoint <path>      parent location of the 'camera' directory
+    -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+    -i|--masterip <master_ip>   master camera ip, defaults to 221
+    -d|--debug                  debug mode
+    -p|--proc                   hotswap using proc
+
+EOF
   exit $1
 }
 
@@ -125,7 +146,7 @@ check_module_address() {
 # wait udev generated files in spool folder, then validate and save module address
 wait_and_register() {
 
-  log ${LINENO} "<= wait_and_register"
+  log ${LINENO} info: wait_and_register
 
   local FIFO=$(mktmp -u).$$
   mkfifo $FIFO
@@ -135,7 +156,7 @@ wait_and_register() {
   local l
   while read l ; do
 
-    log ${LINENO} INOTIFY $SPOOL $l
+    log ${LINENO} debug: INOTIFY $SPOOL $l
 
     local event=($l)
 
@@ -159,7 +180,7 @@ wait_and_register() {
     local ISRETRY=${DISK_CONNECTING_INFO[2]}
     local DEVICE=$(grep DEVNAME "$UDEVINFO" | cut -f 2 -d '=')
 
-    log ${LINENO} device_connected $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SSD_SERIAL $DEVICE
+    log ${LINENO} info: device_connected $MUX_INDEX $REMOTE_SSD_INDEX $SCSIHOST $SSD_SERIAL $DEVICE
 
     # assert previously saved module address match the connecting disk
     check_module_address $MUX_INDEX $REMOTE_SSD_INDEX $SSD_SERIAL 2>&1 | logstdout ${LINENO}
@@ -177,7 +198,7 @@ wait_and_register() {
     # if disk is already connected, ignore
     [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connected ] && continue
 
-    log ${LINENO} unpause connect queue
+    log ${LINENO} info: unpause connect queue
     touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting || killtree -KILL $MYPID
 
     # set already connected flag
@@ -202,12 +223,12 @@ enqueue_next_ssd() {
 
   # quit if already processed - should not happend
   if [ -f $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_processed ] ; then
-    log ${LINENO} already processed
+    log ${LINENO} error: already processed
     killtree -KILL $MYPID
   fi
 
   # sync filesystems
-  log ${LINENO} syncing
+  log ${LINENO} info: syncing
   sync
 
   remove_scsi_device
@@ -224,11 +245,11 @@ enqueue_next_ssd() {
 
   # show progression
   local SSD_SERIAL_DONE_COUNT=$(sort -u $SSD_SERIAL_DONE_TMP | wc -l)
-  log ${LINENO} registration_done_count $SSD_SERIAL_DONE_COUNT
+  log ${LINENO} info: registration_done_count $SSD_SERIAL_DONE_COUNT
 
   # enqueue this mux's next ssd for backup (ignore this step for retries)
   if [ "$ISRETRY" = "" -a $REMOTE_SSD_INDEX -lt ${MUX_MAX_INDEX[$MUX_INDEX]} ] ; then
-    log ${LINENO} enqueue mux $MUX_INDEX ssd $((REMOTE_SSD_INDEX+1))
+    log ${LINENO} debug: enqueue mux $MUX_INDEX ssd $((REMOTE_SSD_INDEX+1))
     echo $MUX_INDEX $((REMOTE_SSD_INDEX+1)) >> $CONNECT_Q_TMP
 
   else
@@ -237,7 +258,7 @@ enqueue_next_ssd() {
       MUX_DONE=$(cat $MUX_DONE_TMP)
       echo $((++MUX_DONE)) > $MUX_DONE_TMP
     fi
-    log ${LINENO} mux_done_count $MUX_DONE
+    log ${LINENO} info: mux_done_count $MUX_DONE
 
   fi
 
@@ -245,13 +266,13 @@ enqueue_next_ssd() {
   if [ "$MUX_DONE" = "${#MUXES[@]}" ] ; then
 
     if [ $(sort -u $SSD_SERIAL_DONE_TMP | wc -l) -eq $MODULES_COUNT ] ; then
-      log "${LINENO} SUCCESS - all modules processed successfuly"
-      log ${LINENO} exit_status 0
+      log ${LINENO} info: "SUCCESS - all modules processed successfuly"
+      log ${LINENO} info: exit_status 0
       echo 0 > $EXIT_CODE_TMP
 
     else
-      log "${LINENO} FAILURE - some modules could not be processed"
-      log ${LINENO} exit_status 1
+      log ${LINENO} error: "FAILURE - some modules could not be processed"
+      log ${LINENO} error: exit_status 1
       echo 1 > $EXIT_CODE_TMP
 
     fi
@@ -270,7 +291,7 @@ is_any_ssd_left_in_queue_for_mux() {
 # switch esata connections sequentially reading from $CONNECT_Q_TMP
 connect_q_run() {
 
-  log ${LINENO} "<= connect_q_run"
+  log ${LINENO} info: "connect_q_run"
 
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO
@@ -295,7 +316,7 @@ connect_q_run() {
       continue
     fi
 
-    log ${LINENO} connect_q_run processing mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
+    log ${LINENO} debug: connect_q_run processing mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
 
     while true ; do
 
@@ -311,19 +332,19 @@ connect_q_run() {
       echo $MUX_INDEX $REMOTE_SSD_INDEX $ISRETRY > $DISK_CONNECTING_TMP
 
       # request disk connection
-      log ${LINENO} requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
-      log ${LINENO} wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
+      log ${LINENO} info: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
+      log ${LINENO} debug: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
       wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
       sleep 10
       add_scsi_device
 
       # wait for inotifywait and timeout setup above
-      log ${LINENO} waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
+      log ${LINENO} info: waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
       wait $TIMEOUTPID
       timeout_status=$?
 
-      log ${LINENO} timeout status $timeout_status wating for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
+      log ${LINENO} debug: timeout status $timeout_status wating for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
 
       rm $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting
 
@@ -334,7 +355,7 @@ connect_q_run() {
       [ -n "$ISRETRY" ] && killtree -KILL $MYPID
 
       # re-enqueue this mux/ssd pair for later
-      log ${LINENO} requeue mux $MUX_INDEX index $REMOTE_SSD_INDEX single
+      log ${LINENO} debug: requeue mux $MUX_INDEX index $REMOTE_SSD_INDEX single
       echo $MUX_INDEX $REMOTE_SSD_INDEX isretry >> $CONNECT_Q_TMP
 
       # ask next ssd index for this mux
@@ -351,9 +372,11 @@ connect_q_run() {
 
 SCSIHOST=()
 
-[ -z "$DESTINATION" ] && DESTINATION=$1 && shift
+init "$@"
 
-if [ -z "$DESTINATION" -o "$#" -gt 0 ] ; then
+[ -z "$MOUNTPOINT" ] && MOUNTPOINT=$1 && shift
+
+if [ -z "$MOUNTPOINT" -o "$#" -gt 0 ] ; then
   usage 1
 fi
 
@@ -391,23 +414,23 @@ else
 fi
 
 # set destination folder
-DEST="$DESTINATION/$(echo $MACADDR | tr 'a-f' 'A-F')"
+DEST="$MOUNTPOINT/$(echo $MACADDR | tr 'a-f' 'A-F')"
 
 mkdir -p "$DEST/rawdata-downloader" || exit 1
 export MODULES_FILE="$DEST/rawdata-downloader/modules"
 
-build_sshall_login_list $MODULES_COUNT
+export SSHALL_HOSTS=$(build_sshall_login_list)
 
 get_camera_ssd_serials
 
-log ${LINENO} got ${#SSD_SERIAL[@]} SSD serials
+log ${LINENO} info: got ${#SSD_SERIAL[@]} SSD serials
 
 [ ${#SSD_SERIAL[@]} -ne $MODULES_COUNT ] && exit 1
 
 rm $SSD_SERIAL_TMP
 
 # unmount camera ssd
-log ${LINENO} umount CF
+log ${LINENO} info: umount CF
 umount_all 2>&1 | logstdout ${LINENO}
 
 # wait for disks and register modules in background
@@ -416,7 +439,7 @@ wait_and_register &
 connect_queue_init
 
 # run queue in background
-log ${LINENO} starting queue processing
+log ${LINENO} info: starting queue processing
 connect_q_run &
 
 # wait background jobs termination
@@ -426,7 +449,7 @@ wait
 trap '' SIGINT
 
 # reset multiplexers
-log ${LINENO} resetting multiplexers
+log ${LINENO} info: resetting multiplexers
 reset_eyesis_ide
 
 restore_scsi_devices
@@ -438,6 +461,6 @@ EXIT_CODE=$(cat $EXIT_CODE_TMP)
 # remove temporary files
 rm $TMP -r 2> /dev/null
 
-log ${LINENO} exit $EXIT_CODE
+log ${LINENO} info: exit $EXIT_CODE
 exit $EXIT_CODE
 

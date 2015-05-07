@@ -82,15 +82,13 @@ init() {
   TMP=/tmp/$(basename $0)/$$
   mkdir -p $TMP || exit
 
-  LOGFILE=/tmp/$(basename $0)/$$.log
-
 }
 
 # return camera MAC address using BASE_IP and MASTER_IP
 get_camera_macaddr() {
   MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
-    log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+    log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
     exit 1
   fi
 }
@@ -147,16 +145,19 @@ killtree() {
 
 # send log message to stderr
 log() {
-  [ -z "$VERBOSE" ] && return
-  echo $(date +%F_%R) $(basename $0) $BASHPID $@ >&2
+  # only if $2 begins with "error" or in VERBOSE mode
+  shopt -s nocasematch
+  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ >&2
+  shopt -u nocasematch
 }
 
 # format stdout as log messages
 logstdout() {
-  [ -z "$VERBOSE" ] && return
+  shopt -s nocasematch
   while read l ; do
-    echo $(date +%F_%R) $(basename $0) $BASHPID $@ $l >&2
+    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ $l >&2
   done
+  shopt -u nocasematch
 }
 
 # return multiplexer index for given module
@@ -169,11 +170,11 @@ get_mux_index() {
 remove_scsi_device() {
   [ -n "$REMOVE_SCSI_DEVICE" ] || return
   if [ -n "$HOTSWAP_USING_SYS" ] ; then
-    log ${LINENO} set device $DEVICE  offline and delete it
+    log ${LINENO} info: set device $DEVICE  offline and delete it
     echo offline | tee /sys/block/$(basename $DEVICE)/device/state 2>&1 | logstdout ${LINENO}
     echo 1 | tee /sys/block/$(basename $DEVICE)/device/delete 2>&1 | logstdout ${LINENO}
   else
-    log ${LINENO} removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
+    log ${LINENO} info: removing device mux $MUX_INDEX index $REMOTE_SSD_INDEX
     echo "scsi remove-single-device $SCSIHOST" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
   fi
   echo $SCSIHOST >> $REMOVED_SCSI_TMP
@@ -184,7 +185,7 @@ add_scsi_device() {
   [ -n "$REMOVE_SCSI_DEVICE" ] || return
   hbtl=$(get_scsihost $MUX_INDEX)
   if [ -n "$hbtl" ] ; then
-    log ${LINENO} "adding scsi device using values from cache"
+    log ${LINENO} info: "adding scsi device using values from cache"
     if [ -n "$HOTSWAP_USING_SYS" ] ; then
       hbtl=($hbtl)
       echo "${hbtl[1]} ${hbtl[2]} ${hbtl[3]}" | tee /sys/class/scsi_host/host${hbtl[0]}/scan 2>&1 | logstdout ${LINENO}
@@ -199,7 +200,7 @@ restore_scsi_devices() {
   local htbl
   if [ -z "$HOTSWAP_USING_SYS" ] ; then
     sort -u $REMOVED_SCSI_TMP | while read hbtl ; do
-      log ${LINENO} "adding previously removed scsi devices"
+      log ${LINENO} info: "adding previously removed scsi devices"
       echo "scsi add-single-device $hbtl" | tee /proc/scsi/scsi 2>&1 | logstdout ${LINENO}
       sed -r -i -e "/^$hbtl\$/d" $REMOVED_SCSI_TMP
     done
@@ -226,17 +227,17 @@ assertcommands() {
 # exit if modules file not found
 assert_modulesfile() {
   if [ ! -f $MODULES_FILE ] ; then
-    log ${LINENO} error file not found: $MODULES_FILE
-    log ${LINENO} "=> run 'build-modules-file -m <mount_point>' first"
+    log ${LINENO} error: file not found: $MODULES_FILE
+    log ${LINENO} error: "=> run 'build-modules-file -m <mount_point>' first"
     exit 1
   fi
 }
 
 # reset multiplexers
 reset_eyesis_ide() {
-  log ${LINENO} reset eyesis_ide
+  log ${LINENO} info: reset eyesis_ide
   for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
-    log ${LINENO} wget http://${MUXES[$i]}/eyesis_ide.php
+    log ${LINENO} info: wget http://${MUXES[$i]}/eyesis_ide.php
     wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null || exit 1
   done
 }
@@ -245,20 +246,72 @@ get_camera_uptime() {
   ssh root@$BASE_IP.$MASTER_IP cat /proc/uptime | cut -f 1 -d '.'
 }
 
-# sleep until camera uptime is greater than 120sec
+# sleep until camera uptime is greater than 180sec
 wait_until_camera_awake() {
 
-  log ${LINENO} get camera uptime
+  log ${LINENO} info: get camera uptime
   CAMERA_UPTIME=$(get_camera_uptime)
   if [ -z "$CAMERA_UPTIME" ] ; then
-    log ${LINENO} cannot get camera uptime
+    log ${LINENO} error: cannot get camera uptime
     exit 1
   fi
 
-  if [ $CAMERA_UPTIME -lt 120 ] ; then
-    log ${LINENO} wait $((120-CAMERA_UPTIME)) seconds for camera wake up
-    sleep $((120-CAMERA_UPTIME))
+  if [ $CAMERA_UPTIME -lt 180 ] ; then
+    log ${LINENO} info: "wait $((180-CAMERA_UPTIME)) seconds for camera wake up"
+    sleep $((180-CAMERA_UPTIME))
   fi
+}
+
+build_sshall_login_list() {
+  for (( i=0 ; $i < $MODULES_COUNT ; ++i )) ; do
+    echo -n " root@$BASE_IP.$((MASTER_IP + i))"
+  done
+  set +x
+}
+
+# delay script execution or exit if another instance is running yet
+# check whether the camera ssh server is functional for SSHALL_HOSTS
+# or die
+assert_remote_ssh_servers_functional() {
+
+  local FIFO=$(mktemp -u).$$
+  mkfifo $FIFO
+  HOSTS=$(build_sshall_login_list) sshall true > $FIFO 2>&1 &
+  local count=0
+
+  while read l ; do
+    msg=($l)
+    if [ ${msg[0]} != "sshall:" ] ; then
+      log ${LINENO} debug: check_remote_ssh_servers: $l
+      continue
+    fi
+    [ ${msg[2]} = "stderr" ] && log ${LINENO} info: check_remote_ssh_servers: $l
+    LOGIN=${msg[1]}
+    [ -z "$LOGIN" ] && log ${LINENO} error: check_remote_ssh_servers: $l && killtree -KILL $MYPID
+    WHAT=${msg[2]}
+    case "$WHAT" in
+    status)
+      STATUS=${msg[3]}
+      if [ "$STATUS" != "0" ] ; then
+        log ${LINENO} error: "$l"
+        log ${LINENO} error: "ssh failed for camera $IP with exit code $STATUS"
+        killtree -KILL $MYPID yes
+      else
+        ((++count))
+      fi
+      ;;
+    esac
+  done < $FIFO
+
+  if [ "$count" == "$MODULES_COUNT" ] ; then
+    log ${LINENO} info: "remote ssh server functional on every modules"
+  else
+    log ${LINENO} error: "assert_remote_ssh_servers_functional failed"
+    log ${LINENO} error: "check network cables or reboot the camera"
+    killtree -KILL $MYPID yes
+  fi
+
+  rm $FIFO
 }
 
 # run hdparm on SSHALL_HOSTS (using sshall) for specified device
@@ -270,7 +323,7 @@ get_remote_disk_serial() {
 # fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable
 get_camera_ssd_serials() {
   # get camera ssd serials
-  log ${LINENO} get ssd serials
+  log ${LINENO} info: get ssd serials
 
   STATUS=()
   SSD_SERIAL=()
@@ -290,16 +343,16 @@ get_camera_ssd_serials() {
   while read l ; do
     msg=($l)
     [ ${msg[0]} = "sshall:" ] || continue
-    [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
+    [ ${msg[2]} = "stderr" ] && log ${LINENO} info: get_remote_disk_serial: $l
     LOGIN=${msg[1]}
-    [ -z "$LOGIN" ] && log ${LINENO} get_remote_disk_serial: $l && killtree -KILL $MYPID
+    [ -z "$LOGIN" ] && log ${LINENO} error: get_remote_disk_serial: $l && killtree -KILL $MYPID
     IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
     INDEX=$(expr $IP - $MASTER_IP)
     WHAT=${msg[2]}
     case "$WHAT" in
     status)
       STATUS[$INDEX]=${msg[3]}
-      [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} get_remote_serial: $IP && killtree -KILL $MYPID
+      [ "${STATUS[$INDEX]}" != "0" ] && log ${LINENO} error: get_remote_serial: $IP && killtree -KILL $MYPID
       ;;
     stdout)
       SERIAL=${msg[3]}
@@ -420,14 +473,6 @@ wait_regexp() {
   rm $TMP_INPUT $FIFO
 }
 
-build_sshall_login_list() {
-  local MODULES_COUNT=$1
-  for (( i=0 ; $i < $MODULES_COUNT ; ++i )) ; do
-    SSHALL_HOSTS="$SSHALL_HOSTS "root@$BASE_IP.$((MASTER_IP + i))
-  done
-}
-
-# delay script execution or exit if another instance is running yet
 no_concurrency() {
 
   local ACTION=$1
@@ -463,16 +508,21 @@ get_master_timestamp() {
 
   local DESTINATION=$MOUNTPOINT/rawdata/$MACADDR/master
   if [ -z "$DESTINATION" ] ; then
-    log ${LINENO} "Destination not specified"
+    log ${LINENO} error: "Destination not specified"
     exit 1
   fi
-  log ${LINENO} get the oldest MOV file on $PARTITION_MOUNTPOINT
+  log ${LINENO} info: get the oldest MOV file on $PARTITION_MOUNTPOINT
   CAM_OLDEST_MOV=$(basename `find $PARTITION_MOUNTPOINT/ -iname '*.mov' | sort | head -n1` 2>/dev/null)
 
-  log ${LINENO} extract the master timestamp
+  if [ -z "$CAM_OLDEST_MOV" ] ; then
+    log ${LINENO} error: no MOV file found on $PARTITION_MOUNTPOINT
+    killtree -TERM $MYPID yes
+  fi
+
+  log ${LINENO} info: extract the master timestamp from file $CAM_OLDEST_MOV
   MASTER_TS=${CAM_OLDEST_MOV%%_*}
 
-  log ${LINENO} get the most recent master timestamp directory on $DESTINATION
+  log ${LINENO} info: get the most recent master timestamp directory on $DESTINATION
   DEST_NEWEST_TS=$(basename `find $DESTINATION/ -maxdepth 1 -type d | grep -E -e '^[0-9]+$' | sort | tail -n1` 2>/dev/null)
 
   # If MOVs older than CAM_OLDEST_MOV were deleted manually on the camera,
@@ -480,11 +530,11 @@ get_master_timestamp() {
   # In that case, reuse this directory. (This should not happend if the camera
   # has been reformatted properly according to the standard procedure)
   if [ -f "$DESTINATION/$DEST_NEWEST_TS/mov/$MODULE_INDEX/$CAM_OLDEST_MOV" ]; then
-      log ${LINENO} "Reusing existing master $DEST_NEWEST_TS"
+      log ${LINENO} info: "Reusing existing master $DEST_NEWEST_TS"
       MASTER_TS=$DEST_NEWEST_TS
 
   else
-      log ${LINENO} "Allocating new master $MASTER_TS"
+      log ${LINENO} info: "Allocating new master $MASTER_TS"
   fi
 
   echo "$MASTER_TS"

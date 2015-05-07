@@ -59,6 +59,7 @@ init() {
   MASTER_IP=221
   MUXES=(192.168.0.224 192.168.0.228)
   SPOOL=/var/spool/rawdata-downloader
+  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -74,7 +75,7 @@ init() {
 
   while [ $# -gt 0 ] ; do
       case $1 in
-      -h|--help) usage $1 ;;
+      -h|--help) usage 1 ;;
       -v|--verbose) VERBOSE=-v ;;
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;
@@ -93,25 +94,24 @@ init() {
 
     # get camera master ip mac address
     if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
-      log ${LINENO} unable to ping $BASE_IP.$MASTER_IP
+      log ${LINENO} error: unable to ping $BASE_IP.$MASTER_IP
       exit 1
     fi
 
     MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
 
     if [ -z "$MACADDR" ] ; then
-      log ${LINENO} "unable to get MAC address for $BASE_IP.$MASTER_IP"
+      log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
       exit 1
     fi
 
   fi
 
-
   # check modules file exist
   MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
   if [ ! -f $MODULES_FILE ] ; then
-    log ${LINENO} error file not found: $MODULES_FILE
-    log ${LINENO} "specify the proper mount point with -m or run 'build-modules-file $MOUNTPOINT' first"
+    log ${LINENO} error: file not found: $MODULES_FILE
+    log ${LINENO} error: "specify the proper mount point with -m or run 'build-modules-file $MOUNTPOINT' first"
     exit 1
   fi
 
@@ -137,8 +137,6 @@ init() {
   fi
 
 }
-
-init "$@"
 
 checkdependencies() {
   assertcommands inotifywait arp wget ssh sshall /usr/sbin/scsi-disk-udev-eventhandler
@@ -199,7 +197,7 @@ check_module_address() {
 # wait udev generated file in spool folder for requested module device  before exiting
 wait_and_exit() {
 
-  log ${LINENO} "<= wait_and_exit"
+  log ${LINENO} debug: "waiting for udev generated file in $SPOOL"
 
   # use FIFO instead of PIPE, to exit loop smoothly and avoid messing with environment variables
   local FIFO=$(mktemp -u).$$
@@ -208,7 +206,7 @@ wait_and_exit() {
   local INOTIFY_PID=$!
  
   while read l ; do
-    log ${LINENO} $SPOOL INOTIFY $l
+    log ${LINENO} debug: $SPOOL INOTIFY $l
 
     # second string returned by inotifywait is filename (disk serial)
     event=($l)
@@ -228,9 +226,9 @@ wait_and_exit() {
     ISRETRY=${DISK_CONNECTING_INFO[2]}
     DEVICE=$(grep DEVNAME "$UDEVINFO" | cut -f 2 -d '=')
 
-    log ${LINENO} device_connected $_MUX_INDEX $_REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
+    log ${LINENO} debug: device_connected $_MUX_INDEX $_REMOTE_SSD_INDEX $SCSIHOST $SERIAL $DEVICE
 
-    log ${LINENO} unpause connect queue         
+    log ${LINENO} debug: unpause connect queue         
     touch $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting || killtree -KILL $MYPID                                   
 
     [ "$_MUX_INDEX" != "$MUX_INDEX" ] && continue
@@ -238,7 +236,7 @@ wait_and_exit() {
 
     # assert previously saved module address match the connecting disk
     if ! check_module_address $_MUX_INDEX $_REMOTE_SSD_INDEX $SERIAL 2>&1 | logstdout ${LINENO} ; then
-      log ${LINENO} invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
+      log ${LINENO} error: invalid_address "saved serial for mux $MUX_INDEX ssd $REMOTE_SSD_INDEX is not matching  $SERIAL"
 
     else
       # success
@@ -286,7 +284,7 @@ request_ssd() {
     REMOTE_SSD_INDEX=$REMOTE_SSD_INDEX
     ISRETRY=
 
-    log ${LINENO} going to request mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
+    log ${LINENO} debug: going to request mux $MUX_INDEX ssd $REMOTE_SSD_INDEX
 
     while true ; do
 
@@ -302,16 +300,16 @@ request_ssd() {
       echo $MUX_INDEX $REMOTE_SSD_INDEX $ISRETRY > $DISK_CONNECTING_TMP
 
       # request disk connection
-      log ${LINENO} requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
-      log ${LINENO} wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
+      log ${LINENO} debug: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
+      log ${LINENO} debug: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
       wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
       # wait for inotifywait and timeout setup above
-      log ${LINENO} waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
+      log ${LINENO} debug: waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
       wait $TIMEOUTPID 2> /dev/null
       timeout_status=$?
 
-      log ${LINENO} timeout "status $timeout_status wating for mux $MUX_INDEX disk $REMOTE_SSD_INDEX"
+      log ${LINENO} debug: timeout "status $timeout_status wating for mux $MUX_INDEX disk $REMOTE_SSD_INDEX"
 
       rm $TMP/${MUX_INDEX}_${REMOTE_SSD_INDEX}_connecting
 
@@ -331,6 +329,8 @@ request_ssd() {
 } # run
 
 ########### main script
+
+init "$@"
 
 SCSIHOST=()
 
@@ -353,24 +353,21 @@ SCSIHOST_TMP=$TMP/../scsihosts
 
 if [ -z "$NO_CHECKLIST" ] ; then
 
-  log ${LINENO} get camera uptime
+  log ${LINENO} info: get camera uptime
   CAMERA_UPTIME=$(get_camera_uptime)
   if [ -z "$CAMERA_UPTIME" ] ; then
-    log ${LINENO} cannot get camera uptime
+    log ${LINENO} error: cannot get camera uptime
     exit 1
   fi
 
-  if [ $CAMERA_UPTIME -lt 120 ] ; then
-    log ${LINENO} wait $((120-CAMERA_UPTIME)) seconds for camera wake up
-    sleep $((120-CAMERA_UPTIME))
+  if [ $CAMERA_UPTIME -lt 180 ] ; then
+    log ${LINENO} info: wait $((180-CAMERA_UPTIME)) seconds for camera wake up
+    sleep $((180-CAMERA_UPTIME))
   fi
 
-  # clear scsi hosts cache if modification time older than camera uptime
-  if [ -f $SCSIHOST_TMP ] ; then
-    if [ $CAMERA_UPTIME -lt $(modtime $SCSIHOST_TMP) ] ; then
-      echo -n > $SCSIHOST_TMP
-    fi
-  fi
+  log ${LINENO} info: check camera ssh access
+  assert_remote_ssh_servers_functional
+
 fi
 
 touch $SCSIHOST_TMP
@@ -402,7 +399,7 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
   export SSHALL_HOSTS="root@$BASE_IP.$((MASTER_IP + MODULE - 1))"
 
   # get camera ssd serial
-  log ${LINENO} get ssd serial
+  log ${LINENO} debug: get ssd serial
   SSD_SERIAL=()
   export SSD_SERIAL_TMP
   export MASTER_IP
@@ -412,12 +409,12 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
   get_remote_disk_serial /dev/hda 2>&1 | while read l ; do
     msg=($l)
     if [ ${msg[0]} != "sshall:" ] ; then
-      log ${LINENO} get_remote_disk_serial: $l
+      log ${LINENO} debug: get_remote_disk_serial: $l
       continue
     fi
-    [ ${msg[2]} = "stderr" ] && log ${LINENO} get_remote_disk_serial: $l
+    [ ${msg[2]} = "stderr" ] && log ${LINENO} error: get_remote_disk_serial: $l
     LOGIN=${msg[1]}
-    [ -z "$LOGIN" ] && log ${LINENO} get_remote_disk_serial: $l && killtree -KILL $MYPID
+    [ -z "$LOGIN" ] && log ${LINENO} error: get_remote_disk_serial: $l && killtree -KILL $MYPID
     IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
     INDEX=$(expr $IP - $MASTER_IP)
     WHAT=${msg[2]}
@@ -450,7 +447,7 @@ if [ "${SSD_SERIAL[$((MODULE-1))]}" != "$SERIAL" ] ; then
 fi
 
 # unmount camera ssd
-log ${LINENO} umount CF
+log ${LINENO} debug: umount CF
 umount_all 2>&1 | logstdout ${LINENO}
 
 # module address
@@ -460,7 +457,7 @@ REMOTE_SSD_INDEX=${MODULE_INFO[2]}
 # run backgroud task waiting for disk
 wait_and_exit &
 
-log ${LINENO} starting processing
+log ${LINENO} debug: starting processing
 
 # request disk
 request_ssd &
@@ -479,5 +476,5 @@ rm $TMP/$$ -r 2> /dev/null
 # kill zombies
 killtree -KILL $MYPID
 
-log ${LINENO} exit $EXIT_CODE
+log ${LINENO} info: exit $EXIT_CODE
 exit $EXIT_CODE
