@@ -262,13 +262,22 @@ wait_until_camera_awake() {
   fi
 }
 
+build_sshall_login_list() {
+  for (( i=0 ; $i < $MODULES_COUNT ; ++i )) ; do
+    echo -n " root@$BASE_IP.$((MASTER_IP + i))"
+  done
+  set +x
+}
+
+# delay script execution or exit if another instance is running yet
 # check whether the camera ssh server is functional for SSHALL_HOSTS
 # or die
 assert_remote_ssh_servers_functional() {
 
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO
-  HOSTS=$SSHALL_HOSTS sshall true > $FIFO 2>&1 &
+  HOSTS=$(build_sshall_login_list) sshall true > $FIFO 2>&1 &
+  local count=0
 
   while read l ; do
     msg=($l)
@@ -287,10 +296,20 @@ assert_remote_ssh_servers_functional() {
         log ${LINENO} error: "$l"
         log ${LINENO} error: "ssh failed for camera $IP with exit code $STATUS"
         killtree -KILL $MYPID yes
+      else
+        ((++count))
       fi
       ;;
     esac
   done < $FIFO
+
+  if [ "$count" == "$MODULES_COUNT" ] ; then
+    log ${LINENO} info: "remote ssh server functional on every modules"
+  else
+    log ${LINENO} error: "assert_remote_ssh_servers_functional failed"
+    log ${LINENO} error: "check network cables or reboot the camera"
+    killtree -KILL $MYPID yes
+  fi
 
   rm $FIFO
 }
@@ -454,14 +473,6 @@ wait_regexp() {
   rm $TMP_INPUT $FIFO
 }
 
-build_sshall_login_list() {
-  local MODULES_COUNT=$1
-  for (( i=0 ; $i -lt $MODULES_COUNT ; ++i )) ; do
-    SSHALL_HOSTS="$SSHALL_HOSTS "root@$BASE_IP.$((MASTER_IP + i))
-  done
-}
-
-# delay script execution or exit if another instance is running yet
 no_concurrency() {
 
   local ACTION=$1

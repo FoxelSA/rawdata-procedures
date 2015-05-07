@@ -52,6 +52,7 @@ init() {
   BASE_IP=192.168.0
   MASTER_IP=221
   VERBOSE=-v
+  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader

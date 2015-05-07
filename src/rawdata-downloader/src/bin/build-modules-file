@@ -419,7 +419,7 @@ DEST="$MOUNTPOINT/$(echo $MACADDR | tr 'a-f' 'A-F')"
 mkdir -p "$DEST/rawdata-downloader" || exit 1
 export MODULES_FILE="$DEST/rawdata-downloader/modules"
 
-build_sshall_login_list $MODULES_COUNT
+export SSHALL_HOSTS=$(build_sshall_login_list)
 
 get_camera_ssd_serials
 

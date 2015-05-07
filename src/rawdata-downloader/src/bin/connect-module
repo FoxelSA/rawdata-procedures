@@ -59,6 +59,7 @@ init() {
   MASTER_IP=221
   MUXES=(192.168.0.224 192.168.0.228)
   SPOOL=/var/spool/rawdata-downloader
+  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -365,7 +366,6 @@ if [ -z "$NO_CHECKLIST" ] ; then
   fi
 
   log ${LINENO} info: check camera ssh access
-  build_sshall_login_list
   assert_remote_ssh_servers_functional
 
 fi

@@ -112,7 +112,7 @@ echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
 
 # save /var/log/kern.log
 KERNEL_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.kern.log
-touch $RAWDATA_KERNEL_LOG || exit
+touch $KERNEL_LOG || exit
 tail -f /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
 
