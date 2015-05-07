@@ -107,7 +107,6 @@ init() {
   mkdir -p $TMPDIR || exit
 
   PROCESSED_LIST=$(mktemp --tmpdir=$TMPDIR)
-  LOGFILE=/tmp/$__PROCESS_ALL_DISKS__/$$.log
 
   if [ $# -eq 0 ] ; then
     log ${LINENO} error: "missing parameter: <script>"
@@ -183,7 +182,7 @@ process_module_list() {
     log ${LINENO} info: module $MODULE connecting
 
     # request module to multiplexer and get device path
-    DEVICE=$(connect-module $VERBOSE $NOCHECKLIST $MODULE --mountpoint $MOUNTPOINT 2>> $LOGFILE)
+    DEVICE=$(connect-module $VERBOSE $NOCHECKLIST $MODULE --mountpoint $MOUNTPOINT)
     if [ -z "$DEVICE" ] ; then
       log ${LINENO} error: failed to connect esata multiplexer $(get_mux_index $MODULE) to module $MODULE
       killtree -KILL $MYPID yes

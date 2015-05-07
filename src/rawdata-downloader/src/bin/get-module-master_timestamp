@@ -88,9 +88,19 @@ fi
 
 log ${LINENO} info: search for master timestamp
 MASTER_TS=$(get_master_timestamp $PARTITION_MOUNTPOINT)
+
 if [ -z "$MASTER_TS" ] ; then
   log ${LINENO} error: "cannot get master timestamp from $PARTITION_MOUNTPOINT"
+
+  # unmount partition on failure
+  log ${LINENO} info: unmounting $PARTITION_MOUNTPOINT
+  umount $PARTITION_MOUNTPOINT 2>&1 | logstdout ${LINENO}
+  if [ ${PIPESTATUS[0]} -ne 0 ] ; then
+     log ${LINENO} error: "unmounting $PARTITION_MOUNTPOINT failed"
+  fi
+
   return 1
+
 fi
 
 echo $MASTER_TS

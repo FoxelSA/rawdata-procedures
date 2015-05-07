@@ -82,8 +82,6 @@ init() {
   TMP=/tmp/$(basename $0)/$$
   mkdir -p $TMP || exit
 
-  LOGFILE=/tmp/$(basename $0)/$$.log
-
 }
 
 # return camera MAC address using BASE_IP and MASTER_IP
@@ -458,7 +456,7 @@ wait_regexp() {
 
 build_sshall_login_list() {
   local MODULES_COUNT=$1
-  for (( i=0 ; $i < $MODULES_COUNT ; ++i )) ; do
+  for (( i=0 ; $i -lt $MODULES_COUNT ; ++i )) ; do
     SSHALL_HOSTS="$SSHALL_HOSTS "root@$BASE_IP.$((MASTER_IP + i))
   done
 }
@@ -505,7 +503,12 @@ get_master_timestamp() {
   log ${LINENO} info: get the oldest MOV file on $PARTITION_MOUNTPOINT
   CAM_OLDEST_MOV=$(basename `find $PARTITION_MOUNTPOINT/ -iname '*.mov' | sort | head -n1` 2>/dev/null)
 
-  log ${LINENO} info: extract the master timestamp
+  if [ -z "$CAM_OLDEST_MOV" ] ; then
+    log ${LINENO} error: no MOV file found on $PARTITION_MOUNTPOINT
+    killtree -TERM $MYPID yes
+  fi
+
+  log ${LINENO} info: extract the master timestamp from file $CAM_OLDEST_MOV
   MASTER_TS=${CAM_OLDEST_MOV%%_*}
 
   log ${LINENO} info: get the most recent master timestamp directory on $DESTINATION
