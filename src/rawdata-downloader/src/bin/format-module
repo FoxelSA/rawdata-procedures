@@ -38,4 +38,6 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 mkfs.ext2 -q -m0 -T largefile4 ${DEVICE}1 2>&1 | logstdout ${LINENO} mkfs $MODULE :
-return ${PIPESTATUS[0]}
+EXIT_CODE=${PIPESTATUS[0]}
+NO_CHECKLIST=true
+return $EXIT_CODE

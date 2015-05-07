@@ -99,7 +99,7 @@ RAWDATA_DOWNLOADER_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.log
 touch $RAWDATA_DOWNLOADER_LOG || exit
 
 # display rawdata-downloader log file on console
-tail -f $RAWDATA_DOWNLOADER_LOG >&2 &
+tail -f $RAWDATA_DOWNLOADER_LOG | egrep -v ' debug: ' >&2 &
 LOGTAIL_PID=$!
 
 # get rid of "terminated" message on kill

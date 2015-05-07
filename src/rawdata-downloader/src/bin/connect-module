@@ -399,7 +399,7 @@ if [ -z "${SSD_SERIAL[$((MODULE-1))]}" ] ; then
   export SSHALL_HOSTS="root@$BASE_IP.$((MASTER_IP + MODULE - 1))"
 
   # get camera ssd serial
-  log ${LINENO} info: get ssd serial
+  log ${LINENO} debug: get ssd serial
   SSD_SERIAL=()
   export SSD_SERIAL_TMP
   export MASTER_IP
@@ -447,7 +447,7 @@ if [ "${SSD_SERIAL[$((MODULE-1))]}" != "$SERIAL" ] ; then
 fi
 
 # unmount camera ssd
-log ${LINENO} info: umount CF
+log ${LINENO} debug: umount CF
 umount_all 2>&1 | logstdout ${LINENO}
 
 # module address
@@ -457,7 +457,7 @@ REMOTE_SSD_INDEX=${MODULE_INFO[2]}
 # run backgroud task waiting for disk
 wait_and_exit &
 
-log ${LINENO} info: starting processing
+log ${LINENO} debug: starting processing
 
 # request disk
 request_ssd &
