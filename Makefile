@@ -25,6 +25,7 @@
 
     clean:
 	rm bin/* -f
+	rm src/*/bin/* -f
 
 #
 #   make - implementation
