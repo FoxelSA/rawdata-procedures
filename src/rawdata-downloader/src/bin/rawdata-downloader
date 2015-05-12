@@ -76,22 +76,30 @@ kill_old_job() {
 
 }
 
+kill_log_tail() {
+  # stop kernel log backup
+  kill $LOGTAIL2_PID > /dev/null 2>&1
+
+  # stop log display
+  kill $LOGTAIL_PID > /dev/null 2>&1
+}
+
+diagnostic_message() {
+  sync
+  if grep -q "ssh_servers_functional failed" $RAWDATA_DOWNLOADER_LOG ; then
+    log ${LINENO} diag: "SSH CONNECTION FAILED - CHECK NETWORK CABLES AND SETTINGS"
+  fi
+  if grep -q "hdparm failed" $RAWDATA_DOWNLOADER_LOG ; then
+    log ${LINENO} diag: "DISK NOT FOUND - REBOOT THE CAMERA"
+  fi
+  if grep -q "DID_BAD_TARGET" $KERNEL_LOG ; then
+    log ${LINENO} diag: "HOTSWAP FAILURE - FIX THE KERNEL OR REBOOT COMPUTER"
+  fi
+}
+
 export MOUNTPOINT=$1
 
 [ -z "$MOUNTPOINT" ] && exit 1
-
-# get the master timestamp from module 1
-export MASTER_TS=$(process-modules --verbose --mountpoint $MOUNTPOINT get-module-master_timestamp 1)
-
-# ... or die
-STATUS=$?
-if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
-  log ${LINENO} error: "could not get the master timestamp"
-  exit 1
-fi
-
-# after getting master timestamp from module 1, no need to check camera uptime anymore
-export NOCHECKLIST=--no-checklist
 
 # create log file
 LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
@@ -124,21 +132,33 @@ LOGTAIL2_PIDFILE=/var/run/rawdata-downloader_logger.kern.pid
 kill_old_job tail $LOGTAIL2_PIDFILE
 echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
+# get the master timestamp from module 1
+export MASTER_TS=$(process-modules --verbose --mountpoint $MOUNTPOINT get-module-master_timestamp 1 2> $RAWDATA_DOWNLOADER_LOG)
+
+# ... or die
+STATUS=$?
+if [ -z "$MASTER_TS" -o $STATUS -ne 0 ] ; then
+  log ${LINENO} error: "could not get the master timestamp"
+  diagnostic_message
+  kill_log_tail
+  exit 1
+fi
+
+# after getting master timestamp from module 1, no need to check camera uptime anymore
+export NOCHECKLIST=--no-checklist
+
 # download rawdata from camera modules
-DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module 2> $RAWDATA_DOWNLOADER_LOG)
+DEST=$(process-modules --all --verbose --mountpoint $MOUNTPOINT backup-module 2>> $RAWDATA_DOWNLOADER_LOG)
 
 EXIT_CODE=$?
 
-# stop kernel log backup
-kill $LOGTAIL2_PID > /dev/null 2>&1
-
-# stop log display
-kill $LOGTAIL_PID > /dev/null 2>&1
+kill_log_tail
 
 # Check exit code
 if [ $EXIT_CODE -ne 0 ] ; then
- log ${LINENO} error: rawdata-download exit code $EXIT_CODE
- exit $EXIT_CODE
+  log ${LINENO} error: rawdata-download exit code $EXIT_CODE
+  diagnostic_message
+  exit $EXIT_CODE
 fi
 
 # set permissions for directories
