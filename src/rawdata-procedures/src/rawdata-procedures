@@ -10,6 +10,10 @@
 #       Nils Hamel <n.hamel@foxel.ch>
 #       Alexandre Kraft <a.kraft@foxel.ch>
 #
+# Contributor(s):
+#
+#       Kevin Velickovic <k.velickovic@foxel.ch>
+#
 #
 # This file is part of the FOXEL project <http://foxel.ch>.
 #
@@ -157,6 +161,14 @@ if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PA
     echo "Error : cannot access segment allocation"
     exit 1
 
+fi
+
+# Check dependencies
+rawdata-dependencies $@
+
+# Exit if dependencies errors
+if [ $? -ne 0 ]; then
+    exit
 fi
 
 # Run procedure #
