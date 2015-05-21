@@ -2,6 +2,30 @@
 
 MOUNTPOINT=$1
 
+kill_old_job() {
+
+  local JOBNAME="$1"
+  local PIDFILE="$2"
+
+  # read PIDFILE
+  [ -s "$PIDFILE" ] && local OLDPID=$(cat $PIDFILE)
+
+  # kill running process with this id if job name matches $JOBNAME
+  if [ -n "$OLDPID" ] && [ -f /proc/$OLDPID/status ] && [ "$(grep Name /proc/$OLDPID/status 2>/dev/null | cut -f 2)" == "$JOBNAME" ] ; then
+    echo "killing old $JOBNAME process with PID $OLDPID"
+    kill $OLDPID
+  fi
+
+}
+
+kill_log_tail() {
+  # stop kernel log backup
+  kill $LOGTAIL2_PID > /dev/null 2>&1
+
+  # stop log display
+  kill $LOGTAIL_PID > /dev/null 2>&1
+}
+
 LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
 
 # assert camera content match corresponding destination files under MOUNTPOINT
@@ -43,3 +67,8 @@ echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
 process-modules --verbose --mountpoint $MOUNTPOINT format-module 2> $LOGFILE
 
+EXIT_CODE=$?
+
+kill_log_tail
+
+exit $EXIT_CODE
