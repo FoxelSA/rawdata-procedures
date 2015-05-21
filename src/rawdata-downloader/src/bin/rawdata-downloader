@@ -41,12 +41,15 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
+
+# WARNING: this file is either run directly or sourced from rawdata-compare
+
 _UID=$UID
 _GID=1000
 
 SCRIPT=$(basename $0)
 
-LOGDIR=/var/log/rawdata-downloader
+LOGDIR=/var/log/$SCRIPT
 mkdir -p $LOGDIR || exit
 
 log() {
@@ -102,8 +105,8 @@ export MOUNTPOINT=$1
 [ -z "$MOUNTPOINT" ] && exit 1
 
 # create log file
-LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
-RAWDATA_DOWNLOADER_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.log
+[ -z "$LOG_DATE" ] && LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
+RAWDATA_DOWNLOADER_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.log
 touch $RAWDATA_DOWNLOADER_LOG || exit
 
 # display rawdata-downloader log file on console
@@ -114,12 +117,12 @@ LOGTAIL_PID=$!
 disown $LOGTAIL_PID
 
 # kill old tail process used to display log on console, if any
-LOGTAIL_PIDFILE=/var/run/rawdata-downloader_logger.pid
+LOGTAIL_PIDFILE=/var/run/${SCRIPT}_logger.pid
 kill_old_job tail $LOGTAIL_PIDFILE
 echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
 
 # save /var/log/kern.log
-KERNEL_LOG=$LOGDIR/rawdata-downloader_${LOG_DATE}.kern.log
+KERNEL_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.kern.log
 touch $KERNEL_LOG || exit
 tail -f /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
@@ -128,7 +131,7 @@ LOGTAIL2_PID=$!
 disown $LOGTAIL2_PID
 
 # kill old tail process used to copy kern.log, if any
-LOGTAIL2_PIDFILE=/var/run/rawdata-downloader_logger.kern.pid
+LOGTAIL2_PIDFILE=/var/run/${SCRIPT}_logger.kern.pid
 kill_old_job tail $LOGTAIL2_PIDFILE
 echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
@@ -156,10 +159,13 @@ kill_log_tail
 
 # Check exit code
 if [ $EXIT_CODE -ne 0 ] ; then
-  log ${LINENO} error: rawdata-download exit code $EXIT_CODE
+  log ${LINENO} error: process-modules exited with code $EXIT_CODE
   diagnostic_message
   exit $EXIT_CODE
 fi
+
+# exit here if we are not backuping
+[ "$SCRIPT" == "rawdata-compare" ] && exit
 
 # set permissions for directories
 chown $_UID.$_GID $DEST $DEST/mov

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+MOUNTPOINT=$1
+
+LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
+
+# assert camera content match corresponding destination files under MOUNTPOINT
+rawdata-compare $MOUNTPOINT || exit
+
+SCRIPT=$(basename $0)
+
+LOGDIR=/var/log/$SCRIPT
+
+# create log file
+LOGFILE=$LOGDIR/${SCRIPT}_${LOG_DATE}.log
+touch $LOGFILE || exit
+
+# display log file on console
+tail -f $LOGFILE | egrep -v ' debug: ' >&2 &
+LOGTAIL_PID=$!
+
+# get rid of "terminated" message on kill
+disown $LOGTAIL_PID
+
+# kill old tail process used to display log on console, if any
+LOGTAIL_PIDFILE=/var/run/${SCRIPT}_logger.pid
+kill_old_job tail $LOGTAIL_PIDFILE
+echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
+
+# save /var/log/kern.log
+KERNEL_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.kern.log
+touch $KERNEL_LOG || exit
+tail -f /var/log/kern.log > $KERNEL_LOG &
+LOGTAIL2_PID=$!
+
+# get rid of "terminated" message on kill
+disown $LOGTAIL2_PID
+
+# kill old tail process used to copy kern.log, if any
+LOGTAIL2_PIDFILE=/var/run/${SCRIPT}_logger.kern.pid
+kill_old_job tail $LOGTAIL2_PIDFILE
+echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
+
+process-modules --verbose --mountpoint $MOUNTPOINT format-module 2> $LOGFILE
+

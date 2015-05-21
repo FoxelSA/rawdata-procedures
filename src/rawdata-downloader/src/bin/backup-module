@@ -37,8 +37,6 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
-[ -z "$BACKUPMODULE_ACTION" ] && BACKUPMODULE_ACTION=backup
-
 PARTNUM=1
 PARTITION=${DEVICE}$PARTNUM
 MODULE_INDEX=$MODULE
@@ -103,9 +101,9 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
   return 1
 fi
 
-case $BACKUPMODULE_ACTION in
+case "$SCRIPT" in
 
-  backup)
+  rawdata-downloader)
     log ${LINENO} info: backup disk of module $MODULE_INDEX
 
     rsync \
@@ -120,7 +118,7 @@ case $BACKUPMODULE_ACTION in
 
     ;;
 
-  compare)
+  rawdata-compare)
     log ${LINENO} info: "comparing content of module $MODULE_INDEX with corresponding files in $RSYNCDEST"
     RSYNC_OUT=$(mktemp /tmp/rsync_XXXXXXX.tmp)
 
@@ -152,7 +150,7 @@ case $BACKUPMODULE_ACTION in
 
   *)
     # unexpected error
-    log ${LINENO} "error: action unspecified"
+    log ${LINENO} "error: SCRIPT unexpected value: \"$SCRIPT\""
     EXIT_CODE=1
     ;;
 
