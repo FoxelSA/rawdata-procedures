@@ -37,6 +37,8 @@
 #       You are required to attribute the work as explained in the "Usage and
 #       Attribution" section of <http://foxel.ch/license>.
 
+[ -z "$BACKUPMODULE_ACTION" ] && BACKUPMODULE_ACTION=backup
+
 PARTNUM=1
 PARTITION=${DEVICE}$PARTNUM
 MODULE_INDEX=$MODULE
@@ -101,17 +103,61 @@ if [ ${PIPESTATUS[0]} -ne 0 ] ; then
   return 1
 fi
 
-log ${LINENO} info: backup disk of module $MODULE_INDEX
-# backup
-rsync \
-  --exclude='lost+found' \
-  --exclude='**nodownload*' \
-  --inplace \
-  --archive \
-  --verbose \
-  $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
+case $BACKUPMODULE_ACTION in
 
-EXIT_CODE=${PIPESTATUS[0]}
+  backup)
+    log ${LINENO} info: backup disk of module $MODULE_INDEX
+
+    rsync \
+      --exclude='lost+found' \
+      --exclude='**nodownload*' \
+      --archive \
+      --inplace \
+      --verbose \
+      $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | logstdout ${LINENO} "$RSYNCDEST : "
+
+      EXIT_CODE=${PIPESTATUS[0]}
+
+    ;;
+
+  compare)
+    log ${LINENO} info: "comparing content of module $MODULE_INDEX with corresponding files in $RSYNCDEST"
+    RSYNC_OUT=$(mktemp /tmp/rsync_XXXXXXX.tmp)
+
+    rsync \
+      --exclude='lost+found' \
+      --exclude='**nodownload*' \
+      --archive \
+      --dry-run \
+      --checksum \
+      --itemize-changes \
+      $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | tee $RSYNC_OUT | logstdout ${LINENO}
+
+      EXIT_CODE=${PIPESTATUS[0]}
+
+      if [ $EXIT_CODE -eq 0 ] ; then
+
+        # if rsync output is not null, a new source file is present or a target file is not identical
+        if [ -s $RSYNC_OUT ] ; then
+          log ${LINENO} error: "content of $MODULE_INDEX differs from corresponding files in $RSYNCDEST"
+          cat $RSYNC_OUT | logstdout ${LINENO}
+          EXIT_CODE=1
+        fi
+
+      fi
+
+      rm $RSYNC_OUT
+
+    ;;
+
+  *)
+    # unexpected error
+    log ${LINENO} "error: action unspecified"
+    EXIT_CODE=1
+    ;;
+
+esac
+
 
 # unmount device
 log ${LINENO} info: unmounting $PARTITION_MOUNTPOINT
@@ -122,4 +168,4 @@ fi
 
 echo $DESTINATION/$MASTER_TS
 
-return  ${PIPESTATUS[0]}
+return $EXIT_CODE
