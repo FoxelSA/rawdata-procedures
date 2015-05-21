@@ -2,6 +2,10 @@
 
 MOUNTPOINT=$1
 
+log() {
+    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ >&2
+}
+
 kill_old_job() {
 
   local JOBNAME="$1"
@@ -24,6 +28,19 @@ kill_log_tail() {
 
   # stop log display
   kill $LOGTAIL_PID > /dev/null 2>&1
+}
+
+diagnostic_message() {
+  sync
+  if grep -q "ssh_servers_functional failed" $LOGFILE ; then
+    log ${LINENO} diag: "SSH CONNECTION FAILED - CHECK NETWORK CABLES AND SETTINGS"
+  fi
+  if grep -q "hdparm failed" $LOGFILE ; then
+    log ${LINENO} diag: "DISK NOT FOUND - REBOOT THE CAMERA"
+  fi
+  if grep -q "DID_BAD_TARGET" $KERNEL_LOG ; then
+    log ${LINENO} diag: "HOTSWAP FAILURE - FIX THE KERNEL OR REBOOT COMPUTER"
+  fi
 }
 
 LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
@@ -69,6 +86,7 @@ process-modules --verbose --mountpoint $MOUNTPOINT format-module 2> $LOGFILE
 
 EXIT_CODE=$?
 
+[ $EXIT_CODE -ne 0 ] && diagnostic_message
 kill_log_tail
 
 exit $EXIT_CODE
