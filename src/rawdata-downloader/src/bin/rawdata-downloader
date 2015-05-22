@@ -47,19 +47,19 @@
 _UID=$UID
 _GID=1000
 
-SCRIPT=$(basename $0)
+export LOG_PREFIX=$(basename $0)
 
-LOGDIR=/var/log/$SCRIPT
+LOGDIR=/var/log/$LOG_PREFIX
 mkdir -p $LOGDIR || exit
 
 log() {
-  echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ >&2
+  echo $(date +%F_%R:%S) $LOG_PREFIX $BASHPID $@ >&2
 }
 
 # format stdin for logginG
 logstdout() {
   while read l ; do
-    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ $l >&2
+    echo $(date +%F_%R:%S) $LOG_PREFIX $BASHPID $@ $l >&2
   done
 }
 
@@ -106,7 +106,7 @@ export MOUNTPOINT=$1
 
 # create log file
 [ -z "$LOG_DATE" ] && LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
-RAWDATA_DOWNLOADER_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.log
+RAWDATA_DOWNLOADER_LOG=$LOGDIR/${LOG_PREFIX}_${LOG_DATE}.log
 touch $RAWDATA_DOWNLOADER_LOG || exit
 
 # display rawdata-downloader log file on console
@@ -117,12 +117,12 @@ LOGTAIL_PID=$!
 disown $LOGTAIL_PID
 
 # kill old tail process used to display log on console, if any
-LOGTAIL_PIDFILE=/var/run/${SCRIPT}_logger.pid
+LOGTAIL_PIDFILE=/var/run/${LOG_PREFIX}_logger.pid
 kill_old_job tail $LOGTAIL_PIDFILE
 echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
 
 # save /var/log/kern.log
-KERNEL_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.kern.log
+KERNEL_LOG=$LOGDIR/${LOG_PREFIX}_${LOG_DATE}.kern.log
 touch $KERNEL_LOG || exit
 tail -f -n0 /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
@@ -131,7 +131,7 @@ LOGTAIL2_PID=$!
 disown $LOGTAIL2_PID
 
 # kill old tail process used to copy kern.log, if any
-LOGTAIL2_PIDFILE=/var/run/${SCRIPT}_logger.kern.pid
+LOGTAIL2_PIDFILE=/var/run/${LOG_PREFIX}_logger.kern.pid
 kill_old_job tail $LOGTAIL2_PIDFILE
 echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
@@ -165,7 +165,7 @@ if [ $EXIT_CODE -ne 0 ] ; then
 fi
 
 # exit here if we are not backuping
-[ "$SCRIPT" == "rawdata-compare" ] && exit
+[ "$(basename $0)" == "rawdata-compare" ] && exit
 
 # set permissions for directories
 chown $_UID.$_GID $DEST $DEST/mov

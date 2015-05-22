@@ -38,6 +38,8 @@
 
 #set -e
 
+LOG_HEADER=$(basename $0)
+
 . $(dirname $0)/rawdata-toolbox.sh
 
 init() {

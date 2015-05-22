@@ -41,6 +41,7 @@ PARTNUM=1
 PARTITION=${DEVICE}$PARTNUM
 MODULE_INDEX=$MODULE
 FSTYPE=ext2
+LOG_HEADER=get-module-master_timestamp
 
 # create mountpoint directory
 PARTITION_MOUNTPOINT=/mnt/$(basename $PARTITION)

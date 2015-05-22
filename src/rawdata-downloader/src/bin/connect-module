@@ -45,6 +45,7 @@
 
 MYPID=$BASHPID
 
+LOG_HEADER=connect-module
 . $(dirname $0)/rawdata-toolbox.sh
 
 # parse command line options and set environment variables

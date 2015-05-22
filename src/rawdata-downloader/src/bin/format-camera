@@ -3,7 +3,7 @@
 MOUNTPOINT=$1
 
 log() {
-    echo $(date +%F_%R:%S) $SCRIPT $BASHPID $@ >&2
+    echo $(date +%F_%R:%S) $LOG_HEADER $BASHPID $@ >&2
 }
 
 kill_old_job() {
@@ -48,12 +48,12 @@ LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
 # assert camera content match corresponding destination files under MOUNTPOINT
 rawdata-compare $MOUNTPOINT || exit
 
-SCRIPT=$(basename $0)
+LOG_HEADER=$(basename $0)
 
-LOGDIR=/var/log/$SCRIPT
+LOGDIR=/var/log/$LOG_HEADER
 
 # create log file
-LOGFILE=$LOGDIR/${SCRIPT}_${LOG_DATE}.log
+LOGFILE=$LOGDIR/${LOG_HEADER}_${LOG_DATE}.log
 touch $LOGFILE || exit
 
 # display log file on console
@@ -64,12 +64,12 @@ LOGTAIL_PID=$!
 disown $LOGTAIL_PID
 
 # kill old tail process used to display log on console, if any
-LOGTAIL_PIDFILE=/var/run/${SCRIPT}_logger.pid
+LOGTAIL_PIDFILE=/var/run/${LOG_HEADER}_logger.pid
 kill_old_job tail $LOGTAIL_PIDFILE
 echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
 
 # save /var/log/kern.log
-KERNEL_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.kern.log
+KERNEL_LOG=$LOGDIR/${LOG_HEADER}_${LOG_DATE}.kern.log
 touch $KERNEL_LOG || exit
 tail -f -n0 /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
@@ -78,7 +78,7 @@ LOGTAIL2_PID=$!
 disown $LOGTAIL2_PID
 
 # kill old tail process used to copy kern.log, if any
-LOGTAIL2_PIDFILE=/var/run/${SCRIPT}_logger.kern.pid
+LOGTAIL2_PIDFILE=/var/run/${LOG_HEADER}_logger.kern.pid
 kill_old_job tail $LOGTAIL2_PIDFILE
 echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 

@@ -145,17 +145,29 @@ killtree() {
 
 # send log message to stderr
 log() {
+  local _LOG_PREFIX
+  if [ -n "$LOG_PREFIX" ] ; then
+    _LOG_PREFIX="$LOG_PREFIX"
+  else
+    _LOG_PREFIX="$(basename $0)"
+  fi
   # only if $2 begins with "error" or in VERBOSE mode
   shopt -s nocasematch
-  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ >&2
+  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ >&2
   shopt -u nocasematch
 }
 
 # format stdout as log messages
 logstdout() {
+  local _LOG_PREFIX
+  if [ -n "$LOG_PREFIX" ] ; then
+    _LOG_PREFIX="$LOG_PREFIX"
+  else
+    _LOG_PREFIX="$(basename $0)"
+  fi
   shopt -s nocasematch
   while read l ; do
-    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $(basename $0) $BASHPID $@ $l >&2
+    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ $l >&2
   done
   shopt -u nocasematch
 }

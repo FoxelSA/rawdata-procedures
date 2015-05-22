@@ -37,6 +37,9 @@
 #       Attribution" section of <http://foxel.ch/license>.
 
 
+export PROCESSMODULES_PARENT_SCRIPT=$LOG_PREFIX
+export LOG_PREFIX=$(basename $0)
+
 . $(dirname $0)/rawdata-toolbox.sh                                                                                    
 __PROCESS_ALL_DISKS__=$(basename $0)
 
@@ -113,11 +116,11 @@ init() {
     log ${LINENO} error: "missing parameter: <script>"
     usage 1
   fi
-  SCRIPT=$(which $1)
+  CHILD_SCRIPT=$(which $1)
   shift
 
-  if [ ! -f "$SCRIPT" ] ; then
-    log ${LINENO} error: "script not found: $SCRIPT"
+  if [ ! -f "$CHILD_SCRIPT" ] ; then
+    log ${LINENO} error: "script not found: $CHILD_SCRIPT"
     exit 1
   fi
 
@@ -173,7 +176,7 @@ EOF
   exit $1
 }
 
-# source $SCRIPT for each module index specified as parameter
+# source $CHILD_SCRIPT for each module index specified as parameter
 process_module_list() {
 
   module_list=$@
@@ -205,12 +208,21 @@ process_module_list() {
     fi
 
     # run specified script using "source" so that it can access to everything defined here
-    log ${LINENO} info: "module $MODULE $SCRIPT"
-    if source $SCRIPT ; then
-      log ${LINENO} info: "module $MODULE $SCRIPT : success"
+    log ${LINENO} info: "module $MODULE $CHILD_SCRIPT"
+
+    LOG_PREFIX=$(basename $CHILD_SCRIPT)
+
+    source $CHILD_SCRIPT
+    EXIT_CODE=$?
+
+    # reset log prefix
+    LOG_PREFIX=$(basename $0)
+
+    if [ $EXIT_CODE -eq 0 ] ; then
+      log ${LINENO} info: "module $MODULE $CHILD_SCRIPT : success"
       echo "${MODULE}" >> $PROCESSED_LIST
     else
-      log ${LINENO} error: "module $MODULE $SCRIPT : failed"
+      log ${LINENO} error: "module $MODULE $CHILD_SCRIPT : failed"
       killtree -KILL $MYPID yes
       break
     fi
