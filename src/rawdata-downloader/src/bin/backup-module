@@ -137,7 +137,7 @@ case "$SCRIPT" in
 
         # if rsync output is not null, a new source file is present or a target file is not identical
         if [ -s $RSYNC_OUT ] ; then
-          log ${LINENO} error: "content of $MODULE_INDEX differs from corresponding files in $RSYNCDEST"
+          log ${LINENO} error: "content of module $MODULE_INDEX differs from corresponding files in $RSYNCDEST"
           cat $RSYNC_OUT | logstdout ${LINENO}
           EXIT_CODE=1
         fi
