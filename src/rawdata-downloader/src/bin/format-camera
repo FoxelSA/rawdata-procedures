@@ -71,7 +71,7 @@ echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
 # save /var/log/kern.log
 KERNEL_LOG=$LOGDIR/${SCRIPT}_${LOG_DATE}.kern.log
 touch $KERNEL_LOG || exit
-tail -f /var/log/kern.log > $KERNEL_LOG &
+tail -f -n0 /var/log/kern.log > $KERNEL_LOG &
 LOGTAIL2_PID=$!
 
 # get rid of "terminated" message on kill
