@@ -71,7 +71,7 @@ init() {
 
   while [ $# -gt 0 ] ; do
       case $1 in
-      -h|--help) usage $1 ;;
+      -h|--help) usage 1 ;;
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -v|--verbose) VERBOSE=-v ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;

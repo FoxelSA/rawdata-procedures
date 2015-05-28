@@ -61,7 +61,7 @@ init() {
 
   while [ $# -gt 0 ] ; do
       case $1 in
-      -h|--help) usage $1 ;;
+      -h|--help) usage 1 ;;
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -v|--verbose) VERBOSE=-v ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;
@@ -285,6 +285,8 @@ build_sshall_login_list() {
 # check whether the camera ssh server is functional for SSHALL_HOSTS
 # or die
 assert_remote_ssh_servers_functional() {
+
+  log ${LINENO} info: check camera ssh access
 
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO

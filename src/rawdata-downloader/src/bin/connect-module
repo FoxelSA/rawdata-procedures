@@ -354,17 +354,8 @@ SCSIHOST_TMP=$TMP/../scsihosts
 
 if [ -z "$NO_CHECKLIST" ] ; then
 
-  log ${LINENO} info: get camera uptime
-  CAMERA_UPTIME=$(get_camera_uptime)
-  if [ -z "$CAMERA_UPTIME" ] ; then
-    log ${LINENO} error: cannot get camera uptime
-    exit 1
-  fi
-
-  if [ $CAMERA_UPTIME -lt 180 ] ; then
-    log ${LINENO} info: wait $((180-CAMERA_UPTIME)) seconds for camera wake up
-    sleep $((180-CAMERA_UPTIME))
-  fi
+  log ${LINENO} info: check camera is awake
+  wait_until_camera_awake
 
   log ${LINENO} info: check camera ssh access
   assert_remote_ssh_servers_functional

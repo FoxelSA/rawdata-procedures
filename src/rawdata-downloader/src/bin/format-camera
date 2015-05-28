@@ -1,7 +1,146 @@
 #!/bin/bash
 
-MOUNTPOINT=$1
+MYPID=$BASHPID
 
+. $(dirname $0)/rawdata-toolbox.sh
+
+usage() {
+  cat >&2 << EOF
+
+SYNOPSIS:
+
+  $(basename $0) [OPTION ...]
+
+DESCRIPTION:
+
+  Format the camera hard disks, checking everything has been copied before
+
+OPTIONS SUMMARY:
+
+  -h|--help                   display this
+  -m|--mountpoint <path>      parent location of the 'camera' directory
+  -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+  -i|--masterip <master_ip>   master camera ip, defaults to 221
+  -f|--force                  dont check files have been copied
+
+EOF
+  exit $1
+
+}
+
+init() {
+
+  # defaults
+  MOUNTPOINT=/data
+  BASE_IP=192.168.0                                                                                                                                                                                                
+  MASTER_IP=221
+  MODULES_COUNT=9
+
+  # load rawdata-downloader preferences
+  [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
+
+  # parse command line options
+  if ! options=$(getopt -o hm:i:I:f:s -l help,mountpoint:,baseip:,masterip:,force,ssh -- "$@")
+  then
+      # something went wrong, getopt will put out an error message for us
+      exit 1
+  fi
+
+  eval set -- "$options"
+
+  while [ $# -gt 0 ] ; do
+      case $1 in
+      -h|--help) usage 1 ;;
+      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
+      -I|--baseip) BASE_IP=$2 ; shift ;;
+      -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -f|--force) FORCE=yes ;;
+      -s|--ssh) USE_SSH=yes ; FORCE=yes ;;
+      (--) shift; break;;
+      (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
+      (*) break;;
+      esac
+      shift
+  done
+
+  if [ -n "$FORCE" ] ; then
+    while true ; do
+      echo -n "Format the camera inconditionally [yes/NO] ? "
+      read answer
+      case "$answer" in
+        yes) break ;;
+        *) exit 2 ;;
+      esac
+    done
+  fi
+
+  if [ ! -d "$MOUNTPOINT" ] ; then
+      log ${LINENO} error: "Mountpoint '$MOUNTPOINT' is not a directory"
+      usage 1
+  fi
+
+}
+
+format_using_ssh() {
+
+  log ${LINENO} info: check camera is awake
+  wait_until_camera_awake
+      
+  log ${LINENO} info: check camera ssh access
+  assert_remote_ssh_servers_functional
+
+  get_camera_ssd_serials
+  log ${LINENO} info: got ${#SSD_SERIAL[@]} SSD serials
+  [ ${#SSD_SERIAL[@]} -ne $MODULES_COUNT ] && exit 1                                                                                                                                                                 
+  return
+}
+
+sshall_mkfs() {
+  log ${LINENO} info: "sending format command"
+ 
+  STATUS=()
+  SSD_SERIAL=()
+ 
+  local FIFO=$(mktemp -u).$$
+  mkfifo $FIFO
+
+  HOSTS=$(build_sshall_login_list) sshall mkfs.ext2 -q -m0 -T largefile4 /dev/hda1  > $FIFO 2>&1 & 
+  get_remote_disk_serial /dev/hda > $FIFO 2>&1 &
+  local PIPE_PID=$!
+ 
+  local l
+  local msg
+  local LOGIN
+  local INDEX
+  local WHAT
+ 
+  while read l ; do
+    msg=($l)
+    [ ${msg[0]} = "sshall:" ] || continue
+    [ ${msg[2]} = "stderr" ] && log ${LINENO} stderr: sshall_mkfs: $l
+    LOGIN=${msg[1]}
+    [ -z "$LOGIN" ] && log ${LINENO} error: sshall_mkfs: $l && killtree -KILL $MYPID
+    IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
+    INDEX=$(expr $IP - $MASTER_IP)
+    WHAT=${msg[2]}
+    case "$WHAT" in
+    status)
+      STATUS=${msg[3]}
+      if [ "${STATUS}" != "0" ] ; then 
+        log ${LINENO} error: "mkfs failed for module $INDEX on $IP"
+        killtree -KILL $MYPID
+      fi
+      ;;
+    stdout)
+      log ${LINENO} info: sshall_mkfs module $INDEX on $IP: $l
+      ;;
+    esac
+  done < $FIFO
+
+  rm $FIFO
+  kill $PIPE_PID > /dev/null 2>&1
+}
+ 
 log() {
     echo $(date +%F_%R:%S) $LOG_HEADER $BASHPID $@ >&2
 }
@@ -38,15 +177,22 @@ diagnostic_message() {
   if grep -q "hdparm failed" $LOGFILE ; then
     log ${LINENO} diag: "DISK NOT FOUND - REBOOT THE CAMERA"
   fi
-  if grep -q "DID_BAD_TARGET" $KERNEL_LOG ; then
-    log ${LINENO} diag: "HOTSWAP FAILURE - FIX THE KERNEL OR REBOOT COMPUTER"
+
+  if [ -z "$USE_SSH" ] ; then
+    if grep -q "DID_BAD_TARGET" $KERNEL_LOG ; then
+      log ${LINENO} diag: "HOTSWAP FAILURE - FIX THE KERNEL OR REBOOT COMPUTER"
+    fi
   fi
 }
 
+init "$@"
+
 LOG_DATE=$(date +%F%R%S | sed -r -e 's/[-\:]//g')
 
-# assert camera content match corresponding destination files under MOUNTPOINT
-rawdata-compare $MOUNTPOINT || exit
+if [ -z "$FORCE" ] ; then
+  # assert camera content match corresponding destination files under MOUNTPOINT
+  rawdata-compare $MOUNTPOINT || exit
+fi
 
 LOG_HEADER=$(basename $0)
 
@@ -67,6 +213,11 @@ disown $LOGTAIL_PID
 LOGTAIL_PIDFILE=/var/run/${LOG_HEADER}_logger.pid
 kill_old_job tail $LOGTAIL_PIDFILE
 echo $LOGTAIL_PID > $LOGTAIL_PIDFILE
+
+if [ -n "$USE_SSH" ] ; then
+  format_using_ssh
+  exit
+fi
 
 # save /var/log/kern.log
 KERNEL_LOG=$LOGDIR/${LOG_HEADER}_${LOG_DATE}.kern.log
