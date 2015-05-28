@@ -41,7 +41,7 @@ init() {
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line options
-  if ! options=$(getopt -o hm:i:I:f:s -l help,mountpoint:,baseip:,masterip:,force,ssh -- "$@")
+  if ! options=$(getopt -o hm:i:I:fs -l help,mountpoint:,baseip:,masterip:,force,ssh -- "$@")
   then
       # something went wrong, getopt will put out an error message for us
       exit 1
@@ -97,7 +97,9 @@ format_using_ssh() {
 
   sshall_mkfs
 
-  return
+  log ${LINENO} info: success
+
+  exit 0
 }
 
 sshall_mkfs() {
@@ -117,7 +119,7 @@ sshall_mkfs() {
   local LOGIN
   local INDEX
   local WHAT
-  local count=0
+  local COUNT=0
  
   while read l ; do
     msg=($l)
@@ -138,7 +140,7 @@ sshall_mkfs() {
         killtree -KILL $MYPID
       else
         log ${LINENO} info: "module $INDEX formatted successfuly"
-        ((++count))
+        ((++COUNT))
       fi
       ;;
     stdout)
