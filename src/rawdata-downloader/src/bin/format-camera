@@ -22,6 +22,7 @@ OPTIONS SUMMARY:
   -I|--baseip <base_ip>       base ip, defaults to 192.168.0
   -i|--masterip <master_ip>   master camera ip, defaults to 221
   -f|--force                  dont check files have been copied
+  -s|--ssh                    use ssh instead of SATA
 
 EOF
   exit $1
@@ -83,15 +84,19 @@ init() {
 
 format_using_ssh() {
 
-  log ${LINENO} info: check camera is awake
+  log ${LINENO} info: checking camera status
   wait_until_camera_awake
       
-  log ${LINENO} info: check camera ssh access
+  log ${LINENO} info: checking network connectivity
   assert_remote_ssh_servers_functional
 
   get_camera_ssd_serials
   log ${LINENO} info: got ${#SSD_SERIAL[@]} SSD serials
   [ ${#SSD_SERIAL[@]} -ne $MODULES_COUNT ] && exit 1                                                                                                                                                                 
+  umount_all
+
+  sshall_mkfs
+
   return
 }
 
@@ -104,8 +109,7 @@ sshall_mkfs() {
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO
 
-  HOSTS=$(build_sshall_login_list) sshall mkfs.ext2 -q -m0 -T largefile4 /dev/hda1  > $FIFO 2>&1 & 
-  get_remote_disk_serial /dev/hda > $FIFO 2>&1 &
+  HOSTS=$(build_sshall_login_list) sshall /sbin/mkfs.ext2 -q -m0 -T largefile4 /dev/hda1  > $FIFO 2>&1 & 
   local PIPE_PID=$!
  
   local l
@@ -113,11 +117,14 @@ sshall_mkfs() {
   local LOGIN
   local INDEX
   local WHAT
+  local count=0
  
   while read l ; do
     msg=($l)
     [ ${msg[0]} = "sshall:" ] || continue
-    [ ${msg[2]} = "stderr" ] && log ${LINENO} stderr: sshall_mkfs: $l
+    if [ ${msg[2]} = "stderr" ] ; then
+      echo $l | grep -q "Could not determine if .dev.hda1 is mounted" || log ${LINENO} $l
+    fi
     LOGIN=${msg[1]}
     [ -z "$LOGIN" ] && log ${LINENO} error: sshall_mkfs: $l && killtree -KILL $MYPID
     IP=$(echo $LOGIN | sed -r -n -e 's/.*@[0-9]+\.[0-9]+\.[0-9]+\.([0-9]+).*/\1/p')
@@ -129,16 +136,26 @@ sshall_mkfs() {
       if [ "${STATUS}" != "0" ] ; then 
         log ${LINENO} error: "mkfs failed for module $INDEX on $IP"
         killtree -KILL $MYPID
+      else
+        log ${LINENO} info: "module $INDEX formatted successfuly"
+        ((++count))
       fi
       ;;
     stdout)
-      log ${LINENO} info: sshall_mkfs module $INDEX on $IP: $l
+      log ${LINENO} info: $l
       ;;
     esac
   done < $FIFO
 
   rm $FIFO
   kill $PIPE_PID > /dev/null 2>&1
+
+  if [ "$COUNT" != "$MODULES_COUNT" ] ; then
+    log ${LINENO} error: "format failed !"
+    diagnostic_message
+    kill_log_tail
+    exit 1
+  fi
 }
  
 log() {
@@ -200,6 +217,7 @@ LOGDIR=/var/log/$LOG_HEADER
 
 # create log file
 LOGFILE=$LOGDIR/${LOG_HEADER}_${LOG_DATE}.log
+mkdir -p $(dirname $LOGFILE) || exit
 touch $LOGFILE || exit
 
 # display log file on console

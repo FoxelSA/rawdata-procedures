@@ -286,8 +286,6 @@ build_sshall_login_list() {
 # or die
 assert_remote_ssh_servers_functional() {
 
-  log ${LINENO} info: check camera ssh access
-
   local FIFO=$(mktemp -u).$$
   mkfifo $FIFO
   HOSTS=$(build_sshall_login_list) sshall true > $FIFO 2>&1 &
@@ -331,7 +329,7 @@ assert_remote_ssh_servers_functional() {
 # run hdparm on SSHALL_HOSTS (using sshall) for specified device
 get_remote_disk_serial() {
   local dev=$1
-  HOSTS=$SSHALL_HOSTS sshall /sbin/hdparm -i $dev \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
+  HOSTS=$(build_sshall_login_list) sshall /sbin/hdparm -i $dev \| sed -r -n -e "'s/.*SerialNo=([^ ]+).*/\1/p'"
 }
 
 # fill SSD_SERIAL and STATUS arrays for logins listed in SSHALL_HOSTS variable
@@ -380,7 +378,7 @@ get_camera_ssd_serials() {
 
 # unmount /usr/html/CF for SSHALL_HOSTS
 umount_cf() {
-  HOSTS=$SSHALL_HOSTS sshall << 'EOF'
+  HOSTS=$(build_sshall_login_list) sshall << 'EOF'
 if grep -q ' /usr/html/CF ' /proc/mounts ; then
   sync
   umount /usr/html/CF || exit 1
