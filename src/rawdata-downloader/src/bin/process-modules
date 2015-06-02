@@ -55,7 +55,6 @@ init() {
   BASE_IP=192.168.0
   MASTER_IP=221
   VERBOSE=-v
-  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -86,26 +85,9 @@ init() {
       shift
   done
 
-  # enable debug mode if requested
-  if [ -n "$DEBUG" ] ; then
-    set -x   
-    set -v   
-    PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
-  fi         
-
-  # retrieve camera mac address from arp cache
-  MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
-  if [ -z "$MACADDR" ] ; then
-    log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
-    exit 1
-  fi
-
-  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
-  if ! [ -f "$MODULES_FILE" ] ; then
-    log ${LINENO} error: "file not found: $MODULES_FILE"
-    log ${LINENO} error: "run build-modules-file first or specify the proper mountpoint with -m"
-    exit 1
-  fi
+  debugmode_update
+  get_camera_macaddr
+  get_modules_file
 
   TMPDIR=/tmp/$__PROCESS_ALL_DISKS__/$$
   mkdir -p $TMPDIR || exit
@@ -245,21 +227,22 @@ main() {
       [ -z "$module_list" ] && break
       process_module_list $module_list &
 
-      # wait for background processes if processing muxes sequentially
+      # wait for background process here if processing muxes sequentially
       [ -n "$SEQUENTIALLY" ] && wait
 
       ((++_muxindex))
 
     done
 
+    # wait for background processes here if processing all muxes in parallel
+    [ -z "$SEQUENTIALLY" ] && wait
+
   else
     # process specified modules
     process_module_list $MODULE_LIST &
+    wait
 
   fi
-
-  # wait for background processes if processing all muxes in parallel
-  [ -z "$SEQUENTIALLY" ] && wait
 
   # display processing status and exit
   #

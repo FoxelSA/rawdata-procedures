@@ -47,9 +47,8 @@ init() {
   export HOTSWAP_USING_SYS=yes
   export BASE_IP=192.168.0
   export MASTER_IP=221
-  export MODULES_COUNT=9
-  MUXES=(192.168.0.224 192.168.0.228)
-  MUX_MAX_INDEX=(4 5)
+  export _MUXES="224 228"
+  export _MUX_SSD_COUNT="4 5"
   export SPOOL=/var/spool/rawdata-downloader
 
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -69,6 +68,8 @@ init() {
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;
       -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -M|--muxes) _MUXES="$2" ; shift ;;
+      -c|--ssdcount) _MUX_SSD_COUNT="$2" ; shift ;;
       -v|--verbose) VERBOSE=-v ;;
       -d|--debug) DEBUG=-d ;;
       -p|--proc) HOTSWAP_USING_SYS= ;;
@@ -79,13 +80,15 @@ init() {
       shift
   done
 
+  export MODULES_COUNT=$(get_module_count)
+
   assert_root
 
   mkdir -p $SPOOL || exit 1
 
   debugmode_update
-  get_camera_macaddr
   checkdependencies
+  get_camera_macaddr
 
 }
 
@@ -99,23 +102,26 @@ checkdependencies() {
 
 usage() {
 cat << EOF
-  SYNOPSIS:
+SYNOPSIS:
 
-    $(basename $0) [OPTION ...]
+  $(basename $0) [OPTION ...]
   
-  DESCRIPTION: 
+DESCRIPTION: 
     
-    Source the specified script for every Eyesis4PI module specified
+  Build the modules file that map the module number with the associated
+  multiplexer index, disk index, and disk serial.
 
-  OPTIONS SUMMARY:
+OPTIONS SUMMARY:
   
-    -h|--help                   display this
-    -v|--verbose                verbose output
-    -m|--mountpoint <path>      parent location of the 'camera' directory
-    -I|--baseip <base_ip>       base ip, defaults to 192.168.0
-    -i|--masterip <master_ip>   master camera ip, defaults to 221
-    -d|--debug                  debug mode
-    -p|--proc                   hotswap using proc
+  -h|--help                   display this
+  -v|--verbose                verbose output
+  -m|--mountpoint <path>      parent location of the 'camera' directory
+  -I|--baseip <base_ip>       base ip, defaults to 192.168.0
+  -i|--masterip <master_ip>   master camera ip, defaults to 221
+  -M|--muxes "<mux_ip> ..."   esata multiplexer ip list, defaults to "224 228"
+  -x|--ssdcount "<n> ..."     esata multiplexers disk count, defaults to "4 5"
+  -d|--debug                  debug mode
+  -p|--proc                   hotswap using proc
 
 EOF
   exit $1
@@ -216,6 +222,8 @@ wait_and_register() {
 
 # enqueue next ssd for this mux
 enqueue_next_ssd() {
+  local MUXES=($_MUXES)
+  local MUX_SSD_COUNT=($_MUX_SSD_COUNT)
   local MUX_INDEX=$1
   local REMOTE_SSD_INDEX=$2
   local SCSIHOST="$3 $4 $5 $6"
@@ -250,12 +258,12 @@ enqueue_next_ssd() {
   log ${LINENO} info: registration_done_count $SSD_SERIAL_DONE_COUNT
 
   # enqueue this mux's next ssd for backup (ignore this step for retries)
-  if [ "$ISRETRY" = "" -a $REMOTE_SSD_INDEX -lt ${MUX_MAX_INDEX[$MUX_INDEX]} ] ; then
+  if [ "$ISRETRY" = "" -a $REMOTE_SSD_INDEX -lt ${MUX_SSD_COUNT[$MUX_INDEX]} ] ; then
     log ${LINENO} debug: enqueue mux $MUX_INDEX ssd $((REMOTE_SSD_INDEX+1))
     echo $MUX_INDEX $((REMOTE_SSD_INDEX+1)) >> $CONNECT_Q_TMP
 
   else
-    # it is a retry or MUX_MAX_INDEX has been reached
+    # it is a retry or MUX_SSD_COUNT has been reached
     if ! is_any_ssd_left_in_queue_for_mux $MUX_INDEX ; then
       MUX_DONE=$(cat $MUX_DONE_TMP)
       echo $((++MUX_DONE)) > $MUX_DONE_TMP
@@ -335,8 +343,8 @@ connect_q_run() {
 
       # request disk connection
       log ${LINENO} info: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
-      log ${LINENO} debug: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
-      wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
+      log ${LINENO} debug: wget http://$BASE_IP.${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
+      wget -q http://$BASE_IP.${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
       sleep 10
       add_scsi_device
@@ -361,7 +369,7 @@ connect_q_run() {
       echo $MUX_INDEX $REMOTE_SSD_INDEX isretry >> $CONNECT_Q_TMP
 
       # ask next ssd index for this mux
-      [ $REMOTE_SSD_INDEX -lt ${MUX_MAX_INDEX[$MUX_INDEX]} ] || break
+      [ $REMOTE_SSD_INDEX -lt ${MUX_SSD_COUNT[$MUX_INDEX]} ] || break
       ((++REMOTE_SSD_INDEX))
 
     done

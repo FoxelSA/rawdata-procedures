@@ -35,7 +35,6 @@ init() {
   MOUNTPOINT=/data
   BASE_IP=192.168.0                                                                                                                                                                                                
   MASTER_IP=221
-  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
