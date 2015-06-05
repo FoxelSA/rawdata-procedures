@@ -224,6 +224,15 @@ def main(argv):
         # Read database config file and prepend a fake [section] to comply with ConfigParser
         db_config.readfp(StringIO('[connection]\n' + open(DatabaseConfigFile, 'r').read()))
 
+        # Check if data push is enabled
+        if not db_config.get('connection', 'pusher_enabled') == "true":
+
+            # Debug output
+            ShowMessage("Data push is disabled.", 1)
+
+            # Exit main function
+            return
+
         # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
         fastcal_config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFile, 'r').read()))
 
