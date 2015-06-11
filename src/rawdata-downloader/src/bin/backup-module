@@ -129,13 +129,15 @@ case "$PROCESSMODULES_PARENT_SCRIPT" in
       --dry-run \
       --checksum \
       --itemize-changes \
-      $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | tee $RSYNC_OUT | logstdout ${LINENO}
+      $PARTITION_MOUNTPOINT/ $RSYNCDEST 2>&1 | grep -v -e '^\.' | tee $RSYNC_OUT | logstdout ${LINENO}
 
       EXIT_CODE=${PIPESTATUS[0]}
 
       if [ $EXIT_CODE -eq 0 ] ; then
 
-        # if rsync output is not null, a new source file is present or a target file is not identical
+        # if rsync output has a line not beginnig with '.'
+        # (see rsync --itemize-change option documentation)
+        # then something would be updated by rsync
         if [ -s $RSYNC_OUT ] ; then
           log ${LINENO} error: "content of module $MODULE_INDEX differs from corresponding files in $RSYNCDEST"
           cat $RSYNC_OUT | logstdout ${LINENO}
