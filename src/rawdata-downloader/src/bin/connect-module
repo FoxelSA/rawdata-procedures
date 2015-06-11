@@ -95,7 +95,7 @@ init() {
   MODULES_COUNT=$(get_module_count)
 
   get_camera_macaddr
-  get_camera_modules_file
+  get_modules_file
 
   # remaining parameter is the requested module number
   [ -z "$MODULE" ] && MODULE=$1 && shift
