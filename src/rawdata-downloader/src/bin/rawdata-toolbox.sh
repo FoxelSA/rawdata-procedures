@@ -105,28 +105,62 @@ killtree() {
 # send log message to stderr
 log() {
   local _LOG_PREFIX
+  local LINE
+  local MSGLEVEL
+
   if [ -n "$LOG_PREFIX" ] ; then
     _LOG_PREFIX="$LOG_PREFIX"
   else
     _LOG_PREFIX="$(basename $0)"
   fi
-  # only if $2 begins with "error" or in VERBOSE mode
+
+  # first argument should be line number
+  LINE=$1
+  shift
+
+  # second argument should be message log level (info:, error:, debug:)
+  if [[ "$1" =~ :$ ]] ; then
+    MSGLEVEL=$1
+    shift
+  else
+    # log level defaults to debug:
+    MSGLEVEL=debug:
+  fi
+
+  # only if WHAT begins with "error" or in VERBOSE mode
   shopt -s nocasematch
-  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ >&2
+  [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $FIRST $MSGLEVEL $@ >&2
   shopt -u nocasematch
 }
 
 # format stdout as log messages
 logstdout() {
   local _LOG_PREFIX
+  local LINE
+  local MSGLEVEL
+
   if [ -n "$LOG_PREFIX" ] ; then
     _LOG_PREFIX="$LOG_PREFIX"
   else
     _LOG_PREFIX="$(basename $0)"
   fi
+
+  # first argument should be line number
+  LINE=$1
+  shift
+
+  # second argument should be message log level (info:, error:, debug:)
+  if [[ "$1" =~ :$ ]] ; then
+    MSGLEVEL=$1
+    shift
+  else
+    # log level defaults to debug:
+    MSGLEVEL=debug:
+  fi
+
   shopt -s nocasematch
   while read l ; do
-    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ $l >&2
+    [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $FIRST $MSGLEVEL $@ $l >&2
   done
   shopt -u nocasematch
 }
