@@ -35,7 +35,6 @@ init() {
   MOUNTPOINT=/data
   BASE_IP=192.168.0                                                                                                                                                                                                
   MASTER_IP=221
-  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
@@ -253,7 +252,7 @@ LOGTAIL2_PIDFILE=/var/run/${LOG_HEADER}_logger.kern.pid
 kill_old_job tail $LOGTAIL2_PIDFILE
 echo $LOGTAIL2_PID > $LOGTAIL2_PIDFILE
 
-process-modules --verbose --mountpoint $MOUNTPOINT format-module 2> $LOGFILE
+process-modules --all --verbose --mountpoint $MOUNTPOINT format-module 2> $LOGFILE
 
 EXIT_CODE=$?
 

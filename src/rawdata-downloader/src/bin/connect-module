@@ -58,15 +58,15 @@ init() {
   MOUNTPOINT=/data
   BASE_IP=192.168.0
   MASTER_IP=221
-  MUXES=(192.168.0.224 192.168.0.228)
+  _MUXES="224 228"
+  _MUX_SSD_COUNT="4 5"
   SPOOL=/var/spool/rawdata-downloader
-  MODULES_COUNT=9
 
   # load rawdata-downloader preferences
   [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
 
   # parse command line
-  if ! options=$(getopt -o hvm:I:i:nd -l help,verbose,mountpoint:,baseip:,masterip,no-checklist,debug: -- "$@")
+  if ! options=$(getopt -o hvm:I:i:M:c:nd -l help,verbose,mountpoint:,baseip:,masterip,muxes,ssdcount,no-checklist,debug: -- "$@")
   then
       # something went wrong, getopt will put out an error message for us
       exit 1
@@ -81,6 +81,8 @@ init() {
       -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
       -I|--baseip) BASE_IP=$2 ; shift ;;
       -i|--masterip) MASTER_IP=$2 ; shift ;;
+      -M|--muxes) _MUXES="$2" ; shift ;;
+      -c|--ssdcount) _MUX_SSD_COUNT="$2" ; shift ;;
       -n|--no-checklist) NO_CHECKLIST=true ;;
       -d|--debug) DEBUG=1 ;;
       (--) shift; break;;
@@ -90,31 +92,10 @@ init() {
       shift
   done
 
-  # get camera MAC address
-  if [ -z "$MACADDR" ] ; then
+  MODULES_COUNT=$(get_module_count)
 
-    # get camera master ip mac address
-    if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
-      log ${LINENO} error: unable to ping $BASE_IP.$MASTER_IP
-      exit 1
-    fi
-
-    MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
-
-    if [ -z "$MACADDR" ] ; then
-      log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
-      exit 1
-    fi
-
-  fi
-
-  # check modules file exist
-  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
-  if [ ! -f $MODULES_FILE ] ; then
-    log ${LINENO} error: file not found: $MODULES_FILE
-    log ${LINENO} error: "specify the proper mount point with -m or run 'build-modules-file $MOUNTPOINT' first"
-    exit 1
-  fi
+  get_camera_macaddr
+  get_modules_file
 
   # remaining parameter is the requested module number
   [ -z "$MODULE" ] && MODULE=$1 && shift
@@ -127,15 +108,9 @@ init() {
   # ... or die
   [ $# -gt 0 ] && usage 1
 
-  
   mkdir -p $SPOOL || exit 1
 
-  # debug flags
-  if [ -n "$DEBUG" ] ; then 
-    set -x
-    set -v
-    PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
-  fi
+  debugmode_update
 
 }
 
@@ -167,6 +142,8 @@ OPTIONS SUMMARY:
   -m|--mountpoint <path>      parent location of the 'camera' directory
   -I|--baseip <base_ip>       base ip, defaults to 192.168.0
   -i|--masterip <master_ip>   master camera ip, defaults to 221
+  -M|--muxes "<mux_ip> ..."   esata multiplexer ip list, defaults to "224 228"
+  -c|--diskcount "<n> ..."     esata multiplexers disk count, defaults to "4 5"
   -n|--nochecklist            dont check camera uptime first
   <camera_module_index>       the camera module index wanted
 
@@ -183,7 +160,7 @@ get_local_disk_serials() {
 # get module info (mux index serial) from module number
 get_module_info() {
   local MODULE_NUMBER=$1
-  grep -E -e "^$MODULE_NUMBER " $MODULES_FILE 
+  grep -E -e "^$MODULE_NUMBER " $MODULES_FILE
 }
 
 # compare specified module details with saved one
@@ -281,7 +258,14 @@ wait_watches_established() {
 # request esata connection for MUX_INDEX / REMOTE_SSD_INDEX
 request_ssd() {
 
+    local MUXES=($_MUXES)
     MUX_INDEX=$MUX_INDEX
+
+    if [ $MUX_INDEX -gt ${#MUXES[@]} ] ; then
+      log ${LINENO} error: "mux index out of range"
+      killtree -KILL $MYPID
+    fi
+
     REMOTE_SSD_INDEX=$REMOTE_SSD_INDEX
     ISRETRY=
 
@@ -302,8 +286,8 @@ request_ssd() {
 
       # request disk connection
       log ${LINENO} debug: requesting sata disk mux $MUX_INDEX index $REMOTE_SSD_INDEX
-      log ${LINENO} debug: wget http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
-      wget -q http://${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
+      log ${LINENO} debug: wget http://$BASE_IP.${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX
+      wget -q http://$BASE_IP.${MUXES[$MUX_INDEX]}/103697.php?c:host4=ssd$REMOTE_SSD_INDEX -O - > /dev/null || killtree -KILL $MYPID
 
       # wait for inotifywait and timeout setup above
       log ${LINENO} debug: waiting for mux $MUX_INDEX disk $REMOTE_SSD_INDEX
@@ -365,6 +349,11 @@ fi
 touch $SCSIHOST_TMP
 
 MODULE_INFO=($(get_module_info $MODULE))
+if [ -z "$MODULE_INFO" ] ; then
+  log ${LINENO} error: "could not get info for module $MODULE" 
+  exit 1
+fi
+
 SERIAL=${MODULE_INFO[3]}
 
 # return device path if already connected

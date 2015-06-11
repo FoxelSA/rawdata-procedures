@@ -39,53 +39,17 @@
 
 trap "killtree -9 $MYPID yes" SIGINT SIGKILL SIGTERM SIGHUP
 
-# template for init procedure
-init() {
+# get camera MAC address using BASE_IP and MASTER_IP
+get_camera_macaddr() {
 
-  # defaults
-  MOUNTPOINT=/data
-  BASE_IP=192.168.0
-  MASTER_IP=221
+  # do nothing if already set
+  [ -n "$MACADDR" ] && return
 
-  # load rawdata-downloader preferences
-  [ -f /etc/defaults/rawdata-downloader ] && . /etc/defaults/rawdata-downloader
-
-  # parse command line options
-  if ! options=$(getopt -o hm:I:i:vd -l help,mountpoint:,baseip:,masterip:,verbose,debug -- "$@")
-  then
-      # something went wrong, getopt will put out an error message for us
-      exit 1
+  if ! ping -w 5 -c 1 $BASE_IP.$MASTER_IP > /dev/null ; then
+    log ${LINENO} error: unable to ping $BASE_IP.$MASTER_IP
+    exit 1
   fi
 
-  eval set -- "$options"
-
-  while [ $# -gt 0 ] ; do
-      case $1 in
-      -h|--help) usage 1 ;;
-      -m|--mountpoint) MOUNTPOINT=$2 ; shift ;;
-      -v|--verbose) VERBOSE=-v ;;
-      -I|--baseip) BASE_IP=$2 ; shift ;;
-      -i|--masterip) MASTER_IP=$2 ; shift ;;
-      -d|--debug) DEBUG=-d ;;
-      (--) shift; break;;
-      (-*) echo "$(basename $0): error - unrecognized option $1" 1>&2; exit 1;;
-      (*) break;;
-      esac
-      shift
-  done
-
-  debugmode
-
-  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
-  MODULES_COUNT=$(cat $MODULES_FILE | wc -l)
-
-  TMP=/tmp/$(basename $0)/$$
-  mkdir -p $TMP || exit
-
-}
-
-# return camera MAC address using BASE_IP and MASTER_IP
-get_camera_macaddr() {
   MACADDR=$(macaddr $BASE_IP.$MASTER_IP | tr 'a-f' 'A-F')
   if [ -z "$MACADDR" ] ; then
     log ${LINENO} error: "unable to get MAC address for $BASE_IP.$MASTER_IP"
@@ -120,11 +84,6 @@ macaddr() {
   arp -n $_ADDR | awk '/[0-9a-f]+:/{gsub(":","-",$3);print $3}'
 }
 
-# return generic usage string
-get_usage() {
-  echo "$(basename $0): [-h|--help] [-v|--verbose] [-m|--mountpoint <path>] [-I|--baseip <base_ip>] [-i|--masterip <master_ip>]"
-}
-
 # kill child processes, and optionally the root process
 killtree() {
 
@@ -146,28 +105,62 @@ killtree() {
 # send log message to stderr
 log() {
   local _LOG_PREFIX
+  local LINE
+  local MSGLEVEL
+
   if [ -n "$LOG_PREFIX" ] ; then
     _LOG_PREFIX="$LOG_PREFIX"
   else
     _LOG_PREFIX="$(basename $0)"
   fi
-  # only if $2 begins with "error" or in VERBOSE mode
+
+  # first argument should be line number
+  LINE=$1
+  shift
+
+  # second argument should be message log level (info:, error:, debug:)
+  if [[ "$1" =~ :$ ]] ; then
+    MSGLEVEL=$1
+    shift
+  else
+    # log level defaults to debug:
+    MSGLEVEL=debug:
+  fi
+
+  # only if WHAT begins with "error" or in VERBOSE mode
   shopt -s nocasematch
-  [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ >&2
+  [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $LINE $MSGLEVEL $@ >&2
   shopt -u nocasematch
 }
 
 # format stdout as log messages
 logstdout() {
   local _LOG_PREFIX
+  local LINE
+  local MSGLEVEL
+
   if [ -n "$LOG_PREFIX" ] ; then
     _LOG_PREFIX="$LOG_PREFIX"
   else
     _LOG_PREFIX="$(basename $0)"
   fi
+
+  # first argument should be line number
+  LINE=$1
+  shift
+
+  # second argument should be message log level (info:, error:, debug:)
+  if [[ "$1" =~ :$ ]] ; then
+    MSGLEVEL=$1
+    shift
+  else
+    # log level defaults to debug:
+    MSGLEVEL=debug:
+  fi
+
   shopt -s nocasematch
   while read l ; do
-    [[ -n "$VERBOSE" || "$2" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $@ $l >&2
+    [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $LINE $MSGLEVEL $@ $l >&2
   done
   shopt -u nocasematch
 }
@@ -248,9 +241,10 @@ assert_modulesfile() {
 # reset multiplexers
 reset_eyesis_ide() {
   log ${LINENO} info: reset eyesis_ide
+  local MUXES=($_MUXES)
   for (( i=0 ; $i < ${#MUXES[@]} ; ++i )) do
-    log ${LINENO} info: wget http://${MUXES[$i]}/eyesis_ide.php
-    wget -q http://${MUXES[$i]}/eyesis_ide.php -O - > /dev/null || exit 1
+    log ${LINENO} info: wget http://$BASE_IP.${MUXES[$i]}/eyesis_ide.php
+    wget -q http://$BASE_IP.${MUXES[$i]}/eyesis_ide.php -O - > /dev/null || exit 1
   done
 }
 
@@ -410,6 +404,7 @@ umount_all() {
 # queue first ssd for each mux, in connect queue
 connect_queue_init() {
   local i
+  local MUXES=($_MUXES)
   for (( i=0 ; i < ${#MUXES[@]} ; ++i )) ; do
     echo $i 1 >> $CONNECT_Q_TMP
   done
@@ -551,3 +546,37 @@ get_master_timestamp() {
 
   echo "$MASTER_TS"
 }
+
+is_array() {
+   local variable_name="$1"
+   [[ "$(declare -p $variable_name) 2>/dev/null" =~ "declare -a" ]]
+}
+
+get_module_count() {
+
+  local MUX_SSD_COUNT=($_MUX_SSD_COUNT)                         
+  local MUXES=($_MUXES)                         
+  local TOTAL=0                                 
+  local i
+
+  if [ ${#MUX_SSD_COUNT[@]} -ne ${#MUXES[@]} ] ; then
+    log ${LINENO} error: "mux list and ssd count list length mismatch"
+    killall -KILL $MYPID
+  fi
+
+  for (( i=0; i<${#MUX_SSD_COUNT[@]} ; ++i )) ; do    
+    ((TOTAL+=${MUX_SSD_COUNT[i]}))
+  done                                                                                                                
+
+  echo $TOTAL
+}
+
+get_modules_file() {
+  MODULES_FILE=$MOUNTPOINT/camera/$MACADDR/rawdata-downloader/modules
+  if ! [ -f "$MODULES_FILE" ] ; then
+    log ${LINENO} error: "file not found: $MODULES_FILE"
+    log ${LINENO} error: "run build-modules-file first or specify the proper mountpoint with -m"
+    exit 1
+  fi
+}
+
