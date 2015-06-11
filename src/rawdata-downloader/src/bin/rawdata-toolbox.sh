@@ -129,7 +129,7 @@ log() {
 
   # only if WHAT begins with "error" or in VERBOSE mode
   shopt -s nocasematch
-  [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $FIRST $MSGLEVEL $@ >&2
+  [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $LINE $MSGLEVEL $@ >&2
   shopt -u nocasematch
 }
 
@@ -160,7 +160,7 @@ logstdout() {
 
   shopt -s nocasematch
   while read l ; do
-    [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $FIRST $MSGLEVEL $@ $l >&2
+    [[ -n "$VERBOSE" || "$MSGLEVEL" =~ ^error ]] && echo $(date +%F_%R:%S) $_LOG_PREFIX $BASHPID $LINE $MSGLEVEL $@ $l >&2
   done
   shopt -u nocasematch
 }
