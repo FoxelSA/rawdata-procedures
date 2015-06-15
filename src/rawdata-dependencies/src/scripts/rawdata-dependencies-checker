@@ -48,6 +48,17 @@ if ! which movie2dng >/dev/null; then
 
 fi
 
+# Check dcraw
+if ! which dcraw >/dev/null; then
+
+    # Debug output
+    echo -e "[$(date '+%F %R') \e[31mERROR\e[39m] $HOST_NAME : dcraw not installed"
+
+    # Flag error
+    ENV_NOT_OK="1"
+
+fi
+
 # Check djpeg
 if ! which djpeg >/dev/null; then
 
