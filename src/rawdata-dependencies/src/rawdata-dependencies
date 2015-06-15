@@ -234,6 +234,7 @@ def main(argv):
 
     # Config files
     __ParallelFile_jp4preview__ = "%s/system/etc/ssh-configs/rawdata-procedures/rawdata-jp4preview.conf" % __MountPoint__
+    __ParallelFile_movsplit__   = "%s/system/etc/ssh-configs/rawdata-procedures/rawdata-movsplit.conf" % __MountPoint__
 
    # Arguments check
     if (not __MountPoint__ ) or __Help__:
@@ -263,6 +264,8 @@ def main(argv):
 
     # Read hosts from configs
     Preview_Hosts = readHosts( __ParallelFile_jp4preview__ )
+    Split_Hosts   = readHosts( __ParallelFile_movsplit__ )
+
 
     # Debug output
     ShowMessage("Checking hosts in rawdata-jp4preview.conf...")
@@ -280,12 +283,44 @@ def main(argv):
         if "localhost" in h.host:
 
             # Execute check script on remote computer
-            ret = execCommand("$(which pointcloud-dependencies-checker)")
+            ret = execCommand("$(which rawdata-dependencies-checker)")
 
         else:
 
             # Execute check script on remote computer
             ret = execCommand("ssh %s@%s 'bash -s' < $(which rawdata-dependencies-checker)" % (h.username, h.host))
+
+        # Check if host have errors
+        if ret is not 0:
+
+            # Debug output
+            ShowMessage("%s@%s have not all dependencies installed..." % (h.username, h.host), 2)
+
+            # Flag error
+            Errored = True
+
+    # Debug output
+    ShowMessage("Checking hosts in rawdata-movsplit.conf...")
+
+    # Iterate over GnoProj hosts
+    for h in Split_Hosts:
+
+        # Debug output
+        ShowMessage("Checking %s@%s..." % (h.username, h.host))
+
+        # Result container
+        ret = ""
+
+        # Check if entry is localhostc
+        if "localhost" in h.host:
+
+            # Execute check script on remote computer
+            ret = execCommand("$(which rawdata-dependencies-checker)")
+
+        else:
+
+            # Execute check script on remote computer
+            ret = execCommand("ssh %s@%s 'bash -s' < $(which rawdata-dependencies-checker-split)" % (h.username, h.host))
 
         # Check if host have errors
         if ret is not 0:
