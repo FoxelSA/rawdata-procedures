@@ -195,7 +195,7 @@ def GetImagesCorrections(FastCalKeyFilePath):
     return Output
 
 # Function to convert a JP4 file into JPEG
-def JP4ToJPEG(List, _output, _temp, _grayscale=0):
+def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
 
     # Itertate over paths
     for path in List:
@@ -206,16 +206,33 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         # Check presence of grayscale option
         if _grayscale:
 
-            # Convert image
-            execCommand("movie2dng --jpeg --jpeg-quality 50 --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+            # Check if write tile requested
+            if _writetiles:
+
+                # Convert image
+                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+
+            else:
+
+                # Convert image
+                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/10 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
         else:
 
             # Convert image to dng
             execCommand("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
-            # Debay dng file and convert it into jpeg
-            execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+            # Check if write tile requested
+            if _writetiles:
+
+                # Debay dng file and convert it into jpeg
+                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast | djpeg | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+
+            else:
+
+                # Debay dng file and convert it into jpeg
+                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
@@ -238,8 +255,7 @@ def MakeTiles(_input, _output):
     if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
         os.remove("%s/%s_3.jpeg" % (_output, FileName))
 
-# Function to stitch a set of tiles
-def StitchPano(_tilesdir, _output, ImagesCorr, _temp):
+def flipTiles(_tilesdir, ImagesCorr):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
@@ -281,10 +297,65 @@ def StitchPano(_tilesdir, _output, ImagesCorr, _temp):
         # Increment module index counter
         _index += 1
 
+# Function to stitch a set of tiles
+def StitchPano(_tilesdir, _output, _temp, _writetiles=0):
+
+    # Separate each tiles into lists
+    TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
+    MidList = sorted(glob.glob("%s/mid/*.jpeg" % _tilesdir))
+    BotList = sorted(glob.glob("%s/bot/*.jpeg" % _tilesdir))
+
+    # Resized config lists
+    TopList_r = []
+    MidList_r = []
+    BotList_r = []
+
+    # Rescale by 10% top images
+    for e in TopList:
+
+        # Check if tile writing is requested
+        if _writetiles:
+
+            # Append element
+            TopList_r.append("%s[10%%]" % e)
+
+        else:
+
+            # Append element
+            TopList_r.append("%s" % e)
+
+    # Rescale by 10% mid images
+    for e in MidList:
+
+        # Check if tile writing is requested
+        if _writetiles:
+
+            # Append element
+            MidList_r.append("%s[10%%]" % e)
+
+        else:
+
+            # Append element
+            MidList_r.append("%s" % e)
+
+    # Rescale by 10% bot images
+    for e in BotList:
+
+        # Check if tile writing is requested
+        if _writetiles:
+
+            # Append element
+            BotList_r.append("%s[10%%]" % e)
+
+        else:
+
+            # Append element
+            BotList_r.append("%s" % e)
+
     # Generate 3 crowns (top, middle, bottom)
-    execCommand("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList), _temp))
-    execCommand("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList), _temp))
-    execCommand("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList_r), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList_r), _temp))
+    execCommand("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList_r), _temp))
 
     # Stitch crowns
     execCommand("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
@@ -297,7 +368,7 @@ def StitchPano(_tilesdir, _output, ImagesCorr, _temp):
 # Usage display function
 def _usage():
     print """
-    Usage: %s <_1 JP4 file path> <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [ no debayer 0 | 1]
+    Usage: %s <_1 JP4 file path> <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [ no debayer 0 | 1] [ write tiles 0 | 1]
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Program entry point function
@@ -316,6 +387,7 @@ def main(argv):
     __PARAM_MASTER__  = argv[ 3 ]
     __PARAM_SEGMENT__ = argv[ 4 ]
     __NoDebayer__     = (int( argv[ 5 ] ) == 1)
+    __WriteTiles__    = (int( argv[ 6 ] ) == 1)
 
     # Compute temp folder
     __Temp_Base__  = "/run/shm/rawdata-jp4preview"
@@ -395,6 +467,18 @@ def main(argv):
 
     # Compute output folder
     __Output_Base__   = "%s/%s/preview/%s/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder)
+    __Output_Tiles__  = ""
+
+    # Check if tile writing is requested
+    if __WriteTiles__:
+
+        # Compute tiles path
+        __Output_Tiles__ = "%s/%s/preview/%s/tiles/%s" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.timestamp)
+
+    else:
+
+        # Compute tiles path
+        __Output_Tiles__ = "%s/tiles" % __Temp__
 
     # Compute output folders
     __Output__   = "%s/%d" % (__Output_Base__, __JP4_Image__.base_folder)
@@ -407,20 +491,30 @@ def main(argv):
         if not os.path.isdir(__Output__):
             os.system("mkdir -p %s" % __Output__)
 
+        # Create output tiles folder if not present
+        if not os.path.isdir(__Output_Tiles__):
+            os.system("mkdir -p %s" % __Output_Tiles__)
+            os.system("mkdir -p %s/top" % __Output_Tiles__)
+            os.system("mkdir -p %s/mid" % __Output_Tiles__)
+            os.system("mkdir -p %s/bot" % __Output_Tiles__)
+
         # Build list of images to be converted
         JP4ToJPEG_List = []
         for i in range(1, ModuleCount):
             JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, __JP4_Image__.path_nomod, i))
 
         # Convert JP4 images to JPEG
-        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
+        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __WriteTiles__)
 
         # Create tiles for previously converted images
         for i in range(1, ModuleCount):
-            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), "%s/tiles" % __Temp__)
+            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__)
+
+        # Flip tiles
+        flipTiles(__Output_Tiles__, ImagesCorr)
 
         # Stitch panorama
-        StitchPano("%s/tiles" % __Temp__, __Output_Image__, ImagesCorr, __Temp__)
+        StitchPano(__Output_Tiles__, __Output_Image__, __Temp__, __WriteTiles__)
 
     # Remove temp files
     execCommand("rm -rf %s" % __Temp__)
