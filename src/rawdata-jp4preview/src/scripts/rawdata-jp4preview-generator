@@ -473,7 +473,7 @@ def main(argv):
     if __WriteTiles__:
 
         # Compute tiles path
-        __Output_Tiles__ = "%s/%s/preview/%s/tiles/%s" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.timestamp)
+        __Output_Tiles__ = "%s/%s/preview/%s/tiles/%s/%s" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.base_folder, __JP4_Image__.timestamp)
 
     else:
 

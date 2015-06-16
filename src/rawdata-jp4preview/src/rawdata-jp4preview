@@ -93,7 +93,6 @@ arguments() {
             ;;
             --write-tiles)
                 PARAM_WRITE_TILES="1"
-                shift
             ;;
             --force)
                 PARAM_FORCE="1"
@@ -119,11 +118,7 @@ arguments() {
                 shift
             ;;
             --cpu-threads)
-                if [ -z "$1" ]; then
-                    PARAM_CPU_THREADS="+0"
-                else
-                    PARAM_CPU_THREADS="$1"
-                fi
+                PARAM_CPU_THREADS="$1"
                 shift
             ;;
             --help | -h)
