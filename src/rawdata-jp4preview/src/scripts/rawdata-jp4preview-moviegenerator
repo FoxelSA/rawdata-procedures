@@ -88,6 +88,9 @@ def main(argv):
     # Determine number of system CPU cores
     CoreCount = multiprocessing.cpu_count()
 
+    # Clamp cores to 8 (maximum allowed for mencoder)
+    CoreCount = ( 8 if CoreCount > 8 else CoreCount )
+
     # Create output folder if not present
     if not os.path.isdir(VideoFolder):
         os.makedirs(VideoFolder)
