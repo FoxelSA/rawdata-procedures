@@ -43,6 +43,7 @@ PARAM_SEGMENT=""
 PARAM_CPU_THREADS=""
 PARAM_NO_DEBAYER="0"
 PARAM_WRITE_TILES="0"
+PARAM_WRITE_SENSOR_TILES="0"
 PARAM_FORCE="0"
 
 # Loop breaker
@@ -54,18 +55,19 @@ _help() {
     Usage: $(basename $0) [OPTIONS]
 
     [Required arguments]
-    --mount-point       Base mount directory
-    --mac-address       Camera MAC address
-    --master-timestamp  Master timestamp
+    --mount-point         Base mount directory
+    --mac-address         Camera MAC address
+    --master-timestamp    Master timestamp
 
     [Optional arguments]
-    --segment-timestamp Segment timestamp
-    --no-split          Exit program
-    --no-debayer        Write grayscale images (without debayer)
-    --write-tiles       Write full resolution tiles
-    --force             Bypass preview flag in JSON
-    --cpu-threads       Process localy with specified number of threads
-    --help              Show this message
+    --segment-timestamp   Segment timestamp
+    --no-split            Exit program
+    --no-debayer          Write grayscale images (without debayer)
+    --write-tiles         Write full resolution tiles
+    --write-sensor-tiles  Write full resolution sensor tiles
+    --force               Bypass preview flag in JSON
+    --cpu-threads         Process localy with specified number of threads
+    --help                Show this message
     """
 }
 
@@ -93,6 +95,9 @@ arguments() {
             ;;
             --write-tiles)
                 PARAM_WRITE_TILES="1"
+            ;;
+            --write-sensor-tiles)
+                PARAM_WRITE_SENSOR_TILES="1"
             ;;
             --force)
                 PARAM_FORCE="1"
@@ -226,7 +231,8 @@ if [ -z "$PARAM_SEGMENT" ]; then
                             $PARAM_MASTER \
                             $SEGMENT_TIMESTAMP \
                             $PARAM_NO_DEBAYER \
-                            $PARAM_WRITE_TILES
+                            $PARAM_WRITE_TILES \
+                            $PARAM_WRITE_SENSOR_TILES
                         else
                             echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                             $PARAM_MOUNT \
@@ -234,7 +240,8 @@ if [ -z "$PARAM_SEGMENT" ]; then
                             $PARAM_MASTER \
                             $SEGMENT_TIMESTAMP \
                             $PARAM_NO_DEBAYER \
-                            $PARAM_WRITE_TILES
+                            $PARAM_WRITE_TILES \
+                            $PARAM_WRITE_SENSOR_TILES
                         fi
 
                         # Loop break checker
@@ -354,7 +361,8 @@ else
                     $PARAM_MASTER \
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER \
-                    $PARAM_WRITE_TILES
+                    $PARAM_WRITE_TILES \
+                    $PARAM_WRITE_SENSOR_TILES
                 else
                     echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
@@ -362,7 +370,8 @@ else
                     $PARAM_MASTER \
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER \
-                    $PARAM_WRITE_TILES
+                    $PARAM_WRITE_TILES \
+                    $PARAM_WRITE_SENSOR_TILES
                 fi
 
                 # Loop break checker

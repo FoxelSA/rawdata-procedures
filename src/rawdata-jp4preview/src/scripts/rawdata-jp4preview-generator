@@ -194,6 +194,18 @@ def GetImagesCorrections(FastCalKeyFilePath):
     # Return value
     return Output
 
+# Function to get image sizes from sensor
+def GetImageSizes(FastCalKeyFilePath):
+
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
+
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(FastCalKeyFilePath, 'r').read()))
+
+    # Return values
+    return [ config.getint('calibration', 'pixelCorrectionWidth_00'), config.getint('calibration', 'pixelCorrectionHeight_00') ]
+
 # Function to convert a JP4 file into JPEG
 def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
 
@@ -215,7 +227,7 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
             else:
 
                 # Convert image
-                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/10 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
         else:
 
@@ -231,29 +243,51 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
             else:
 
                 # Debay dng file and convert it into jpeg
-                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/10 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/8 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
 
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
 
 # Function to generate tiles form a crow
-def MakeTiles(_input, _output):
+def MakeTiles(_input, _output, image_sizes, _writetiles=0):
 
     # Extract filename
     FileName = os.path.splitext(os.path.basename(_input))[0]
 
-    # Split image into 3 parts
-    execCommand("convert -crop 100%%x33.3%% +repage %s %s/%s_%%d.jpeg" % (_input, _output, FileName))
+    # Get image sizes
+    image_sizes_width = image_sizes[ 0 ]
+    image_sizes_height = image_sizes[ 1 ]
 
-    # Arrange splitted images
-    execCommand("mv %s/%s_0.jpeg %s/top/" % (_output, FileName, _output))
-    execCommand("mv %s/%s_1.jpeg %s/mid/" % (_output, FileName, _output))
-    execCommand("mv %s/%s_2.jpeg %s/bot/" % (_output, FileName, _output))
+    # Compute jp4 tile sizes
+    jp4_image_sizes_width  = image_sizes_width
+    jp4_image_sizes_height = ( image_sizes_height + 8 )
 
-    # Remove the unnecessary third image
-    if os.path.isfile("%s/%s_3.jpeg" % (_output, FileName)):
-        os.remove("%s/%s_3.jpeg" % (_output, FileName))
+    # Compute cropping margins
+    tile_1_margin = 8
+    tile_2_margin = ( jp4_image_sizes_height + 8 )
+    tile_3_margin = ( ( ( jp4_image_sizes_height * 2 ) + 8 ) + 8 )
+
+    # Determine if tile writing is enabled
+    if not _writetiles:
+
+        # Divide pixel size
+        tile_1_margin = ( tile_1_margin / 8.0 )
+        tile_2_margin = ( tile_2_margin / 8.0 )
+        tile_3_margin = ( tile_3_margin / 8.0 )
+
+        # Divide image size
+        image_sizes_width  = ( image_sizes_width / 8.0 )
+        image_sizes_height = ( image_sizes_height / 8.0 )
+
+        # Divide jp4 image size
+        jp4_image_sizes_width  = ( jp4_image_sizes_width / 8.0 )
+        jp4_image_sizes_height = ( jp4_image_sizes_height / 8.0 )
+
+    # Split image
+    execCommand("convert -crop %dx%d+0-%d  %s %s/top/%s_0.jpeg" % (jp4_image_sizes_width, jp4_image_sizes_height, tile_1_margin, _input, _output, FileName))
+    execCommand("convert -crop %dx%d+0+%d %s %s/mid/%s_1.jpeg" % (jp4_image_sizes_width, image_sizes_height, tile_2_margin,  _input, _output, FileName))
+    execCommand("convert -crop %dx%d+0+%d %s %s/bot/%s_2.jpeg" % (jp4_image_sizes_width, image_sizes_height, tile_3_margin,  _input, _output, FileName))
 
 def flipTiles(_tilesdir, ImagesCorr):
 
@@ -381,13 +415,14 @@ def main(argv):
         sys.exit( 0 )
 
     # Parse arguments
-    __Input_File__    = argv[ 0 ]
-    __PARAM_MOUNT__   = argv[ 1 ]
-    __PARAM_MAC__     = argv[ 2 ]
-    __PARAM_MASTER__  = argv[ 3 ]
-    __PARAM_SEGMENT__ = argv[ 4 ]
-    __NoDebayer__     = (int( argv[ 5 ] ) == 1)
-    __WriteTiles__    = (int( argv[ 6 ] ) == 1)
+    __Input_File__        = argv[ 0 ]
+    __PARAM_MOUNT__       = argv[ 1 ]
+    __PARAM_MAC__         = argv[ 2 ]
+    __PARAM_MASTER__      = argv[ 3 ]
+    __PARAM_SEGMENT__     = argv[ 4 ]
+    __NoDebayer__         = (int( argv[ 5 ] ) == 1)
+    __WriteTiles__        = (int( argv[ 6 ] ) == 1)
+    __WriteTiles_Sensor__ = (int( argv[ 7 ] ) == 1)
 
     # Compute temp folder
     __Temp_Base__  = "/run/shm/rawdata-jp4preview"
@@ -468,9 +503,10 @@ def main(argv):
     # Compute output folder
     __Output_Base__   = "%s/%s/preview/%s/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder)
     __Output_Tiles__  = ""
+    __Output_Tiles_Pano__ = "%s/tiles" % __Temp__
 
     # Check if tile writing is requested
-    if __WriteTiles__:
+    if __WriteTiles__ or __WriteTiles_Sensor__:
 
         # Compute tiles path
         __Output_Tiles__ = "%s/%s/preview/%s/tiles/%s/%s" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.base_folder, __JP4_Image__.timestamp)
@@ -483,6 +519,9 @@ def main(argv):
     # Compute output folders
     __Output__   = "%s/%d" % (__Output_Base__, __JP4_Image__.base_folder)
     __Output_Image__ = "%s/%s.jpeg" % (__Output__, __JP4_Image__.timestamp)
+
+    # Get image sizes
+    imageSizes = GetImageSizes( FastCalKeyFile )
 
     # Check if destination file already exists
     if not os.path.isfile(__Output_Image__):
@@ -498,26 +537,48 @@ def main(argv):
             os.system("mkdir -p %s/mid" % __Output_Tiles__)
             os.system("mkdir -p %s/bot" % __Output_Tiles__)
 
+        # Create output tiles folder if not present
+        if not os.path.isdir(__Output_Tiles_Pano__):
+            os.system("mkdir -p %s" % __Output_Tiles_Pano__)
+            os.system("mkdir -p %s/top" % __Output_Tiles_Pano__)
+            os.system("mkdir -p %s/mid" % __Output_Tiles_Pano__)
+            os.system("mkdir -p %s/bot" % __Output_Tiles_Pano__)
+
         # Build list of images to be converted
         JP4ToJPEG_List = []
         for i in range(1, ModuleCount):
             JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, __JP4_Image__.path_nomod, i))
 
         # Convert JP4 images to JPEG
-        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, __WriteTiles__)
+        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, (__WriteTiles__ or __WriteTiles_Sensor__))
 
         # Create tiles for previously converted images
         for i in range(1, ModuleCount):
-            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__)
+            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__, imageSizes, (__WriteTiles__ or __WriteTiles_Sensor__))
 
-        # Flip tiles
-        flipTiles(__Output_Tiles__, ImagesCorr)
+        # Check if sensor tile writing is requested
+        if __WriteTiles_Sensor__:
 
-        # Stitch panorama
-        StitchPano(__Output_Tiles__, __Output_Image__, __Temp__, __WriteTiles__)
+            # Copy tiles
+            os.system("cp -r %s/* %s/" % (__Output_Tiles__, __Output_Tiles_Pano__))
 
-    # Remove temp files
-    execCommand("rm -rf %s" % __Temp__)
+            # Flip tiles
+            flipTiles(__Output_Tiles_Pano__, ImagesCorr)
+
+            # Stitch panorama
+            StitchPano(__Output_Tiles_Pano__, __Output_Image__, __Temp__, (__WriteTiles__ or __WriteTiles_Sensor__))
+
+        else:
+
+            # Flip tiles
+            flipTiles(__Output_Tiles__, ImagesCorr)
+
+            # Stitch panorama
+            StitchPano(__Output_Tiles__, __Output_Image__, __Temp__, (__WriteTiles__ or __WriteTiles_Sensor__) )
+
+    # Remove temporary files
+    if "rawdata-jp4preview" in __Temp__:
+        execCommand("rm %s -rf" % __Temp__)
 
 # Program entry point
 if __name__ == "__main__":
