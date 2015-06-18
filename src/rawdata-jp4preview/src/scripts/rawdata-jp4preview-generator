@@ -289,7 +289,7 @@ def MakeTiles(_input, _output, image_sizes, _writetiles=0):
     execCommand("convert -crop %dx%d+0+%d %s %s/mid/%s_1.jpeg" % (jp4_image_sizes_width, image_sizes_height, tile_2_margin,  _input, _output, FileName))
     execCommand("convert -crop %dx%d+0+%d %s %s/bot/%s_2.jpeg" % (jp4_image_sizes_width, image_sizes_height, tile_3_margin,  _input, _output, FileName))
 
-def flipTiles(_tilesdir, ImagesCorr):
+def flipTiles(_tilesdir, ImagesCorr, flip=1, rotate=1):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
@@ -305,28 +305,32 @@ def flipTiles(_tilesdir, ImagesCorr):
     # Iterate over images
     for image in All_images:
 
-        # Check if image need to be flipped verticaly
-        if ImagesCorr.vflips[ _index ] == 1:
+        if flip:
 
-            # Flip verticaly
-            execCommand("convert -flip %s %s" % (image, image))
+            # Check if image need to be flipped verticaly
+            if ImagesCorr.vflips[ _index ] == 1:
 
-        # Check if image need to be flipped horizontaly
-        if ImagesCorr.hflips[ _index ] == 1:
+                # Flip verticaly
+                execCommand("convert -flip %s %s" % (image, image))
 
-            # Flip horizontaly
-            execCommand("convert -flop %s %s" % (image, image))
+            # Check if image need to be flipped horizontaly
+            if ImagesCorr.hflips[ _index ] == 1:
 
-        # Check which rotation direction need to be applyed
-        if ImagesCorr.rolls[ _index ] > 0:
+                # Flip horizontaly
+                execCommand("convert -flop %s %s" % (image, image))
 
-            # Rotate clockwise
-            execCommand("convert -rotate 90 %s %s" % (image, image))
+        if rotate:
 
-        elif ImagesCorr.rolls[ _index ] < 0:
+            # Check which rotation direction need to be applyed
+            if ImagesCorr.rolls[ _index ] > 0:
 
-            # Rotate counter clockwise
-            execCommand("convert -rotate 270 %s %s" % (image, image))
+                # Rotate clockwise
+                execCommand("convert -rotate 90 %s %s" % (image, image))
+
+            elif ImagesCorr.rolls[ _index ] < 0:
+
+                # Rotate counter clockwise
+                execCommand("convert -rotate 270 %s %s" % (image, image))
 
         # Increment module index counter
         _index += 1
@@ -559,11 +563,14 @@ def main(argv):
         # Check if sensor tile writing is requested
         if __WriteTiles_Sensor__:
 
+            # Flip tiles
+            flipTiles(__Output_Tiles__, ImagesCorr, 1, 0)
+
             # Copy tiles
             os.system("cp -r %s/* %s/" % (__Output_Tiles__, __Output_Tiles_Pano__))
 
-            # Flip tiles
-            flipTiles(__Output_Tiles_Pano__, ImagesCorr)
+            # Rotate tiles
+            flipTiles(__Output_Tiles_Pano__, ImagesCorr, 0, 1)
 
             # Stitch panorama
             StitchPano(__Output_Tiles_Pano__, __Output_Image__, __Temp__, (__WriteTiles__ or __WriteTiles_Sensor__))
