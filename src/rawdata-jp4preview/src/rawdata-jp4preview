@@ -174,12 +174,12 @@ SEGMENTS_DIR="$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment"
 
 # Scripts paths
 PARALLEL_SCRIPT="parallel"
-LIST_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-list"
-PREVIEW_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-generator"
-MOVIE_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-moviegenerator"
-JSONUPDATE_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-jsonupdater"
-STATE_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-state"
-VALIDATE_SCRIPT="/home/f0x/Bureau/rawdata-procedures/src/rawdata-jp4preview/src/scripts/rawdata-jp4preview-validate"
+LIST_SCRIPT="rawdata-jp4preview-list"
+PREVIEW_SCRIPT="rawdata-jp4preview-generator"
+MOVIE_SCRIPT="rawdata-jp4preview-moviegenerator"
+JSONUPDATE_SCRIPT="rawdata-jp4preview-jsonupdater"
+STATE_SCRIPT="rawdata-jp4preview-state"
+VALIDATE_SCRIPT="rawdata-jp4preview-validate"
 
 # Check if a segment is specified
 if [ -z "$PARAM_SEGMENT" ]; then
