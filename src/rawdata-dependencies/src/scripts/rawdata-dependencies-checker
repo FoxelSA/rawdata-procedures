@@ -38,6 +38,17 @@
 HOST_NAME="$USER@$HOSTNAME"
 
 # Check movie2dng
+if ! which norama-invert >/dev/null; then
+
+    # Debug output
+    echo -e "[$(date '+%F %R') \e[31mERROR\e[39m] $HOST_NAME : norama-suite not installed"
+
+    # Flag error
+    ENV_NOT_OK="1"
+    
+fi
+
+# Check movie2dng
 if ! which movie2dng >/dev/null; then
 
     # Debug output
