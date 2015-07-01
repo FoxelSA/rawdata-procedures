@@ -47,6 +47,7 @@ import glob
 
 from cStringIO import StringIO
 from datetime import datetime
+import exifread
 
 # JP4 file container class
 class JP4Image:
@@ -207,7 +208,7 @@ def GetImageSizes(FastCalKeyFilePath):
     return [ config.getint('calibration', 'pixelCorrectionWidth_00'), config.getint('calibration', 'pixelCorrectionHeight_00') ]
 
 # Function to convert a JP4 file into JPEG
-def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
+def JP4ToJPEG(List, _output, _temp, _grayscale=0):
 
     # Itertate over paths
     for path in List:
@@ -218,39 +219,26 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0, _writetiles=0):
         # Check presence of grayscale option
         if _grayscale:
 
-            # Check if write tile requested
-            if _writetiles:
-
-                # Convert image
-                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
-
-            else:
-
-                # Convert image
-                execCommand("movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/8 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+            # Convert image
+            execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/4 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
         else:
 
             # Convert image to dng
-            execCommand("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
-            # Check if write tile requested
-            if _writetiles:
+            # Convert dng to pgm
+            execCommand("OMP_NUM_THREADS=1 dcraw_half %s/jpeg/%s.dng 1> /dev/null" % ( _temp, FileName)  )
 
-                # Debay dng file and convert it into jpeg
-                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast | djpeg | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
-
-            else:
-
-                # Debay dng file and convert it into jpeg
-                execCommand("dcraw -c %s/jpeg/%s.dng | cjpeg -dct fast -quality 50 | djpeg -scale 1/8 | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
-
+            # Convert pgm to final jpeg image
+            execCommand("OMP_NUM_THREADS=1 convert %s/jpeg/%s.dng.ppm -resize 648x1460 %s/jpeg/%s.jpeg 2> /dev/null" % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
+            os.remove("%s/jpeg/%s.dng.ppm" % (_temp, FileName))
 
 # Function to generate tiles form a crow
-def MakeTiles(_input, _output, image_sizes, _writetiles=0):
+def MakeTiles(_input, _output, image_sizes):
 
     # Extract filename
     FileName = os.path.splitext(os.path.basename(_input))[0]
@@ -268,21 +256,18 @@ def MakeTiles(_input, _output, image_sizes, _writetiles=0):
     tile_2_margin = ( jp4_image_sizes_height + 8 )
     tile_3_margin = ( ( ( jp4_image_sizes_height * 2 ) + 8 ) + 8 )
 
-    # Determine if tile writing is enabled
-    if not _writetiles:
+    # Divide pixel size
+    tile_1_margin = ( tile_1_margin / 4.0 )
+    tile_2_margin = ( tile_2_margin / 4.0 )
+    tile_3_margin = ( tile_3_margin / 4.0 )
 
-        # Divide pixel size
-        tile_1_margin = ( tile_1_margin / 8.0 )
-        tile_2_margin = ( tile_2_margin / 8.0 )
-        tile_3_margin = ( tile_3_margin / 8.0 )
+    # Divide image size
+    image_sizes_width  = ( image_sizes_width / 4.0 )
+    image_sizes_height = ( image_sizes_height / 4.0 )
 
-        # Divide image size
-        image_sizes_width  = ( image_sizes_width / 8.0 )
-        image_sizes_height = ( image_sizes_height / 8.0 )
-
-        # Divide jp4 image size
-        jp4_image_sizes_width  = ( jp4_image_sizes_width / 8.0 )
-        jp4_image_sizes_height = ( jp4_image_sizes_height / 8.0 )
+    # Divide jp4 image size
+    jp4_image_sizes_width  = ( jp4_image_sizes_width / 4.0 )
+    jp4_image_sizes_height = ( jp4_image_sizes_height / 4.0 )
 
     # Split image
     execCommand("convert -crop %dx%d+0-%d  %s %s/top/%s_0.jpeg" % (jp4_image_sizes_width, jp4_image_sizes_height, tile_1_margin, _input, _output, FileName))
@@ -335,73 +320,210 @@ def flipTiles(_tilesdir, ImagesCorr, flip=1, rotate=1):
         # Increment module index counter
         _index += 1
 
+# Function to invert a tile
+def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shift ):
+
+    # Retrieve channel #
+    EP_CHAN = ( int( os.path.basename( input_tile ).split( '_' )[ 2 ] ) + shift )
+
+    # Compute kernel map file path
+    imagePath = glob.glob( "%s/camera/%s/calibration/*maps*/*%02d.eqr-tiff" % ( mount_point, mac_address, EP_CHAN ) )[ 0 ]
+
+    # Sensor image size containers
+    EP_EQRW = 0
+    EP_EQRH = 0
+
+    # Open sensor image
+    with open( imagePath, 'r' ) as f:
+
+        # Read image exif tags
+        EXIF_Tags = exifread.process_file( f )
+
+        # Extract dimensions
+        EP_EQRW = ( int( "%s" % EXIF_Tags[ 'Image ImageWidth' ] ) / 6 )
+        EP_EQRH = ( int( "%s" % EXIF_Tags[ 'Image ImageLength' ] ) / 6 )
+
+    # Read angles from FastCal file
+    EP_AZIM = ( fastCal.getfloat('calibration', 'azimuth_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
+    EP_HEAD = ( fastCal.getfloat('calibration', 'heading_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
+    EP_ELEV = ( fastCal.getfloat('calibration', 'elevation_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
+    EP_ROLL = ( fastCal.getfloat('calibration', 'roll_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
+
+    # Read pixel sizes from FastCal file
+    X0 = ( fastCal.getfloat('calibration', 'px0_%02d' % EP_CHAN ) / 4.0 )
+    Y0 = ( fastCal.getfloat('calibration', 'py0_%02d' % EP_CHAN ) / 4.0 )
+    PIXEL_SIZE = fastCal.getfloat('calibration', 'pixelSize_%02d' % EP_CHAN )
+
+    # Read focal length from FastCal file
+    F0 = ( fastCal.getfloat('calibration', 'focalLength_%02d' % EP_CHAN ) / 4.0 )
+
+    # Read sensor image dimensions
+    MAP_WIDTH  = ( fastCal.getfloat('calibration', 'ImageFullWidth_%02d' % EP_CHAN ) / 6.0 )
+    MAP_HEIGHT = ( fastCal.getfloat('calibration', 'ImageFullLength_%02d' % EP_CHAN ) / 6.0 )
+
+    # Read sensor image positions
+    TILE_X = ( fastCal.getfloat('calibration', 'XPosition_%02d' % EP_CHAN ) / 6.0 )
+    TILE_Y = ( fastCal.getfloat('calibration', 'YPosition_%02d' % EP_CHAN ) / 6.0 )
+
+    # Invert tile
+    execCommand( "norama-invert --elphel \
+        -i %s \
+        -o %s \
+        --interpolation bilinearf \
+        --threads    1 \
+        --eqr-width  %d \
+        --eqr-height %d \
+        --map-width  %d \
+        --map-height %d \
+        --sight-x    %.10f \
+        --sight-y    %.10f \
+        --tile-x     %.10f \
+        --tile-y     %.10f \
+        --azimuth    %.10f \
+        --heading    %.10f \
+        --elevation  %.10f \
+        --roll       %.10f \
+        --focal      %.10f \
+        --pixel      %.10f "
+    % (
+        input_tile,
+        output_tile,
+        EP_EQRW,
+        EP_EQRH,
+        MAP_WIDTH,
+        MAP_HEIGHT,
+        X0,
+        Y0,
+        TILE_X,
+        TILE_Y,
+        EP_AZIM,
+        EP_HEAD,
+        EP_ELEV,
+        EP_ROLL,
+        F0,
+        PIXEL_SIZE
+    ) )
+
+# Function to invert tile list
+def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, fastcal_file):
+
+    # Separate each tiles into lists
+    TopList = sorted(glob.glob("%s/top/*.jpeg" % output_tiles))
+    MidList = sorted(glob.glob("%s/mid/*.jpeg" % output_tiles))
+    BotList = sorted(glob.glob("%s/bot/*.jpeg" % output_tiles))
+
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
+
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(fastcal_file, 'r').read()))
+
+    # Iterate over top tiles
+    for tile in TopList:
+
+        # Invert tile
+        invertTile( config, tile, "%s/top/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, -1 )
+
+    # Iterate over mid tiles
+    for tile in MidList:
+
+        # Invert tile
+        invertTile( config, tile, "%s/mid/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 7 )
+
+    # Iterate over bottom tiles
+    for tile in BotList:
+
+        # Invert tile
+        invertTile( config, tile, "%s/bot/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 15 )
+
 # Function to stitch a set of tiles
-def StitchPano(_tilesdir, _output, _temp, _writetiles=0):
+def StitchPano(_tilesdir, _output, fastcal_file):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
     MidList = sorted(glob.glob("%s/mid/*.jpeg" % _tilesdir))
     BotList = sorted(glob.glob("%s/bot/*.jpeg" % _tilesdir))
 
-    # Resized config lists
-    TopList_r = []
-    MidList_r = []
-    BotList_r = []
+    # Instanciate ConfigParser
+    config = ConfigParser.RawConfigParser()
 
-    # Rescale by 10% top images
-    for e in TopList:
+    # Read FastCal calibration file and prepend a fake [section] to comply with ConfigParser
+    config.readfp(StringIO('[calibration]\n' + open(fastcal_file, 'r').read()))
 
-        # Check if tile writing is requested
-        if _writetiles:
+    # Get image positions
+    EP_MD04 = ( ( config.getint('calibration', 'XPosition_04' ) - config.getint('calibration', 'ImageFullWidth_04' ) ) / 6 )
+    EP_MD12 = ( ( config.getint('calibration', 'XPosition_12' ) - config.getint('calibration', 'ImageFullWidth_12' ) ) / 6 )
+    EP_MD20 = ( ( config.getint('calibration', 'XPosition_20' ) - config.getint('calibration', 'ImageFullWidth_20' ) ) / 6 )
 
-            # Append element
-            TopList_r.append("%s[10%%]" % e)
+    # Get image dimensions
+    PAN_W = ( config.getint('calibration', 'ImageFullWidth_00' )  / 6 )
+    PAN_H = ( config.getint('calibration', 'ImageFullLength_00' ) / 6 )
 
-        else:
+    # Stitch panorama
+    execCommand("\
+        convert -size %dx%d canvas:black \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s -geometry +%d+%d -composite -compose lighten \
+        %s "
+    % (
+        PAN_W, PAN_H,
+        TopList[ 0 ], ( config.getint('calibration', 'XPosition_00' ) / 6 ), ( config.getint('calibration', 'YPosition_00' ) / 6 ),
+        TopList[ 1 ], ( config.getint('calibration', 'XPosition_01' ) / 6 ), ( config.getint('calibration', 'YPosition_01' ) / 6 ),
+        TopList[ 2 ], ( config.getint('calibration', 'XPosition_02' ) / 6 ), ( config.getint('calibration', 'YPosition_02' ) / 6 ),
+        TopList[ 3 ], ( config.getint('calibration', 'XPosition_03' ) / 6 ), ( config.getint('calibration', 'YPosition_03' ) / 6 ),
+        TopList[ 4 ], ( config.getint('calibration', 'XPosition_04' ) / 6 ), ( config.getint('calibration', 'YPosition_04' ) / 6 ),
+        TopList[ 4 ], EP_MD04, ( config.getint('calibration', 'YPosition_04' ) / 6 ),
+        TopList[ 5 ], ( config.getint('calibration', 'XPosition_05' ) / 6 ), ( config.getint('calibration', 'YPosition_05' ) / 6 ),
+        TopList[ 6 ], ( config.getint('calibration', 'XPosition_06' ) / 6 ), ( config.getint('calibration', 'YPosition_06' ) / 6 ),
+        TopList[ 7 ], ( config.getint('calibration', 'XPosition_07' ) / 6 ), ( config.getint('calibration', 'YPosition_07' ) / 6 ),
 
-            # Append element
-            TopList_r.append("%s" % e)
+        MidList[ 0 ], ( config.getint('calibration', 'XPosition_08' ) / 6 ), ( config.getint('calibration', 'YPosition_08' ) / 6 ),
+        MidList[ 1 ], ( config.getint('calibration', 'XPosition_09' ) / 6 ), ( config.getint('calibration', 'YPosition_09' ) / 6 ),
+        MidList[ 2 ], ( config.getint('calibration', 'XPosition_10' ) / 6 ), ( config.getint('calibration', 'YPosition_10' ) / 6 ),
+        MidList[ 3 ], ( config.getint('calibration', 'XPosition_11' ) / 6 ), ( config.getint('calibration', 'YPosition_11' ) / 6 ),
+        MidList[ 4 ], ( config.getint('calibration', 'XPosition_12' ) / 6 ), ( config.getint('calibration', 'YPosition_12' ) / 6 ),
+        MidList[ 4 ], EP_MD12, ( config.getint('calibration', 'YPosition_12' ) / 6 ),
+        MidList[ 5 ], ( config.getint('calibration', 'XPosition_13' ) / 6 ), ( config.getint('calibration', 'YPosition_13' ) / 6 ),
+        MidList[ 6 ], ( config.getint('calibration', 'XPosition_14' ) / 6 ), ( config.getint('calibration', 'YPosition_14' ) / 6 ),
+        MidList[ 7 ], ( config.getint('calibration', 'XPosition_15' ) / 6 ), ( config.getint('calibration', 'YPosition_15' ) / 6 ),
 
-    # Rescale by 10% mid images
-    for e in MidList:
+        BotList[ 0 ], ( config.getint('calibration', 'XPosition_16' ) / 6 ), ( config.getint('calibration', 'YPosition_16' ) / 6 ),
+        BotList[ 1 ], ( config.getint('calibration', 'XPosition_17' ) / 6 ), ( config.getint('calibration', 'YPosition_17' ) / 6 ),
+        BotList[ 2 ], ( config.getint('calibration', 'XPosition_18' ) / 6 ), ( config.getint('calibration', 'YPosition_18' ) / 6 ),
+        BotList[ 3 ], ( config.getint('calibration', 'XPosition_19' ) / 6 ), ( config.getint('calibration', 'YPosition_19' ) / 6 ),
+        BotList[ 4 ], ( config.getint('calibration', 'XPosition_20' ) / 6 ), ( config.getint('calibration', 'YPosition_20' ) / 6 ),
+        BotList[ 4 ], EP_MD20, ( config.getint('calibration', 'YPosition_20' ) / 6 ),
+        BotList[ 5 ], ( config.getint('calibration', 'XPosition_21' ) / 6 ), ( config.getint('calibration', 'YPosition_21' ) / 6 ),
+        BotList[ 6 ], ( config.getint('calibration', 'XPosition_22' ) / 6 ), ( config.getint('calibration', 'YPosition_22' ) / 6 ),
+        BotList[ 7 ], ( config.getint('calibration', 'XPosition_23' ) / 6 ), ( config.getint('calibration', 'YPosition_23' ) / 6 ),
 
-        # Check if tile writing is requested
-        if _writetiles:
-
-            # Append element
-            MidList_r.append("%s[10%%]" % e)
-
-        else:
-
-            # Append element
-            MidList_r.append("%s" % e)
-
-    # Rescale by 10% bot images
-    for e in BotList:
-
-        # Check if tile writing is requested
-        if _writetiles:
-
-            # Append element
-            BotList_r.append("%s[10%%]" % e)
-
-        else:
-
-            # Append element
-            BotList_r.append("%s" % e)
-
-    # Generate 3 crowns (top, middle, bottom)
-    execCommand("montage -mode concatenate -tile 8x %s %s/top.jpeg" % (' '.join(TopList_r), _temp))
-    execCommand("montage -mode concatenate -tile 8x %s %s/mid.jpeg" % (' '.join(MidList_r), _temp))
-    execCommand("montage -mode concatenate -tile 8x %s %s/bot.jpeg" % (' '.join(BotList_r), _temp))
-
-    # Stitch crowns
-    execCommand("convert -append %s/top.jpeg %s/mid.jpeg %s/bot.jpeg %s" % (_temp, _temp, _temp, _output))
-
-    # Remove temporary files
-    os.remove("%s/top.jpeg" % _temp)
-    os.remove("%s/mid.jpeg" % _temp)
-    os.remove("%s/bot.jpeg" % _temp)
+        _output
+    ))
 
 # Usage display function
 def _usage():
@@ -425,12 +547,10 @@ def main(argv):
     __PARAM_MASTER__      = argv[ 3 ]
     __PARAM_SEGMENT__     = argv[ 4 ]
     __NoDebayer__         = (int( argv[ 5 ] ) == 1)
-    __WriteTiles__        = (int( argv[ 6 ] ) == 1)
-    __WriteTiles_Sensor__ = (int( argv[ 7 ] ) == 1)
 
     # Compute temp folder
     __Temp_Base__  = "/run/shm/rawdata-jp4preview"
-    __Temp__       = "%s/%d" %  (__Temp_Base__, os.getpid())
+    __Temp__       = "%s/%d" %  ( __Temp_Base__, os.getpid() )
 
     # Compute FastCal key file path
     FastCalKeyFile = "%s/camera/%s/fastcal/calibration.key" % (__PARAM_MOUNT__, __PARAM_MAC__)
@@ -506,19 +626,8 @@ def main(argv):
 
     # Compute output folder
     __Output_Base__   = "%s/%s/preview/%s/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder)
-    __Output_Tiles__  = ""
-    __Output_Tiles_Pano__ = "%s/tiles" % __Temp__
-
-    # Check if tile writing is requested
-    if __WriteTiles__ or __WriteTiles_Sensor__:
-
-        # Compute tiles path
-        __Output_Tiles__ = "%s/%s/preview/%s/tiles/%s/%s" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.base_folder, __JP4_Image__.timestamp)
-
-    else:
-
-        # Compute tiles path
-        __Output_Tiles__ = "%s/tiles" % __Temp__
+    __Output_Tiles__ = "%s/tiles" % __Temp__
+    __Output_Tiles_Inverted__ = "%s/tiles_inverted" % __Temp__
 
     # Compute output folders
     __Output__   = "%s/%d" % (__Output_Base__, __JP4_Image__.base_folder)
@@ -542,11 +651,11 @@ def main(argv):
             os.system("mkdir -p %s/bot" % __Output_Tiles__)
 
         # Create output tiles folder if not present
-        if not os.path.isdir(__Output_Tiles_Pano__):
-            os.system("mkdir -p %s" % __Output_Tiles_Pano__)
-            os.system("mkdir -p %s/top" % __Output_Tiles_Pano__)
-            os.system("mkdir -p %s/mid" % __Output_Tiles_Pano__)
-            os.system("mkdir -p %s/bot" % __Output_Tiles_Pano__)
+        if not os.path.isdir(__Output_Tiles_Inverted__):
+            os.system("mkdir -p %s" % __Output_Tiles_Inverted__)
+            os.system("mkdir -p %s/top" % __Output_Tiles_Inverted__)
+            os.system("mkdir -p %s/mid" % __Output_Tiles_Inverted__)
+            os.system("mkdir -p %s/bot" % __Output_Tiles_Inverted__)
 
         # Build list of images to be converted
         JP4ToJPEG_List = []
@@ -554,34 +663,20 @@ def main(argv):
             JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, __JP4_Image__.path_nomod, i))
 
         # Convert JP4 images to JPEG
-        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, (__WriteTiles__ or __WriteTiles_Sensor__))
+        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
 
         # Create tiles for previously converted images
         for i in range(1, ModuleCount):
-            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__, imageSizes, (__WriteTiles__ or __WriteTiles_Sensor__))
+            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__, imageSizes)
 
-        # Check if sensor tile writing is requested
-        if __WriteTiles_Sensor__:
+        # Flip tiles
+        flipTiles(__Output_Tiles__, ImagesCorr, 1, 0)
 
-            # Flip tiles
-            flipTiles(__Output_Tiles__, ImagesCorr, 1, 0)
+        # Inver tiles to EQR
+        invertTiles( __Output_Tiles__, __Output_Tiles_Inverted__, __PARAM_MOUNT__, __PARAM_MAC__, FastCalKeyFile )
 
-            # Copy tiles
-            os.system("cp -r %s/* %s/" % (__Output_Tiles__, __Output_Tiles_Pano__))
-
-            # Rotate tiles
-            flipTiles(__Output_Tiles_Pano__, ImagesCorr, 0, 1)
-
-            # Stitch panorama
-            StitchPano(__Output_Tiles_Pano__, __Output_Image__, __Temp__, (__WriteTiles__ or __WriteTiles_Sensor__))
-
-        else:
-
-            # Flip tiles
-            flipTiles(__Output_Tiles__, ImagesCorr)
-
-            # Stitch panorama
-            StitchPano(__Output_Tiles__, __Output_Image__, __Temp__, (__WriteTiles__ or __WriteTiles_Sensor__) )
+        # Stitch panorama
+        StitchPano(__Output_Tiles_Inverted__, __Output_Image__, FastCalKeyFile)
 
     # Remove temporary files
     if "rawdata-jp4preview" in __Temp__:

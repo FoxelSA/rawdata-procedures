@@ -133,7 +133,7 @@ def main(argv):
 
     # Create preview movie if not exists
     if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
-        os.system('mencoder mf://@%s -mf w=1944:h=972:fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+        os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
 
     # Remove temp file
     os.unlink( list_File.name )
