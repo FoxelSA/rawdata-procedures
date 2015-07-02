@@ -43,7 +43,7 @@ PARAM_SEGMENT=""
 PARAM_CPU_THREADS=""
 PARAM_NO_DEBAYER="0"
 PARAM_WRITE_TILES="0"
-PARAM_WRITE_SENSOR_TILES="0"
+PARAM_FULL_PREVIEWS="0"
 PARAM_FORCE="0"
 
 # Loop breaker
@@ -63,8 +63,8 @@ _help() {
     --segment-timestamp   Segment timestamp
     --no-split            Exit program
     --no-debayer          Write grayscale images (without debayer)
-    --write-tiles         Write full resolution tiles
-    --write-sensor-tiles  Write full resolution sensor tiles
+    --write-tiles         Write full resolution sensor tiles
+    --full-previews       Write full resolution previews
     --force               Bypass preview flag in JSON
     --cpu-threads         Process localy with specified number of threads
     --help                Show this message
@@ -96,8 +96,8 @@ arguments() {
             --write-tiles)
                 PARAM_WRITE_TILES="1"
             ;;
-            --write-sensor-tiles)
-                PARAM_WRITE_SENSOR_TILES="1"
+            --full-previews)
+                PARAM_FULL_PREVIEWS="1"
             ;;
             --force)
                 PARAM_FORCE="1"
@@ -232,7 +232,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                             $SEGMENT_TIMESTAMP \
                             $PARAM_NO_DEBAYER \
                             $PARAM_WRITE_TILES \
-                            $PARAM_WRITE_SENSOR_TILES
+                            $PARAM_FULL_PREVIEWS
                         else
                             echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                             $PARAM_MOUNT \
@@ -241,7 +241,7 @@ if [ -z "$PARAM_SEGMENT" ]; then
                             $SEGMENT_TIMESTAMP \
                             $PARAM_NO_DEBAYER \
                             $PARAM_WRITE_TILES \
-                            $PARAM_WRITE_SENSOR_TILES
+                            $PARAM_FULL_PREVIEWS
                         fi
 
                         # Loop break checker
@@ -279,7 +279,8 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         $PARAM_MAC \
                         $PARAM_MASTER \
                         $SEGMENT_TIMESTAMP \
-                        $PARAM_NO_DEBAYER
+                        $PARAM_NO_DEBAYER \
+                        $PARAM_FULL_PREVIEWS
 
                         # Loop break checker
                         if [ $LOOP_BREAK -ne 0 ]; then break; fi
@@ -362,7 +363,7 @@ else
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER \
                     $PARAM_WRITE_TILES \
-                    $PARAM_WRITE_SENSOR_TILES
+                    $PARAM_FULL_PREVIEWS
                 else
                     echo "$JP4_LIST" | sort | $PARALLEL_SCRIPT --gnu --retries 5 --will-cite --eta -j$PARAM_CPU_THREADS $PREVIEW_SCRIPT {} \
                     $PARAM_MOUNT \
@@ -371,7 +372,7 @@ else
                     $PARAM_SEGMENT \
                     $PARAM_NO_DEBAYER \
                     $PARAM_WRITE_TILES \
-                    $PARAM_WRITE_SENSOR_TILES
+                    $PARAM_FULL_PREVIEWS
                 fi
 
                 # Loop break checker
@@ -409,7 +410,8 @@ else
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $PARAM_SEGMENT \
-                $PARAM_NO_DEBAYER
+                $PARAM_NO_DEBAYER \
+                $PARAM_FULL_PREVIEWS
 
                 # Loop break checker
                 if [ $LOOP_BREAK -ne 0 ]; then break; fi

@@ -67,6 +67,8 @@ def main(argv):
     __MasterTimestamp__  = argv[ 2 ]
     __SegmentTimestamp__ = argv[ 3 ]
     __Param_NoDebayer__  = "0"
+    __Param_Full_Previews__ = argv[ 4 ]
+
 
     # Arguments check
     if( len( argv ) > 4 ):
@@ -133,7 +135,17 @@ def main(argv):
 
     # Create preview movie if not exists
     if not os.path.isfile("%s/segment.webm" % PreviewsFolder):
-        os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+
+        # Check if full preview requested
+        if __Param_Full_Previews__:
+
+            # Generate video
+            os.system('mencoder mf://@%s -vf scale=5120:3200 -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+
+        else:
+
+            # Generate video
+            os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
 
     # Remove temp file
     os.unlink( list_File.name )

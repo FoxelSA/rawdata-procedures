@@ -49,10 +49,6 @@ from cStringIO import StringIO
 from datetime import datetime
 import exifread
 
-# Global variables
-TILES_SCALE_FACTOR  = 2
-OUTPUT_SCALE_FACTOR = 6
-
 # JP4 file container class
 class JP4Image:
     def __init__(self, timestamp, module, base_folder=-1):
@@ -212,7 +208,7 @@ def GetImageSizes(FastCalKeyFilePath):
     return [ config.getint('calibration', 'pixelCorrectionWidth_00'), config.getint('calibration', 'pixelCorrectionHeight_00') ]
 
 # Function to convert a JP4 file into JPEG
-def JP4ToJPEG(List, _output, _temp, _grayscale=0):
+def JP4ToJPEG(List, _output, _temp, _grayscale=0, _half=0):
 
     # Itertate over paths
     for path in List:
@@ -229,16 +225,28 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         else:
 
             # Convert image to dng
-            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 1> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
-            # Debay dng file and convert it into jpeg
-            execCommand("OMP_NUM_THREADS=1 dcraw -h -c %s/jpeg/%s.dng | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+            # Check if half tile requested
+            if _half:
+
+                # Debay dng file and convert it into jpeg
+                execCommand("OMP_NUM_THREADS=1 dcraw_half %s/jpeg/%s.dng 1> /dev/null" % (_temp, FileName))
+
+            else:
+
+                # Debay dng file and convert it into jpeg
+                execCommand("OMP_NUM_THREADS=1 simple_dcraw %s/jpeg/%s.dng" % (_temp, FileName))
+
+            # Comvert PPM to jpeg
+            execCommand("OMP_NUM_THREADS=1 convert %s/jpeg/%s.dng.ppm %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName) )
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
+            os.remove("%s/jpeg/%s.dng.ppm" % (_temp, FileName))
 
 # Function to generate tiles form a crow
-def MakeTiles(_input, _output, image_sizes):
+def MakeTiles(_input, _output, image_sizes, TILES_SCALE_FACTOR):
 
     # Extract filename
     FileName = os.path.splitext(os.path.basename(_input))[0]
@@ -321,7 +329,7 @@ def flipTiles(_tilesdir, ImagesCorr, flip=1, rotate=1):
         _index += 1
 
 # Function to invert a tile
-def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shift ):
+def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shift, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR ):
 
     # Retrieve channel #
     EP_CHAN = ( int( os.path.basename( input_tile ).split( '_' )[ 2 ] ) + shift )
@@ -405,7 +413,7 @@ def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shif
     ) )
 
 # Function to invert tile list
-def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, fastcal_file):
+def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, fastcal_file, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % output_tiles))
@@ -422,22 +430,22 @@ def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, 
     for tile in TopList:
 
         # Invert tile
-        invertTile( config, tile, "%s/top/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, -1 )
+        invertTile( config, tile, "%s/top/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, -1, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
     # Iterate over mid tiles
     for tile in MidList:
 
         # Invert tile
-        invertTile( config, tile, "%s/mid/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 7 )
+        invertTile( config, tile, "%s/mid/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 7, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
     # Iterate over bottom tiles
     for tile in BotList:
 
         # Invert tile
-        invertTile( config, tile, "%s/bot/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 15 )
+        invertTile( config, tile, "%s/bot/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 15, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
 # Function to stitch a set of tiles
-def StitchPano(_tilesdir, _output, fastcal_file):
+def StitchPano(_tilesdir, _output, fastcal_file, OUTPUT_SCALE_FACTOR ):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % _tilesdir))
@@ -547,6 +555,39 @@ def main(argv):
     __PARAM_MASTER__      = argv[ 3 ]
     __PARAM_SEGMENT__     = argv[ 4 ]
     __NoDebayer__         = (int( argv[ 5 ] ) == 1)
+    __Write_Tiles__       = (int( argv[ 6 ] ) == 1)
+    __Full_Previews__     = (int( argv[ 7 ] ) == 1)
+
+    # Settings
+    HALF_ENABLED = 1
+    OUTPUT_SCALE_FACTOR = 6
+
+    # Global variables
+    TILES_SCALE_FACTOR  = 1
+
+    # Check if half  previews is requested
+    if HALF_ENABLED:
+
+        # Adjust tiles scale factor
+        TILES_SCALE_FACTOR = 2
+
+        # Check if output scale is lesser than tile scale factor
+        if OUTPUT_SCALE_FACTOR < TILES_SCALE_FACTOR:
+
+            # Clamp output scale factor
+            OUTPUT_SCALE_FACTOR = TILES_SCALE_FACTOR
+
+    # Check if full previews requested
+    if __Full_Previews__:
+
+        # Disable half generation
+        HALF_ENABLED = 0
+
+        # Adjust tiles scale factor
+        TILES_SCALE_FACTOR = 1
+
+        # Adjust output tiles scale factor
+        OUTPUT_SCALE_FACTOR = 1
 
     # Compute temp folder
     __Temp_Base__  = "/run/shm/rawdata-jp4preview"
@@ -568,7 +609,6 @@ def main(argv):
         execCommand("mkdir -p %s/tiles/top" % __Temp__)
         execCommand("mkdir -p %s/tiles/mid" % __Temp__)
         execCommand("mkdir -p %s/tiles/bot" % __Temp__)
-
         execCommand("mkdir -p %s/jpeg" % __Temp__)
 
     # Check if all tools are present
@@ -663,20 +703,20 @@ def main(argv):
             JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, __JP4_Image__.path_nomod, i))
 
         # Convert JP4 images to JPEG
-        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__)
+        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, HALF_ENABLED)
 
         # Create tiles for previously converted images
         for i in range(1, ModuleCount):
-            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__, imageSizes)
+            MakeTiles("%s/jpeg/%s_%d.jpeg" % (__Temp__, __JP4_Image__.timestamp, i), __Output_Tiles__, imageSizes, TILES_SCALE_FACTOR)
 
         # Flip tiles
         flipTiles(__Output_Tiles__, ImagesCorr, 1, 0)
 
         # Inver tiles to EQR
-        invertTiles( __Output_Tiles__, __Output_Tiles_Inverted__, __PARAM_MOUNT__, __PARAM_MAC__, FastCalKeyFile )
+        invertTiles( __Output_Tiles__, __Output_Tiles_Inverted__, __PARAM_MOUNT__, __PARAM_MAC__, FastCalKeyFile, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR)
 
         # Stitch panorama
-        StitchPano(__Output_Tiles_Inverted__, __Output_Image__, FastCalKeyFile)
+        StitchPano(__Output_Tiles_Inverted__, __Output_Image__, FastCalKeyFile, OUTPUT_SCALE_FACTOR)
 
     # Remove temporary files
     if "rawdata-jp4preview" in __Temp__:
