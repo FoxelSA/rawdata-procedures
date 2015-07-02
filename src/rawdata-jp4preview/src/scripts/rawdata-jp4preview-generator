@@ -49,6 +49,10 @@ from cStringIO import StringIO
 from datetime import datetime
 import exifread
 
+# Global variables
+TILES_SCALE_FACTOR  = 2
+OUTPUT_SCALE_FACTOR = 6
+
 # JP4 file container class
 class JP4Image:
     def __init__(self, timestamp, module, base_folder=-1):
@@ -225,17 +229,13 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         else:
 
             # Convert image to dng
-            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            execCommand("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
-            # Convert dng to pgm
-            execCommand("OMP_NUM_THREADS=1 dcraw_half %s/jpeg/%s.dng 1> /dev/null" % ( _temp, FileName)  )
-
-            # Convert pgm to final jpeg image
-            execCommand("OMP_NUM_THREADS=1 convert %s/jpeg/%s.dng.ppm -resize 648x1460 %s/jpeg/%s.jpeg 2> /dev/null" % (_temp, FileName, _output, FileName))
+            # Debay dng file and convert it into jpeg
+            execCommand("dcraw -h -c %s/jpeg/%s.dng | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
-            os.remove("%s/jpeg/%s.dng.ppm" % (_temp, FileName))
 
 # Function to generate tiles form a crow
 def MakeTiles(_input, _output, image_sizes):
@@ -257,17 +257,17 @@ def MakeTiles(_input, _output, image_sizes):
     tile_3_margin = ( ( ( jp4_image_sizes_height * 2 ) + 8 ) + 8 )
 
     # Divide pixel size
-    tile_1_margin = ( tile_1_margin / 4.0 )
-    tile_2_margin = ( tile_2_margin / 4.0 )
-    tile_3_margin = ( tile_3_margin / 4.0 )
+    tile_1_margin = ( tile_1_margin / TILES_SCALE_FACTOR )
+    tile_2_margin = ( tile_2_margin / TILES_SCALE_FACTOR )
+    tile_3_margin = ( tile_3_margin / TILES_SCALE_FACTOR )
 
     # Divide image size
-    image_sizes_width  = ( image_sizes_width / 4.0 )
-    image_sizes_height = ( image_sizes_height / 4.0 )
+    image_sizes_width  = ( image_sizes_width / TILES_SCALE_FACTOR )
+    image_sizes_height = ( image_sizes_height / TILES_SCALE_FACTOR )
 
     # Divide jp4 image size
-    jp4_image_sizes_width  = ( jp4_image_sizes_width / 4.0 )
-    jp4_image_sizes_height = ( jp4_image_sizes_height / 4.0 )
+    jp4_image_sizes_width  = ( jp4_image_sizes_width / TILES_SCALE_FACTOR )
+    jp4_image_sizes_height = ( jp4_image_sizes_height / TILES_SCALE_FACTOR )
 
     # Split image
     execCommand("convert -crop %dx%d+0-%d  %s %s/top/%s_0.jpeg" % (jp4_image_sizes_width, jp4_image_sizes_height, tile_1_margin, _input, _output, FileName))
@@ -340,8 +340,8 @@ def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shif
         EXIF_Tags = exifread.process_file( f )
 
         # Extract dimensions
-        EP_EQRW = ( int( "%s" % EXIF_Tags[ 'Image ImageWidth' ] ) / 6 )
-        EP_EQRH = ( int( "%s" % EXIF_Tags[ 'Image ImageLength' ] ) / 6 )
+        EP_EQRW = ( int( "%s" % EXIF_Tags[ 'Image ImageWidth' ] ) / OUTPUT_SCALE_FACTOR )
+        EP_EQRH = ( int( "%s" % EXIF_Tags[ 'Image ImageLength' ] ) / OUTPUT_SCALE_FACTOR )
 
     # Read angles from FastCal file
     EP_AZIM = ( fastCal.getfloat('calibration', 'azimuth_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
@@ -350,20 +350,20 @@ def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shif
     EP_ROLL = ( fastCal.getfloat('calibration', 'roll_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
 
     # Read pixel sizes from FastCal file
-    X0 = ( fastCal.getfloat('calibration', 'px0_%02d' % EP_CHAN ) / 4.0 )
-    Y0 = ( fastCal.getfloat('calibration', 'py0_%02d' % EP_CHAN ) / 4.0 )
+    X0 = ( fastCal.getfloat('calibration', 'px0_%02d' % EP_CHAN ) / TILES_SCALE_FACTOR )
+    Y0 = ( fastCal.getfloat('calibration', 'py0_%02d' % EP_CHAN ) / TILES_SCALE_FACTOR )
     PIXEL_SIZE = fastCal.getfloat('calibration', 'pixelSize_%02d' % EP_CHAN )
 
     # Read focal length from FastCal file
-    F0 = ( fastCal.getfloat('calibration', 'focalLength_%02d' % EP_CHAN ) / 4.0 )
+    F0 = ( fastCal.getfloat('calibration', 'focalLength_%02d' % EP_CHAN ) / TILES_SCALE_FACTOR )
 
     # Read sensor image dimensions
-    MAP_WIDTH  = ( fastCal.getfloat('calibration', 'ImageFullWidth_%02d' % EP_CHAN ) / 6.0 )
-    MAP_HEIGHT = ( fastCal.getfloat('calibration', 'ImageFullLength_%02d' % EP_CHAN ) / 6.0 )
+    MAP_WIDTH  = ( fastCal.getfloat('calibration', 'ImageFullWidth_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
+    MAP_HEIGHT = ( fastCal.getfloat('calibration', 'ImageFullLength_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
 
     # Read sensor image positions
-    TILE_X = ( fastCal.getfloat('calibration', 'XPosition_%02d' % EP_CHAN ) / 6.0 )
-    TILE_Y = ( fastCal.getfloat('calibration', 'YPosition_%02d' % EP_CHAN ) / 6.0 )
+    TILE_X = ( fastCal.getfloat('calibration', 'XPosition_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
+    TILE_Y = ( fastCal.getfloat('calibration', 'YPosition_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
 
     # Invert tile
     execCommand( "norama-invert --elphel \
@@ -451,13 +451,13 @@ def StitchPano(_tilesdir, _output, fastcal_file):
     config.readfp(StringIO('[calibration]\n' + open(fastcal_file, 'r').read()))
 
     # Get image positions
-    EP_MD04 = ( ( config.getint('calibration', 'XPosition_04' ) - config.getint('calibration', 'ImageFullWidth_04' ) ) / 6 )
-    EP_MD12 = ( ( config.getint('calibration', 'XPosition_12' ) - config.getint('calibration', 'ImageFullWidth_12' ) ) / 6 )
-    EP_MD20 = ( ( config.getint('calibration', 'XPosition_20' ) - config.getint('calibration', 'ImageFullWidth_20' ) ) / 6 )
+    EP_MD04 = ( ( config.getint('calibration', 'XPosition_04' ) - config.getint('calibration', 'ImageFullWidth_04' ) ) / OUTPUT_SCALE_FACTOR )
+    EP_MD12 = ( ( config.getint('calibration', 'XPosition_12' ) - config.getint('calibration', 'ImageFullWidth_12' ) ) / OUTPUT_SCALE_FACTOR )
+    EP_MD20 = ( ( config.getint('calibration', 'XPosition_20' ) - config.getint('calibration', 'ImageFullWidth_20' ) ) / OUTPUT_SCALE_FACTOR )
 
     # Get image dimensions
-    PAN_W = ( config.getint('calibration', 'ImageFullWidth_00' )  / 6 )
-    PAN_H = ( config.getint('calibration', 'ImageFullLength_00' ) / 6 )
+    PAN_W = ( config.getint('calibration', 'ImageFullWidth_00' )  / OUTPUT_SCALE_FACTOR )
+    PAN_H = ( config.getint('calibration', 'ImageFullLength_00' ) / OUTPUT_SCALE_FACTOR )
 
     # Stitch panorama
     execCommand("\
@@ -492,35 +492,35 @@ def StitchPano(_tilesdir, _output, fastcal_file):
         %s "
     % (
         PAN_W, PAN_H,
-        TopList[ 0 ], ( config.getint('calibration', 'XPosition_00' ) / 6 ), ( config.getint('calibration', 'YPosition_00' ) / 6 ),
-        TopList[ 1 ], ( config.getint('calibration', 'XPosition_01' ) / 6 ), ( config.getint('calibration', 'YPosition_01' ) / 6 ),
-        TopList[ 2 ], ( config.getint('calibration', 'XPosition_02' ) / 6 ), ( config.getint('calibration', 'YPosition_02' ) / 6 ),
-        TopList[ 3 ], ( config.getint('calibration', 'XPosition_03' ) / 6 ), ( config.getint('calibration', 'YPosition_03' ) / 6 ),
-        TopList[ 4 ], ( config.getint('calibration', 'XPosition_04' ) / 6 ), ( config.getint('calibration', 'YPosition_04' ) / 6 ),
-        TopList[ 4 ], EP_MD04, ( config.getint('calibration', 'YPosition_04' ) / 6 ),
-        TopList[ 5 ], ( config.getint('calibration', 'XPosition_05' ) / 6 ), ( config.getint('calibration', 'YPosition_05' ) / 6 ),
-        TopList[ 6 ], ( config.getint('calibration', 'XPosition_06' ) / 6 ), ( config.getint('calibration', 'YPosition_06' ) / 6 ),
-        TopList[ 7 ], ( config.getint('calibration', 'XPosition_07' ) / 6 ), ( config.getint('calibration', 'YPosition_07' ) / 6 ),
+        TopList[ 0 ], ( config.getint('calibration', 'XPosition_00' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_00' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 1 ], ( config.getint('calibration', 'XPosition_01' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_01' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 2 ], ( config.getint('calibration', 'XPosition_02' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_02' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 3 ], ( config.getint('calibration', 'XPosition_03' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_03' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 4 ], ( config.getint('calibration', 'XPosition_04' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_04' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 4 ], EP_MD04, ( config.getint('calibration', 'YPosition_04' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 5 ], ( config.getint('calibration', 'XPosition_05' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_05' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 6 ], ( config.getint('calibration', 'XPosition_06' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_06' ) / OUTPUT_SCALE_FACTOR ),
+        TopList[ 7 ], ( config.getint('calibration', 'XPosition_07' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_07' ) / OUTPUT_SCALE_FACTOR ),
 
-        MidList[ 0 ], ( config.getint('calibration', 'XPosition_08' ) / 6 ), ( config.getint('calibration', 'YPosition_08' ) / 6 ),
-        MidList[ 1 ], ( config.getint('calibration', 'XPosition_09' ) / 6 ), ( config.getint('calibration', 'YPosition_09' ) / 6 ),
-        MidList[ 2 ], ( config.getint('calibration', 'XPosition_10' ) / 6 ), ( config.getint('calibration', 'YPosition_10' ) / 6 ),
-        MidList[ 3 ], ( config.getint('calibration', 'XPosition_11' ) / 6 ), ( config.getint('calibration', 'YPosition_11' ) / 6 ),
-        MidList[ 4 ], ( config.getint('calibration', 'XPosition_12' ) / 6 ), ( config.getint('calibration', 'YPosition_12' ) / 6 ),
-        MidList[ 4 ], EP_MD12, ( config.getint('calibration', 'YPosition_12' ) / 6 ),
-        MidList[ 5 ], ( config.getint('calibration', 'XPosition_13' ) / 6 ), ( config.getint('calibration', 'YPosition_13' ) / 6 ),
-        MidList[ 6 ], ( config.getint('calibration', 'XPosition_14' ) / 6 ), ( config.getint('calibration', 'YPosition_14' ) / 6 ),
-        MidList[ 7 ], ( config.getint('calibration', 'XPosition_15' ) / 6 ), ( config.getint('calibration', 'YPosition_15' ) / 6 ),
+        MidList[ 0 ], ( config.getint('calibration', 'XPosition_08' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_08' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 1 ], ( config.getint('calibration', 'XPosition_09' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_09' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 2 ], ( config.getint('calibration', 'XPosition_10' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_10' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 3 ], ( config.getint('calibration', 'XPosition_11' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_11' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 4 ], ( config.getint('calibration', 'XPosition_12' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_12' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 4 ], EP_MD12, ( config.getint('calibration', 'YPosition_12' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 5 ], ( config.getint('calibration', 'XPosition_13' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_13' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 6 ], ( config.getint('calibration', 'XPosition_14' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_14' ) / OUTPUT_SCALE_FACTOR ),
+        MidList[ 7 ], ( config.getint('calibration', 'XPosition_15' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_15' ) / OUTPUT_SCALE_FACTOR ),
 
-        BotList[ 0 ], ( config.getint('calibration', 'XPosition_16' ) / 6 ), ( config.getint('calibration', 'YPosition_16' ) / 6 ),
-        BotList[ 1 ], ( config.getint('calibration', 'XPosition_17' ) / 6 ), ( config.getint('calibration', 'YPosition_17' ) / 6 ),
-        BotList[ 2 ], ( config.getint('calibration', 'XPosition_18' ) / 6 ), ( config.getint('calibration', 'YPosition_18' ) / 6 ),
-        BotList[ 3 ], ( config.getint('calibration', 'XPosition_19' ) / 6 ), ( config.getint('calibration', 'YPosition_19' ) / 6 ),
-        BotList[ 4 ], ( config.getint('calibration', 'XPosition_20' ) / 6 ), ( config.getint('calibration', 'YPosition_20' ) / 6 ),
-        BotList[ 4 ], EP_MD20, ( config.getint('calibration', 'YPosition_20' ) / 6 ),
-        BotList[ 5 ], ( config.getint('calibration', 'XPosition_21' ) / 6 ), ( config.getint('calibration', 'YPosition_21' ) / 6 ),
-        BotList[ 6 ], ( config.getint('calibration', 'XPosition_22' ) / 6 ), ( config.getint('calibration', 'YPosition_22' ) / 6 ),
-        BotList[ 7 ], ( config.getint('calibration', 'XPosition_23' ) / 6 ), ( config.getint('calibration', 'YPosition_23' ) / 6 ),
+        BotList[ 0 ], ( config.getint('calibration', 'XPosition_16' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_16' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 1 ], ( config.getint('calibration', 'XPosition_17' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_17' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 2 ], ( config.getint('calibration', 'XPosition_18' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_18' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 3 ], ( config.getint('calibration', 'XPosition_19' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_19' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 4 ], ( config.getint('calibration', 'XPosition_20' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_20' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 4 ], EP_MD20, ( config.getint('calibration', 'YPosition_20' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 5 ], ( config.getint('calibration', 'XPosition_21' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_21' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 6 ], ( config.getint('calibration', 'XPosition_22' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_22' ) / OUTPUT_SCALE_FACTOR ),
+        BotList[ 7 ], ( config.getint('calibration', 'XPosition_23' ) / OUTPUT_SCALE_FACTOR ), ( config.getint('calibration', 'YPosition_23' ) / OUTPUT_SCALE_FACTOR ),
 
         _output
     ))
