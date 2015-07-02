@@ -229,10 +229,10 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0):
         else:
 
             # Convert image to dng
-            execCommand("movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 2> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
             # Debay dng file and convert it into jpeg
-            execCommand("dcraw -h -c %s/jpeg/%s.dng | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
+            execCommand("OMP_NUM_THREADS=1 dcraw -h -c %s/jpeg/%s.dng | cjpeg > %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName))
 
             # Remove temporary dng file
             os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
