@@ -47,7 +47,6 @@ import glob
 
 from cStringIO import StringIO
 from datetime import datetime
-import exifread
 
 # JP4 file container class
 class JP4Image:
@@ -219,8 +218,16 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0, _half=0):
         # Check presence of grayscale option
         if _grayscale:
 
-            # Convert image
-            execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/4 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+            # Check if half tile requested
+            if _half:
+
+                # Convert image
+                execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/2 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+
+            else:
+
+                # Convert image
+                execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
 
         else:
 
@@ -329,27 +336,14 @@ def flipTiles(_tilesdir, ImagesCorr, flip=1, rotate=1):
         _index += 1
 
 # Function to invert a tile
-def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shift, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR ):
+def invertTile( fastCal, input_tile, output_tile, shift, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR ):
 
     # Retrieve channel #
     EP_CHAN = ( int( os.path.basename( input_tile ).split( '_' )[ 2 ] ) + shift )
 
-    # Compute kernel map file path
-    imagePath = glob.glob( "%s/camera/%s/calibration/*maps*/*%02d.eqr-tiff" % ( mount_point, mac_address, EP_CHAN ) )[ 0 ]
-
-    # Sensor image size containers
-    EP_EQRW = 0
-    EP_EQRH = 0
-
-    # Open sensor image
-    with open( imagePath, 'r' ) as f:
-
-        # Read image exif tags
-        EXIF_Tags = exifread.process_file( f )
-
-        # Extract dimensions
-        EP_EQRW = ( int( "%s" % EXIF_Tags[ 'Image ImageWidth' ] ) / OUTPUT_SCALE_FACTOR )
-        EP_EQRH = ( int( "%s" % EXIF_Tags[ 'Image ImageLength' ] ) / OUTPUT_SCALE_FACTOR )
+    # Extract sensor image sizes from FastCal file
+    EP_EQRW = ( fastCal.getint('calibration', 'equirectangularWidth_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
+    EP_EQRH = ( fastCal.getint('calibration', 'equirectangularHeight_%02d' % EP_CHAN ) / OUTPUT_SCALE_FACTOR )
 
     # Read angles from FastCal file
     EP_AZIM = ( fastCal.getfloat('calibration', 'azimuth_%02d' % EP_CHAN ) * ( 180 / 3.1415926535 ) )
@@ -413,7 +407,7 @@ def invertTile( fastCal, input_tile, output_tile, mount_point, mac_address, shif
     ) )
 
 # Function to invert tile list
-def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, fastcal_file, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR):
+def invertTiles( output_tiles, output_tiles_inverted, fastcal_file, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR):
 
     # Separate each tiles into lists
     TopList = sorted(glob.glob("%s/top/*.jpeg" % output_tiles))
@@ -430,19 +424,19 @@ def invertTiles( output_tiles, output_tiles_inverted, mount_point, mac_address, 
     for tile in TopList:
 
         # Invert tile
-        invertTile( config, tile, "%s/top/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, -1, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
+        invertTile( config, tile, "%s/top/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), -1, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
     # Iterate over mid tiles
     for tile in MidList:
 
         # Invert tile
-        invertTile( config, tile, "%s/mid/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 7, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
+        invertTile( config, tile, "%s/mid/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), 7, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
     # Iterate over bottom tiles
     for tile in BotList:
 
         # Invert tile
-        invertTile( config, tile, "%s/bot/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), mount_point, mac_address, 15, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
+        invertTile( config, tile, "%s/bot/%s" % ( output_tiles_inverted, os.path.basename( tile ) ), 15, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR )
 
 # Function to stitch a set of tiles
 def StitchPano(_tilesdir, _output, fastcal_file, OUTPUT_SCALE_FACTOR ):
@@ -669,6 +663,12 @@ def main(argv):
     __Output_Tiles__ = "%s/tiles" % __Temp__
     __Output_Tiles_Inverted__ = "%s/tiles_inverted" % __Temp__
 
+    # Check if tile writing is specified
+    if __Write_Tiles__:
+
+        # Adjust output tiles folder
+        __Output_Tiles_Inverted__ = "%s/%s/preview/%s/tiles/%d" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.base_folder)
+
     # Compute output folders
     __Output__   = "%s/%d" % (__Output_Base__, __JP4_Image__.base_folder)
     __Output_Image__ = "%s/%s.jpeg" % (__Output__, __JP4_Image__.timestamp)
@@ -713,7 +713,7 @@ def main(argv):
         flipTiles(__Output_Tiles__, ImagesCorr, 1, 0)
 
         # Inver tiles to EQR
-        invertTiles( __Output_Tiles__, __Output_Tiles_Inverted__, __PARAM_MOUNT__, __PARAM_MAC__, FastCalKeyFile, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR)
+        invertTiles( __Output_Tiles__, __Output_Tiles_Inverted__, FastCalKeyFile, TILES_SCALE_FACTOR, OUTPUT_SCALE_FACTOR)
 
         # Stitch panorama
         StitchPano(__Output_Tiles_Inverted__, __Output_Image__, FastCalKeyFile, OUTPUT_SCALE_FACTOR)
