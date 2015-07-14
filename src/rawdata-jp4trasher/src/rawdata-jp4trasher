@@ -115,74 +115,11 @@ def GetCameraModules(FastCalKeyFilePath):
     # Return value
     return config.getint('calibration', 'modules')
 
-# Usage display function
-def _usage():
-    print """
-    Usage: %s [OPTIONS]
-
-    [Required arguments]
-    --mount-point        Base mount directory
-    --mac-address        Camera MAC address
-    --master-timestamp   Master timestamp
-
-    [Optional arguments]
-    --auto-segmented     Auto segmentation executed (master script)
-    --output             Show STDOUT logs
-    --help               Show this message
-
-    """ % sys.argv[0]
-
-# Program entry point function
-def main(argv):
-
-    # Parse arguments
-    Arguments = {}
-    Argv_Concat = ' '.join(argv)
-    Argv_Flags = Argv_Concat.split('--')
-
-    # Iterate over source args
-    for i in Argv_Flags:
-
-        # Check length
-        if len(i) > 0:
-
-            # Split by first space
-            splited = i.split(' ', 1)
-
-            # Check if argument contains value
-            if len(splited) > 1:
-                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
-            else:
-                Arguments[splited[0]] =  None
-
-    # Arguments variables
-    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
-    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
-    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
-    __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
-    __Help__            = (1 if 'help' in Arguments else 0)
-
-    # Arguments check
-    if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
-        _usage()
-        sys.exit(0)
-
-    # Check if auto-segmented argument is given
-    if not __AutoSegmented__:
-        ShowMessage( 'No --auto-segmented argument given, exiting...', 1 )
-        return
-
-    # Compute paths
-    BaseSyncFolder    = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
-    InputFile         = "%s/info/raw/jp4table.bin" % (BaseSyncFolder)
-    FastCalKeyFile    = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
-    CorruptedPath     = "%s/info/raw/corrupted/integrity" % (BaseSyncFolder)
-
-    # Get camera modules count
-    ModuleCount = GetCameraModules(FastCalKeyFile)
+# Function to load JP4Table binary file
+def LoadJP4Table( InputFile, ModuleCount ):
 
     # Debug output
-    ShowMessage("Loading jp4table.bin file...", 0, 0, 1)
+    ShowMessage("Loading jp4table.bin file...")
 
     # Read state file
     with open(InputFile, "rb") as bin_file:
@@ -251,11 +188,80 @@ def main(argv):
     # Debug output
     ShowMessage("%d entries loaded from jp4table.bin" % Count)
 
+    # Return data
+    return [ COMPLETE_TIMESTAMPS, TIMESTAMPS_LIST ]
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    --mount-point        Base mount directory
+    --mac-address        Camera MAC address
+    --master-timestamp   Master timestamp
+
+    [Optional arguments]
+    --auto-segmented     Auto segmentation executed (master script)
+    --output             Show STDOUT logs
+    --help               Show this message
+
+    """ % sys.argv[0]
+
+# Program entry point function
+def main(argv):
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables
+    __MountPoint__      = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
+    __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
+    __Help__            = (1 if 'help' in Arguments else 0)
+
+    # Arguments check
+    if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
+        _usage()
+        sys.exit(0)
+
+    # Compute paths
+    BaseSyncFolder    = "%s/rawdata/%s/master/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
+    InputFile         = "%s/info/raw/jp4table.bin" % (BaseSyncFolder)
+    FastCalKeyFile    = "%s/camera/%s/fastcal/calibration.key" % (__MountPoint__, __CameraMAC__)
+    CorruptedPath     = "%s/info/raw/corrupted/integrity" % (BaseSyncFolder)
+
+    # Get camera modules count
+    ModuleCount = GetCameraModules(FastCalKeyFile)
+
+    # JP4Table arrays
+    JP4TABLE_COMPLETE_TIMESTAMPS = []
+    JP4TABLE_TIMESTAMPS = []
+
     # Local integrity corrupted timestamps container
     Integrity_TimeStamps = []
 
     # Debug output
     ShowMessage("Listing corrupted images timestamps(integrity)...", 0, 0, 1)
+
+    # Corrupted images counter
     Corr_Count = 0
 
     # Iterate over corrupted files
@@ -277,15 +283,20 @@ def main(argv):
         if not TimeStamp in Integrity_TimeStamps:
             Integrity_TimeStamps.append( TimeStamp )
 
+    # Check corrupted images presence
+    if Corr_Count > 0:
 
-    # Debug output
-    ShowMessage("%d timestamp(s) found in %d corrupted image(s)." % (len( Integrity_TimeStamps ), Corr_Count))
+        # Debug output
+        ShowMessage("%d timestamp(s) found in %d corrupted image(s)." % (len( Integrity_TimeStamps ), Corr_Count))
 
     # Find all JSON files
     JSON_Files = glob.glob("%s/rawdata/%s/master/%s/segment/*/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__))
 
     # Debug output
     ShowMessage("Updating JSON files...", 0, 0, 1)
+
+    # JSON state container
+    JSON_UPDATED = False
 
     # Iterate over JSON files
     for index, i in enumerate(JSON_Files):
@@ -302,47 +313,70 @@ def main(argv):
         # Close file
         SourceJSON.close()
 
-        # Get pose sections
-        poses = json_data['pose']
+        # Check if json is already processed
+        if not json_data['trash']:
 
-        # Iterate over pose sections
-        for j in poses:
+            # Flag state
+            JSON_UPDATED = True
 
-            # Compute pose timestamp
-            PoseTS = '%10d_%06d' % (j['sec'], j['usec'])
+            # Check if JP4Table is loaded
+            if len( JP4TABLE_COMPLETE_TIMESTAMPS ) == 0:
 
-            # Check if timestamp is corrupted
-            if PoseTS in Integrity_TimeStamps:
+                # Load JP4Table
+                JP4TABLE_COMPLETE_TIMESTAMPS, JP4TABLE_TIMESTAMPS = LoadJP4Table( InputFile, ModuleCount )
 
-                # Tag as corrupt
-                j['raw'] = "corrupt"
+            # Get pose sections
+            poses = json_data['pose']
 
-            else:
+            # Iterate over pose sections
+            for j in poses:
 
-                # Check if Pose have associated images
-                if PoseTS in TIMESTAMPS_LIST:
+                # Compute pose timestamp
+                PoseTS = '%10d_%06d' % (j['sec'], j['usec'])
 
-                    # Check if pose in complete
-                    if PoseTS in COMPLETE_TIMESTAMPS:
+                # Check if timestamp is corrupted
+                if PoseTS in Integrity_TimeStamps:
 
-                        # Tag as valid
-                        j['raw'] = "valid"
-                    else:
-
-                        # Tag as trashed
-                        j['raw'] = "trash"
+                    # Tag as corrupt
+                    j['raw'] = "corrupt"
 
                 else:
 
-                    # Tag as miss
-                    j['raw'] = "miss"
+                    # Check if Pose have associated images
+                    if PoseTS in JP4TABLE_TIMESTAMPS:
 
-        # Write validated JSON file
-        with open(i, 'w') as outfile:
-            json.dump(json_data, outfile, sort_keys = True, indent = 4)
+                        # Check if pose in complete
+                        if PoseTS in JP4TABLE_COMPLETE_TIMESTAMPS:
 
-    # Debug output
-    ShowMessage("Done")
+                            # Tag as valid
+                            j['raw'] = "valid"
+                        else:
+
+                            # Tag as trashed
+                            j['raw'] = "trash"
+
+                    else:
+
+                        # Tag as miss
+                        j['raw'] = "miss"
+
+            # Flag JSON as processed
+            json_data['trash'] = True
+
+            # Write validated JSON file
+            with open(i, 'w') as outfile:
+                json.dump(json_data, outfile, sort_keys = True, indent = 4)
+
+    # Check if JSON files have been updated
+    if JSON_UPDATED:
+
+        # Debug output
+        ShowMessage("Done")
+
+    else:
+
+        # Debug output
+        ShowMessage("All files already processed")
 
 # Program entry point
 if __name__ == "__main__":

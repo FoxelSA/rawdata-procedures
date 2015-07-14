@@ -582,18 +582,12 @@ def main(argv):
     __CameraMAC__       = (None if not 'mac-address' in Arguments else Arguments['mac-address'])
     __MasterTimestamp__ = (None if not 'master-timestamp' in Arguments else Arguments['master-timestamp'])
     __DiskThreads__     = (None if not 'disk-threads' in Arguments else Arguments['disk-threads'])
-    __AutoSegmented__   = (1 if 'auto-segmented' in Arguments else 0)
     __Help__            = (1 if 'help' in Arguments else 0)
 
     # Arguments check
     if (not __MountPoint__ or not __CameraMAC__ or not __MasterTimestamp__) or __Help__:
         _usage()
         sys.exit(0)
-
-    # Check if auto-segmented argument is given
-    if not __AutoSegmented__:
-        ShowMessage('No --auto-segmented argument given, exiting...', 1)
-        return
 
     # Compute paths
     InputFolder          = "%s/rawdata/%s/master/%s/mov" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__)
@@ -626,11 +620,6 @@ def main(argv):
     # Verifiy presence of prefs.xml
     if not os.path.isfile(FastCalKeyFile):
         ShowMessage("FastCal key file '%s' does not exist" % FastCalKeyFile, 2, 1)
-
-    # Debug output
-    ShowMessage("Input MOV path: %s" % InputFolder)
-    ShowMessage("Output table file: %s" % OutputFile)
-    ShowMessage("Output state file: %s" % StateFile)
 
     # Check if file exists
     if os.path.isfile( StateFile ):
