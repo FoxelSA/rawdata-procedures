@@ -45,7 +45,7 @@ if ! which norama-invert >/dev/null; then
 
     # Flag error
     ENV_NOT_OK="1"
-    
+
 fi
 
 # Check movie2dng
@@ -63,7 +63,7 @@ fi
 if ! which dcraw_half >/dev/null; then
 
     # Debug output
-    echo -e "[$(date '+%F %R') \e[31mERROR\e[39m] $HOST_NAME : dcraw_half not installed"
+    echo -e "[$(date '+%F %R') \e[31mERROR\e[39m] $HOST_NAME : libraw not installed"
 
     # Flag error
     ENV_NOT_OK="1"
