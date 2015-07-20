@@ -1,2 +1,0 @@
-KERNEL=="sd*", RUN+="/usr/sbin/scsi-disk-udev-eventhandler"
-

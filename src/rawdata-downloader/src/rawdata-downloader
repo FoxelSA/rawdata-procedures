@@ -1,0 +1,1012 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import glob
+import json
+import os
+import re
+import select
+import subprocess
+import sys
+import time
+import urllib2
+from datetime import datetime
+
+# Global variables
+MODE_DOWNLOAD = 1
+MODE_VERIFY   = 2
+MODE_FORMAT   = 3
+
+MODAL_NAMES = {
+    1: "Download",
+    2: "Verify",
+    3: "Format"
+}
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0):
+
+    NO_COLORS = 0
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [INFO] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[32m[INFO]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [WARNING] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[33m[WARNING]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [ERROR] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[31m[ERROR]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [DEBUG] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[34m[DEBUG]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# Function to execute a system command
+def execCommand(command):
+
+    # Execute command
+    return subprocess.call(command, shell=True)
+
+# Function to execute a command and return its output
+def runProcess(exe):
+
+    # Open command
+    p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+
+    # Loop
+    while(True):
+
+        # Initiate poll
+        retcode = p.poll() #returns None while subprocess is running
+
+        # Read one line from stdout
+        line = p.stdout.readline()
+
+        # Yeld line
+        yield line
+
+        # If process closes exit loop
+        if(retcode is not None):
+            break
+
+# Function to list only directories of a folder
+def list_directories( path ):
+
+    # Output container
+    Results = []
+
+    # Iterate over folder elements
+    for e in glob.glob( "%s/*" % path ):
+
+        # Check if element is a directory
+        if os.path.isdir( e ):
+
+            # Append element
+            Results.append( e )
+
+    # Return results
+    return Results
+
+# Function to retrieve mount point of a disk on the local system by its serial
+def find_disk_by_serial( modules_file ):
+
+    # List connected SCSI disks
+    connected_disks = glob.glob("/dev/sd*")
+
+    # Iterate over connected disks
+    for local_disk in connected_disks:
+
+        # Read serial of SCSI device
+        local_disk_serial = os.popen("udevadm info --query=all --name=%s | grep ID_SERIAL_SHORT | cut -d'=' -f2" % local_disk).read()
+
+        # Iterate over possible modules ( 1 - 9 )
+        for module in range( 1, 10 ):
+
+            # Extract corresponding module serial from JSON modules file data
+            module_serial = str( modules_file[ 'modules' ][ str( module ) ][ 'serial' ] )
+
+            # Comparte serial
+            if module_serial in local_disk_serial:
+
+                # Return data
+                return [module, local_disk]
+
+# Function to get mac address from camera
+def get_camera_mac():
+
+    # Loop variables
+    retries_max_url   = 3
+    retries_count_url = 0
+
+    while True:
+
+        # Check if retries exceed limit
+        if retries_count_url >= retries_max_url:
+
+            # Exit loop
+            return
+
+        # Catch errors
+        try:
+
+            # Send querry
+            data = urllib2.urlopen( "http://192.168.0.221/phpshell.php?command=echo%20MacAddr%20$(cat%20/sys/class/net/eth0/address)", timeout=10)
+
+            # Check if mac address is not empty
+            if not data:
+
+                # Exit function
+                return
+
+            # Iterate over output lines
+            for line in data:
+
+                # Extract mac address
+                exp_data = re.search( r'.*MacAddr\s(.*)\<.*', line )
+
+                # Check if mac address is valid
+                if exp_data:
+
+                    # Return mac address
+                    return exp_data.group( 1 ).upper().replace(':', '-')
+
+            # Exit loop
+            break
+
+        except:
+
+            # Debug output
+            ShowMessage("Failed to send querry, camera offline ? or this machine is not on the 192.168.0/24 subnet ?, retrying... (%d of %d)" % (retries_count_url + 1, retries_max_url), 1)
+
+            # Increment retries
+            retries_count_url += 1
+
+            # Sleep 5s
+            time.sleep( 5 )
+
+# Function to get camera uptime in minutes
+def get_camera_uptime():
+
+    # Loop variables
+    retries_max_url   = 3
+    retries_count_url = 0
+
+    while True:
+
+        # Check if retries exceed limit
+        if retries_count_url >= retries_max_url:
+
+            # Exit loop
+            return
+
+        # Catch errors
+        try:
+
+            # Send querry
+            data = urllib2.urlopen( "http://192.168.0.221/phpshell.php?command=cat%20/proc/uptime%20|%20cut%20-d'%20'%20-f1", timeout=10)
+
+            # Check if mac address is not empty
+            if not data:
+
+                # Exit function
+                return
+
+            # Iterate over output lines
+            for line in data:
+
+                # Extract uptime
+                exp_data = re.search( r'(\d+\.\d+)\<\/textarea\>.*', line )
+
+                # Check if mac address is valid
+                if exp_data:
+
+                    # Return mac address
+                    return float( exp_data.group( 1 ) )
+
+            # Exit loop
+            break
+
+        except:
+
+            # Debug output
+            ShowMessage("Failed to send querry, camera offline ? or this machine is not on the 192.168.0/24 subnet ?, retrying... (%d of %d)" % (retries_count_url + 1, retries_max_url), 1)
+
+            # Increment retries
+            retries_count_url += 1
+
+            # Sleep 5s
+            time.sleep( 5 )
+
+# Function to format a specified disk
+def format_disk( disk_id, disk_path, modules_file ):
+
+    # Verify is path is a partition not the entire disk
+    if disk_path[ -1 ].isdigit():
+
+        # Debug output
+        ShowMessage("Verifying serials before format...")
+
+        # Read serial of SCSI device
+        disk_serial = os.popen("udevadm info --query=all --name=%s | grep ID_SERIAL_SHORT | cut -d'=' -f2" % disk_path).read()
+
+        # Extract corresponding module serial from JSON modules file data
+        module_serial = str( modules_file[ 'modules' ][ str( disk_id ) ][ 'serial' ] )
+
+        # Perform a serial verification before format
+        if module_serial in disk_serial:
+
+            # Debug output
+            ShowMessage( "Formatting %s..." % disk_path )
+
+            # Execute format and return output
+            return execCommand( "sudo mkfs.ext2 -q -m0 -T largefile4 %s 1>&2" % disk_path )
+
+    # Return failure
+    return 1
+
+# Function to connect a specified ssd from a specified mux
+def connect_disk( mux, disk, modules_file ):
+
+    # Establish kernel log watcher
+    f = subprocess.Popen(['tail','-F', "/var/log/kern.log", '-n', '0'],\
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p = select.poll()
+    p.register(f.stdout)
+
+    # Debug output
+    ShowMessage("Sending querry to the camera...")
+
+    # Loop variables
+    retries_max_url   = 3
+    retries_count_url = 0
+
+    while True:
+
+        # Check if retries exceed limit
+        if retries_count_url >= retries_max_url:
+
+            # Exit loop
+            return
+
+        # Catch errors
+        try:
+
+            # Ask the Eyesis to connect the disk
+            urllib2.urlopen( "http://192.168.0.%d/103697.php?c:host4=%s" % ( mux, disk ), timeout = 10)
+
+            # Exit loop
+            break
+
+        except:
+
+            # Debug output
+            ShowMessage("Failed to send querry, camera offline ? or this machine is not on the 192.168.0/24 subnet ?, retrying... (%d of %d)" % (retries_count_url + 1, retries_max_url), 1)
+
+            # Increment retries
+            retries_count_url += 1
+
+            # Sleep 5s
+            time.sleep( 5 )
+
+    # Loop variables
+    timeout_counter = 0
+    timeout_limit   = 20
+    retries_max     = 3
+    retries_count   = 0
+
+    # Debug output
+    ShowMessage("Waiting for system...")
+
+    # Loop
+    while True:
+
+        # Check if timeout excedeed
+        if timeout_counter >= timeout_limit:
+
+            # Check if retries exceed limit
+            if retries_count >= retries_max:
+
+                # Exit loop
+                break
+
+            else:
+
+                # Debug output
+                ShowMessage("Timeout connecting %s on multiplexer %d..., verify SATA cables connection, retrying... (%d of %d)" % (disk, mux, retries_count + 1, retries_max), 1)
+
+                # Increment retries counter
+                retries_count  += 1
+
+                # Reset timeout counter
+                timeout_counter = 0
+
+        # Check if kernel output are available
+        if p.poll(1):
+
+            # Extract line
+            line = f.stdout.readline()
+
+            # Check if event is an SCSI attach event
+            if "Attached scsi" in line:
+
+                # Debug output
+                ShowMessage("Disk attached, waiting 5s for initialisation...")
+
+                # Wait 5 seconds for device initialisation
+                time.sleep( 5 )
+
+                # Find mount point and module of disk
+                mount_point = find_disk_by_serial( modules_file )
+
+                # Check if disk is correctily mounted
+                if mount_point:
+
+                    # Return data
+                    return  mount_point
+
+                else:
+
+                    ShowMessage("Cannot find disk or serial mismatch!", 1)
+
+        # Sleep 100ms
+        time.sleep( 0.1 )
+
+        # Increment timeout counter
+        timeout_counter += 0.1
+
+# Function to disconnect a specified mux
+def disconnect_disk( mux_base_addr, skip_check=0 ):
+
+    # Debug output
+    ShowMessage("Disconnecting multiplexer %d..." % (mux_base_addr))
+
+    # Local variables
+    f = None
+    p = None
+
+    # Check if skip checks requested
+    if not skip_check:
+
+        # Establish kernel log watcher
+        f = subprocess.Popen(['tail','-F', "/var/log/kern.log", '-n', '0'],\
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        p = select.poll()
+        p.register(f.stdout)
+
+    # Debug output
+    ShowMessage("Sending querry to the camera...")
+
+    # Loop variables
+    retries_max_url   = 3
+    retries_count_url = 0
+
+    while True:
+
+        # Check if retries exceed limit
+        if retries_count_url >= retries_max_url:
+
+            # Exit loop
+            return
+
+        # Catch errors
+        try:
+
+            # Ask the Eyesis to reset the mux
+            urllib2.urlopen( "http://192.168.0.%d/eyesis_ide.php" % ( mux_base_addr ), timeout=10 )
+
+            # Exit loop
+            break
+
+        except:
+
+            # Debug output
+            ShowMessage("Failed to send querry, camera offline ? or this machine is not on the 192.168.0/24 subnet ?, retrying... (%d of %d)" % (retries_count_url + 1, retries_max_url), 1)
+
+            # Increment retries
+            retries_count_url += 1
+
+            # Sleep 5s
+            time.sleep( 5 )
+
+    # Check if skip checks requested
+    if skip_check:
+
+        # Exit function
+        return
+
+    # Loop variables
+    timeout_counter = 0
+    timeout_limit   = 30
+
+    # Debug output
+    ShowMessage("Waiting for system...")
+
+    # Loop
+    while True:
+
+        # Check if timeout excedeed
+        if timeout_counter >= timeout_limit:
+
+            # Debug output
+            ShowMessage("Timeout disconnecting multiplexer %d..., verify SATA cables connection" % (mux_base_addr), 2)
+
+            # Exit loop
+            break
+
+        # Check if kernel output are available
+        if p.poll(1):
+
+            # Extract line
+            line = f.stdout.readline()
+
+            # Check if event is an SCSI attach event
+            if "Stopping disk" in line:
+
+                # Exit loop
+                break
+
+        # Sleep 100ms
+        time.sleep( 0.1 )
+
+        # Increment timeout counter
+        timeout_counter += 0.1
+
+# Function to download data from the camera
+def download_data( source_folder, destination_folder, module_index ):
+
+    # Compute destination folder
+    dest_folder = "%s/mov/%d" % (destination_folder, module_index)
+
+    # Check if destination folder exists
+    if not os.path.isdir( dest_folder ):
+
+        # Create destination folder
+        os.makedirs( dest_folder )
+
+    # Copy files with rsync
+    return execCommand("rsync -a -b -c --progress --exclude 'lost+found' %s/* %s 1>&2" % (source_folder, dest_folder))
+
+# Function to download data from the camera
+def verify_data( source_folder, destination_folder, module_index ):
+
+    # Compute destination folder
+    dest_folder = "%s/mov/%d/" % (destination_folder, module_index)
+
+    # Check if destination folder exists
+    if not os.path.isdir( dest_folder ):
+
+        # Create destination folder
+        os.makedirs( dest_folder )
+
+    # Error flag container
+    errored = False
+
+    # Verify files with rsync
+    for line in runProcess( "rsync --exclude 'lost+found' --archive --dry-run --checksum --itemize-changes %s/ %s" % (source_folder, dest_folder) ):
+
+        # Extract rsync output
+        exp_data = re.match( r'(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)\s(.*)', line )
+
+        # Check if regex matched
+        if exp_data:
+
+            # Check if rsync output is invalid
+            if not '.' in exp_data.group( 1 ):
+
+                # Mark as invalid
+                errored = True
+
+    # Return result
+    return (1 if errored else 0)
+
+# Function to get master timestamp
+def get_master_timestamp( source_folder, masters_folder ):
+
+    # List mov files on camera
+    camera_mov_list = sorted( glob.glob( "%s/*.mov" % source_folder ) )
+
+    # Check if camera is not empty
+    if camera_mov_list:
+
+        # Get oldest mov filename on the camera
+        camera_oldest_mov = os.path.basename( camera_mov_list[ 0 ] )
+
+        # Extract timestamp from mov file name
+        camera_oldest_mov_timestamp = camera_oldest_mov[ :-4 ]
+
+        # List master timestamps on the destination storage
+        destination_masters = sorted( list_directories( masters_folder ) )
+
+        # Check if destination storage have masters
+        if destination_masters:
+
+            # Get the newest master on the destination storage
+            destination_newest_timestamp = os.path.basename( destination_masters[ -1 ] )
+
+            # Check if oldest mov on the camera exists on the newest downloaded master
+            if os.path.isfile( "%s/%s/mov/1/%s" % ( masters_folder, destination_newest_timestamp, camera_oldest_mov ) ):
+
+                # Debug output
+                ShowMessage("Master %s resumed" % destination_newest_timestamp.split( '_' )[ 0 ] )
+
+                # Return timestamp
+                return destination_newest_timestamp.split( '_' )[ 0 ]
+
+            else:
+
+                # Debug output
+                ShowMessage("Master %s allocated" % camera_oldest_mov_timestamp.split( '_' )[ 0 ] )
+
+                # Return timestamp
+                return camera_oldest_mov_timestamp.split( '_' )[ 0 ]
+
+        else:
+
+            # Debug output
+            ShowMessage("Master %s allocated" % camera_oldest_mov_timestamp.split( '_' )[ 0 ] )
+
+            # Return timestamp
+            return camera_oldest_mov_timestamp.split( '_' )[ 0 ]
+
+def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
+
+    # Local variables
+    master_timestamp = None
+    destination_folder = None
+
+    # Iterate over possible muxes
+    for module in sorted( modules_file[ 'modules' ].items() ):
+
+        # Extract mux informations
+        module_mux  = module[ 1 ][ 'mux' ]
+        module_disk = module[ 1 ][ 'disk' ]
+
+        # Loop variables
+        retries_count = 0
+        retries_max   = 3
+        retries_loop  = 1
+
+        # Download loop
+        while retries_loop:
+
+            # Check if is a retry
+            if retries_count > 0:
+
+                # Debug output
+                ShowMessage("Resetting mux %d..." % module_mux)
+
+                # Disconnect disk
+                disconnect_disk( module_mux, 1 )
+
+                # Debug output
+                ShowMessage("Waiting 10s...")
+
+                # Wait 10s
+                time.sleep( 10 )
+
+            # Check if retries exceed limit
+            if retries_count >= retries_max:
+
+                # Debug output
+                ShowMessage("%s failed!" % MODAL_NAMES[ working_mode ], 2)
+                return False
+
+            # Debug output
+            ShowMessage("Connecting disk of module %s..." % ( module[ 0 ] ))
+
+            # Connect disk
+            connected_disk = connect_disk( module_mux, module_disk, modules_file )
+
+            # Check connection status
+            if not connected_disk:
+
+                # Debug output
+                ShowMessage("%s failed." % MODAL_NAMES[ working_mode ], 2)
+                return False
+
+            # Debug output
+            ShowMessage("Module %s connected as %s!" % ( module[ 0 ], connected_disk[ 1 ] ) )
+
+            # Debug output
+            ShowMessage("Running FSCK on %s..." % ( connected_disk[ 1 ] ) )
+
+            if working_mode != MODE_FORMAT:
+
+                # Repair disk
+                execCommand("sudo fsck -p %s 1>&2" % (connected_disk[ 1 ]))
+
+                # Debug output
+                ShowMessage("Mounting %s to /mnt/rawdata-downloader..." % ( connected_disk[ 1 ] ) )
+
+                # Mount disk on local computer
+                execCommand("sudo mount %s /mnt/rawdata-downloader/ 1>&2" % (connected_disk[ 1 ]))
+
+            # Check if mode is download or verify
+            if (working_mode == MODE_DOWNLOAD) or (working_mode == MODE_VERIFY):
+
+                # Check if folders are initialized
+                if not master_timestamp and not destination_folder:
+
+                    # Check if connected module is the first module (1)
+                    if connected_disk[ 0 ] == 1:
+
+                        # Debug output
+                        ShowMessage("Allocating new master...")
+
+                        # Get master timestamp
+                        master_timestamp = get_master_timestamp( "/mnt/rawdata-downloader", masters_folder )
+
+                        # Check if master is null (camera is empty)
+                        if not master_timestamp:
+
+                            # Debug output
+                            ShowMessage("Camera have no MOV files!", 1)
+
+                            # Disconnect disk
+                            disconnect_disk( module_mux )
+
+                            # Exit function
+                            return False
+
+                        # Compute destination folder
+                        destination_folder = "%s/%s" % ( masters_folder, master_timestamp )
+                    else:
+
+                        # Debug output
+                        ShowMessage("Mux 224 ssd1 is not module 1!", 2)
+                        return False
+
+            # Debug output
+            ShowMessage("%s data of module %d..." % (MODAL_NAMES[ working_mode ], connected_disk[ 0 ]))
+
+            # Action container
+            action = None
+
+            # Check if in download mode
+            if working_mode == MODE_DOWNLOAD:
+
+                # Execute action
+                action = download_data( "/mnt/rawdata-downloader", destination_folder, connected_disk[ 0 ] )
+
+            # Check if in verify mode
+            elif working_mode == MODE_VERIFY:
+
+                # Execute action
+                action = verify_data( "/mnt/rawdata-downloader", destination_folder, connected_disk[ 0 ] )
+
+            # Check if in format mode
+            elif working_mode == MODE_FORMAT:
+
+                # Execute action
+                action = format_disk( connected_disk[ 0 ], connected_disk[ 1 ], modules_file )
+
+            # Check action success
+            if action != 0:
+
+                # Check if mode is verify or format
+                if (working_mode == MODE_VERIFY) or (working_mode == MODE_FORMAT):
+
+                    # Debug output
+                    ShowMessage("%s failed" % (MODAL_NAMES[ working_mode ]), 2)
+
+                    # Return failure
+                    return False
+
+                else:
+
+                    # Debug output
+                    ShowMessage("%s failed, Retrying... (%d of %d)" % (MODAL_NAMES[ working_mode ], retries_count + 1, retries_max), 1)
+
+                    # Increment retries counter
+                    retries_count  += 1
+
+            else:
+
+                # Stop retry loop
+                retries_loop = 0
+
+                # Reset retries counter
+                retries_count = 0
+
+                # Debug output
+                ShowMessage("Module %d %s OK" % (connected_disk[ 0 ], MODAL_NAMES[ working_mode ]))
+
+        # Wait 1 sec
+        time.sleep( 1 )
+
+        # Check if mode is not format
+        if working_mode != MODE_FORMAT:
+
+            # Unmount local storage
+            execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
+
+        # Disconnect disk
+        disconnect_disk( module_mux )
+
+        # Debug output
+        ShowMessage("Mux %d disconnected" % module_mux)
+
+    # Return success ( Master timestamp )
+    return master_timestamp
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    --mount-point            Base mount directory
+
+    [Optional arguments]
+    --verify                 Verify if all files from camera are properly downloaded
+    --format                 Just format camera (implies --verify before)
+    --format-after-download  Format camera after download (implies --verify before)
+    --help                   Show this message
+
+    """ % os.path.basename( sys.argv[0] )
+
+# Program entry point function
+def main(argv):
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables
+    __MountPoint__            = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __Format__                = (1 if 'format' in Arguments else 0)
+    __Format_After_Download__ = (1 if 'format-after-download' in Arguments else 0)
+    __Verify__                = (1 if 'verify' in Arguments else 0)
+    __Help__                  = (1 if 'help' in Arguments else 0)
+
+    # Arguments check
+    if (not __MountPoint__) or __Help__:
+        _usage()
+        sys.exit(0)
+
+    # Debug output
+    ShowMessage("Checking camera uptime...")
+
+    # Get camera uptime
+    camera_uptime = get_camera_uptime()
+
+    # Check if command succeeded
+    if camera_uptime:
+
+        # Debug output
+        ShowMessage( "Camera is up since %.2f minute(s)" % ( camera_uptime / 60.0 )  )
+
+    else:
+
+        # Exit function
+        return False
+
+    # Check if uptime is less than 3min
+    if camera_uptime < ( 3.0 * 60.0 ):
+
+        # Determine time to sleep
+        sleep_time = ( ( ( 3.0 * 60.0 ) - camera_uptime ) )
+
+        # Debug output
+        ShowMessage( "Waiting %.2f minute(s) for camera initialisation..." % ( sleep_time / 60.0 )  )
+
+        # Wait for initialisation
+        time.sleep( sleep_time )
+
+    # Debug output
+    ShowMessage("Asking camera for MAC address...")
+
+    # Get camera mac address
+    __CameraMAC__ = get_camera_mac()
+
+    # Debug output
+    ShowMessage("Camera MAC: %s" % __CameraMAC__)
+
+    # Check if camera mac is valid
+    if not __CameraMAC__:
+
+        # Debug output
+        ShowMessage("Failed to get camera mac address, camera offline ? or this machine is not on the 192.168.0/24 subnet ?", 2, 1)
+
+    # Compute paths
+    __Masters_Folder__ = "%s/rawdata/%s/master" % ( __MountPoint__, __CameraMAC__ )
+    __Modules_File__   = "%s/camera/%s/rawdata-downloader/modules.json" % ( __MountPoint__, __CameraMAC__ )
+
+    # Local variables
+    master_timestamp = None
+    modules_file = []
+
+    # Check modules file presence
+    if os.path.isfile( __Modules_File__ ):
+
+        # Open and read json modules file
+        with open( __Modules_File__ ) as data_file:
+            modules_file = json.load(data_file)
+
+    else:
+
+        # Debug output
+        ShowMessage("modules.json not found, did you ran rawdata-downloader-build-modules script once ?", 2, 1)
+
+    # Debug output
+    ShowMessage("Resetting multiplexers...")
+
+    # Reset multiplexers
+    # Iterate over possible muxes
+    for mux in modules_file[ 'multiplexers' ].items():
+
+        # Extract mux informations
+        mux_id = int( mux[0] )
+
+        # Debug output
+        ShowMessage("Resetting mux %d..." % mux_id)
+
+        # Disconnect disk
+        disconnect_disk( mux_id, 1 )
+
+    # Debug output
+    ShowMessage("Waiting 10s...")
+
+    # Wait 10s
+    time.sleep( 10 )
+
+    # Process state container
+    action_state = False
+
+    # Check if format mode requested
+    if __Format__:
+
+        # Debug output
+        ShowMessage("Starting verification...")
+
+        # Check if action 'Verify' succeeded
+        if process_data( modules_file, __Masters_Folder__, MODE_VERIFY ):
+
+            # Debug output
+            ShowMessage("Starting format...")
+
+            # Execute action 'Format'
+            if process_data( modules_file, __Masters_Folder__, MODE_FORMAT ):
+
+                # Flag success
+                action_state = True
+
+    else:
+
+        # Check verify flag
+        if __Verify__:
+
+            # Execute action 'Download'
+            if process_data( modules_file, __Masters_Folder__, MODE_DOWNLOAD ):
+
+                # Flag success
+                action_state = True
+
+        else:
+
+            # Debug output
+            ShowMessage("Starting download...")
+
+            # Execute action 'Download'
+            master_timestamp = process_data( modules_file, __Masters_Folder__, MODE_DOWNLOAD )
+
+            # Check if download succeeded
+            if master_timestamp:
+
+                # Flag success
+                action_state = True
+
+            # Check if format after download mode requested
+            if __Format_After_Download__:
+
+                # Debug output
+                ShowMessage("Starting verification...")
+
+                # Check if action 'Verify' succeeded
+                if process_data( modules_file, __Masters_Folder__, MODE_VERIFY ):
+
+                    # Debug output
+                    ShowMessage("Starting format...")
+
+                    # Execute action 'Format'
+                    process_data( modules_file, __Masters_Folder__, MODE_FORMAT )
+
+                    # Flag success
+                    action_state = True
+
+    # Check process state
+    if action_state:
+
+        # Debug output
+        ShowMessage("Completed.")
+
+        # Output needed informations for rawdata-procedures
+        print( "%s %s" % ( __CameraMAC__, master_timestamp ) )
+
+    else:
+
+        # Debug output
+        ShowMessage("Failed.", 2)
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

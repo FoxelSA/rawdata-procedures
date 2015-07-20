@@ -1,14 +1,10 @@
+
 #
 #   make - synchronize
 #
 
-    all:directories install
-    
-    install:
-	cp -rv src/bin . 
-
-    install-system-tools:
-	${MAKE} -C src/system-tools install
+    all:directories
+	cp src/rawdata-downloader bin/rawdata-downloader
 
 #
 #   make - directories
