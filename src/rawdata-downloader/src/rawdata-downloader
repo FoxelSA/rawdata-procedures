@@ -616,6 +616,7 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
     # Local variables
     master_timestamp = None
     destination_folder = None
+    format_success = False
 
     # Iterate over possible muxes
     for module in sorted( modules_file[ 'modules' ].items() ):
@@ -788,6 +789,9 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
                 # Reset retries counter
                 retries_count = 0
 
+                # Flag success
+                format_success = True
+
                 # Debug output
                 ShowMessage("Module %d %s OK" % (connected_disk[ 0 ], MODAL_NAMES[ working_mode ]))
 
@@ -806,8 +810,16 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
         # Debug output
         ShowMessage("Mux %d disconnected" % module_mux)
 
-    # Return success ( Master timestamp )
-    return master_timestamp
+    # Check if mode is format
+    if working_mode == MODE_FORMAT:
+
+        # Return format_success flag
+        return format_success
+
+    else:
+
+        # Return success ( Master timestamp )
+        return master_timestamp
 
 # Usage display function
 def _usage():
