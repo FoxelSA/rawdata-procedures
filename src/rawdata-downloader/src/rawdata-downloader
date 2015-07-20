@@ -671,12 +671,29 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
             ShowMessage("Module %s connected as %s!" % ( module[ 0 ], connected_disk[ 1 ] ) )
 
             # Debug output
-            ShowMessage("Running FSCK on %s..." % ( connected_disk[ 1 ] ) )
+            ShowMessage("Running FSCK on module %s (%s)..." % ( module[ 0 ], connected_disk[ 1 ] ) )
 
             if working_mode != MODE_FORMAT:
 
                 # Repair disk
-                execCommand("sudo fsck -p %s 1>&2" % (connected_disk[ 1 ]))
+                exit_code = execCommand("sudo fsck -p %s 1>&2" % (connected_disk[ 1 ]))
+
+                # Check fsck status
+                if exit_code != 0:
+
+                    # Debug output
+                    ShowMessage("fsck failed on module %s (%s)!" % ( module[ 0 ], connected_disk[ 1 ] ), 2)
+
+                    # Disconnect disk
+                    disconnect_disk( module_mux )
+
+                    # Exit function
+                    return False
+
+                else:
+
+                    # Debug output
+                    ShowMessage("fsck OK for module %s (%s)" % ( module[ 0 ], connected_disk[ 1 ] ))
 
                 # Debug output
                 ShowMessage("Mounting %s to /mnt/rawdata-downloader..." % ( connected_disk[ 1 ] ) )
@@ -804,6 +821,7 @@ def _usage():
     --verify                 Verify if all files from camera are properly downloaded
     --format                 Just format camera (implies --verify before)
     --format-after-download  Format camera after download (implies --verify before)
+    --force-format           Format camera without verification [DANGEROUS]
     --help                   Show this message
 
     """ % os.path.basename( sys.argv[0] )
@@ -834,6 +852,7 @@ def main(argv):
     # Arguments variables
     __MountPoint__            = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
     __Format__                = (1 if 'format' in Arguments else 0)
+    __Format_Force__          = (1 if 'force-format' in Arguments else 0)
     __Format_After_Download__ = (1 if 'format-after-download' in Arguments else 0)
     __Verify__                = (1 if 'verify' in Arguments else 0)
     __Help__                  = (1 if 'help' in Arguments else 0)
@@ -905,7 +924,7 @@ def main(argv):
     else:
 
         # Debug output
-        ShowMessage("modules.json not found, did you ran rawdata-downloader-build-modules script once ?", 2, 1)
+        ShowMessage("modules.json not found, did you ran camera-downloader-build-modules script once ?", 2, 1)
 
     # Debug output
     ShowMessage("Resetting multiplexers...")
@@ -932,8 +951,20 @@ def main(argv):
     # Process state container
     action_state = False
 
+    # Check if force format mode requested
+    if __Format_Force__:
+
+        # Debug output
+        ShowMessage("Starting format without verification...", 1)
+
+        # Execute action 'Format'
+        if process_data( modules_file, __Masters_Folder__, MODE_FORMAT ):
+
+            # Flag success
+            action_state = True
+
     # Check if format mode requested
-    if __Format__:
+    elif __Format__:
 
         # Debug output
         ShowMessage("Starting verification...")
