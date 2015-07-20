@@ -1042,8 +1042,11 @@ def main(argv):
         # Debug output
         ShowMessage("Completed.")
 
-        # Output needed informations for rawdata-procedures
-        print( "%s %s" % ( __CameraMAC__, master_timestamp ) )
+        # Check if not --force-format
+        if not __Format_Force__ and not __Format__:
+
+            # Output needed informations for rawdata-procedures
+            print( "%s %s" % ( __CameraMAC__, master_timestamp ) )
 
     else:
 
