@@ -675,6 +675,8 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
 
                 # Debug output
                 ShowMessage("%s failed." % MODAL_NAMES[ working_mode ], 2)
+
+                # Exit function
                 return False
 
             # Debug output
@@ -692,7 +694,7 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
                 if exit_code != 0:
 
                     # Debug output
-                    ShowMessage("fsck failed on module %s (%s)!" % ( module[ 0 ], connected_disk[ 1 ] ), 2)
+                    ShowMessage("fsck failed on module %s (%s), exit code: %d!" % ( module[ 0 ], connected_disk[ 1 ], exit_code ), 2)
 
                     # Disconnect disk
                     disconnect_disk( module_mux )
@@ -732,6 +734,12 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
                             # Debug output
                             ShowMessage("Camera have no MOV files!", 1)
 
+                            # Debug output
+                            ShowMessage("Unmounting /mnt/rawdata-downloader/...")
+
+                            # Unmount local storage
+                            execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
+
                             # Disconnect disk
                             disconnect_disk( module_mux )
 
@@ -744,6 +752,17 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
 
                         # Debug output
                         ShowMessage("Mux 224 ssd1 is not module 1!", 2)
+
+                        # Debug output
+                        ShowMessage("Unmounting /mnt/rawdata-downloader/...")
+
+                        # Unmount local storage
+                        execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
+
+                        # Disconnect disk
+                        disconnect_disk( module_mux )
+
+                        # Exit function
                         return False
 
             # Debug output
@@ -779,6 +798,15 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
                     # Debug output
                     ShowMessage("%s failed" % (MODAL_NAMES[ working_mode ]), 2)
 
+                    # Debug output
+                    ShowMessage("Unmounting /mnt/rawdata-downloader/...")
+
+                    # Unmount local storage
+                    execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
+
+                    # Disconnect disk
+                    disconnect_disk( module_mux )
+
                     # Return failure
                     return False
 
@@ -809,6 +837,9 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
 
         # Check if mode is not format
         if working_mode != MODE_FORMAT:
+
+            # Debug output
+            ShowMessage("Unmounting /mnt/rawdata-downloader/...")
 
             # Unmount local storage
             execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
