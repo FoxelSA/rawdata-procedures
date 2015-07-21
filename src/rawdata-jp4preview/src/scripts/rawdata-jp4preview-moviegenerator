@@ -75,7 +75,7 @@ def main(argv):
     __JSONFile__ = "%s/info/segment.json" % (__Segment_Folder__)
 
     # Compute source folder
-    PreviewsFolder = "%s/preview/img" % (__Segment_Folder__)
+    PreviewsFolder = "%s/preview" % (__Segment_Folder__)
 
     # Compute destination folder
     VideoFolder = "%s/info/" % (__Segment_Folder__)

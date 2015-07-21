@@ -637,7 +637,7 @@ def main(argv):
     __Input__    = "%s/%s/raw" % (BaseSegmentsFolder, __PARAM_SEGMENT__)
 
     # Compute output folder
-    __Output_Base__   = "%s/%s/preview/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__)
+    __Output_Base__   = "%s/%s/preview" % (BaseSegmentsFolder, __PARAM_SEGMENT__)
     __Output_Tiles__ = "%s/tiles" % __Temp__
     __Output_Tiles_Inverted__ = "%s/tiles_inverted" % __Temp__
 

@@ -141,7 +141,7 @@ def main(argv):
             if 'valid' in pose['raw']:
 
                 # Append path to list
-                PathList.append( "%s/img/%s/%10d_%06d.jpeg" % (PreviewFolder,
+                PathList.append( "%s/%s/%10d_%06d.jpeg" % (PreviewFolder,
                 str(pose['sec'])[:-2],
                 pose['sec'],
                 pose['usec']))
