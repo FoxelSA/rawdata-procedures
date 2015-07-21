@@ -111,7 +111,7 @@ def execCommand(command):
     return subprocess.call(command, shell=True)
 
 # Function to execute a command and return its output
-def runProcess(exe):
+def runProcess(exe, out_retcode):
 
     # Open command
     p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
@@ -120,7 +120,7 @@ def runProcess(exe):
     while(True):
 
         # Initiate poll
-        retcode = p.poll() #returns None while subprocess is running
+        retcode =  p.poll() #returns None while subprocess is running
 
         # Read one line from stdout
         line = p.stdout.readline()
@@ -130,6 +130,7 @@ def runProcess(exe):
 
         # If process closes exit loop
         if(retcode is not None):
+            out_retcode.append( retcode )
             break
 
 # Function to list only directories of a folder
@@ -546,9 +547,10 @@ def verify_data( source_folder, destination_folder, module_index ):
 
     # Error flag container
     errored = False
+    rsync_retcode = []
 
     # Verify files with rsync
-    for line in runProcess( "rsync --exclude 'lost+found' --archive --dry-run --checksum --itemize-changes %s/ %s" % (source_folder, dest_folder) ):
+    for line in runProcess( "rsync --exclude 'lost+found' --archive --dry-run --checksum --itemize-changes %s/ %s" % (source_folder, dest_folder), rsync_retcode ):
 
         # Extract rsync output
         exp_data = re.match( r'(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)\s(.*)', line )
@@ -687,14 +689,27 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
 
             if working_mode != MODE_FORMAT:
 
-                # Repair disk
-                exit_code = execCommand("sudo fsck -p %s 1>&2" % (connected_disk[ 1 ]))
+                # Fsck variables
+                fsck_exit_code = []
+                fsck_umount_error = False
+
+                # Run fsck and iterate over output
+                for line in runProcess("sudo fsck -p %s 1>&2" % (connected_disk[ 1 ]), fsck_exit_code):
+
+                    # Write output
+                    sys.stderr.write( line )
+
+                    # Check if an unmount error is present
+                    if "was not cleanly unmounted" in line:
+
+                        # Flag error
+                        fsck_umount_error = True
 
                 # Check fsck status
-                if exit_code != 0:
+                if fsck_exit_code[ 0 ] != 0 and not fsck_umount_error:
 
                     # Debug output
-                    ShowMessage("fsck failed on module %s (%s), exit code: %d!" % ( module[ 0 ], connected_disk[ 1 ], exit_code ), 2)
+                    ShowMessage("fsck failed on module %s (%s), exit code: %d!" % ( module[ 0 ], connected_disk[ 1 ], fsck_exit_code[ 0 ] ), 2)
 
                     # Disconnect disk
                     disconnect_disk( module_mux )
@@ -1013,10 +1028,10 @@ def main(argv):
             sys.exit( 1 )
 
     # Debug output
-    ShowMessage("Waiting 10s...")
+    ShowMessage("Waiting 20s...")
 
     # Wait 10s
-    time.sleep( 10 )
+    time.sleep( 20 )
 
     # Process state container
     action_state = False
