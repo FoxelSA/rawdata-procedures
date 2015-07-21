@@ -684,10 +684,10 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
             # Debug output
             ShowMessage("Module %s connected as %s!" % ( module[ 0 ], connected_disk[ 1 ] ) )
 
-            # Debug output
-            ShowMessage("Running FSCK on module %s (%s)..." % ( module[ 0 ], connected_disk[ 1 ] ) )
-
             if working_mode != MODE_FORMAT:
+
+                # Debug output
+                ShowMessage("Running FSCK on module %s (%s)..." % ( module[ 0 ], connected_disk[ 1 ] ) )
 
                 # Fsck variables
                 fsck_exit_code = []
