@@ -449,7 +449,7 @@ def disconnect_disk( mux_base_addr, skip_check=0 ):
         if retries_count_url >= retries_max_url:
 
             # Exit loop
-            return
+            return False
 
         # Catch errors
         try:
@@ -475,7 +475,7 @@ def disconnect_disk( mux_base_addr, skip_check=0 ):
     if skip_check:
 
         # Exit function
-        return
+        return True
 
     # Loop variables
     timeout_counter = 0
@@ -494,7 +494,7 @@ def disconnect_disk( mux_base_addr, skip_check=0 ):
             ShowMessage("Timeout disconnecting multiplexer %d..., verify SATA cables connection" % (mux_base_addr), 2)
 
             # Exit loop
-            break
+            return False
 
         # Check if kernel output are available
         if p.poll(1):
@@ -513,6 +513,9 @@ def disconnect_disk( mux_base_addr, skip_check=0 ):
 
         # Increment timeout counter
         timeout_counter += 0.1
+
+    # Return success
+    return True
 
 # Function to download data from the camera
 def download_data( source_folder, destination_folder, module_index ):
@@ -640,7 +643,13 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
                 ShowMessage("Resetting mux %d..." % module_mux)
 
                 # Disconnect disk
-                disconnect_disk( module_mux, 1 )
+                if not disconnect_disk( module_mux, 1 ):
+
+                    # Debug output
+                    ShowMessage("Failed to reset multiplexer %d" % module_mux, 2)
+
+                    # Exit with code 1 ( failure )
+                    return False
 
                 # Debug output
                 ShowMessage("Waiting 10s...")
@@ -805,7 +814,13 @@ def process_data( modules_file, masters_folder, working_mode=MODE_DOWNLOAD ):
             execCommand("sudo umount /mnt/rawdata-downloader/ 1>&2")
 
         # Disconnect disk
-        disconnect_disk( module_mux )
+        if not disconnect_disk( module_mux ):
+
+            # Debug output
+            ShowMessage("Failed to reset multiplexer %d" % module_mux, 2)
+
+            # Exit with code 1 ( failure )
+            return False
 
         # Debug output
         ShowMessage("Mux %d disconnected" % module_mux)
@@ -888,8 +903,11 @@ def main(argv):
 
     else:
 
-        # Exit function
-        return False
+        # Debug output
+        ShowMessage("Failed to get camera uptime", 2)
+
+        # Exit with code 1 ( failure )
+        sys.exit( 1 )
 
     # Check if uptime is less than 3min
     if camera_uptime < ( 3.0 * 60.0 ):
@@ -909,14 +927,17 @@ def main(argv):
     # Get camera mac address
     __CameraMAC__ = get_camera_mac()
 
-    # Debug output
-    ShowMessage("Camera MAC: %s" % __CameraMAC__)
-
     # Check if camera mac is valid
     if not __CameraMAC__:
 
         # Debug output
-        ShowMessage("Failed to get camera mac address, camera offline ? or this machine is not on the 192.168.0/24 subnet ?", 2, 1)
+        ShowMessage("Failed to get camera MAC address", 2)
+
+        # Exit with code 1 ( failure )
+        sys.exit( 1 )
+
+    # Debug output
+    ShowMessage("Camera MAC: %s" % __CameraMAC__)
 
     # Compute paths
     __Masters_Folder__ = "%s/rawdata/%s/master" % ( __MountPoint__, __CameraMAC__ )
@@ -952,7 +973,13 @@ def main(argv):
         ShowMessage("Resetting mux %d..." % mux_id)
 
         # Disconnect disk
-        disconnect_disk( mux_id, 1 )
+        if not disconnect_disk( mux_id, 1 ):
+
+            # Debug output
+            ShowMessage("Failed to reset multiplexer %d" % mux_id, 2)
+
+            # Exit with code 1 ( failure )
+            sys.exit( 1 )
 
     # Debug output
     ShowMessage("Waiting 10s...")
@@ -1048,10 +1075,16 @@ def main(argv):
             # Output needed informations for rawdata-procedures
             print( "%s %s" % ( __CameraMAC__, master_timestamp ) )
 
+        # Exit with code 0 ( success )
+        sys.exit( 0 )
+
     else:
 
         # Debug output
         ShowMessage("Failed.", 2)
+
+        # Exit with code 1 ( failure )
+        sys.exit( 1 )
 
 # Program entry point
 if __name__ == "__main__":

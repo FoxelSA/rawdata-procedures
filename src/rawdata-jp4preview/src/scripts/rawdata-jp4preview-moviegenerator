@@ -49,7 +49,7 @@ import json
 # Usage display function
 def _usage():
     print """
-    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <No debayer ? *0|1>
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Program entry point function
@@ -66,8 +66,7 @@ def main(argv):
     __CameraMAC__           = argv[ 1 ]
     __MasterTimestamp__     = argv[ 2 ]
     __SegmentTimestamp__    = argv[ 3 ]
-    __Param_NoDebayer__     = (int( argv[ 4 ] ) == 1)
-    __Param_Full_Previews__ = (int( argv[ 5 ] ) == 1)
+    __Param_Full_Previews__ = (int( argv[ 4 ] ) == 1)
 
     # Compute JSON file path
     __Segment_Folder__ = "%s/rawdata/%s/master/%s/segment/%s" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__, __SegmentTimestamp__)
@@ -76,10 +75,10 @@ def main(argv):
     __JSONFile__ = "%s/info/segment.json" % (__Segment_Folder__)
 
     # Compute source folder
-    PreviewsFolder = "%s/preview/%s/img" % (__Segment_Folder__, ('no-debayer' if __Param_NoDebayer__ else 'debayer'))
+    PreviewsFolder = "%s/preview/img" % (__Segment_Folder__)
 
     # Compute destination folder
-    VideoFolder = "%s/preview/%s/vid" % (__Segment_Folder__, ('no-debayer' if __Param_NoDebayer__ else 'debayer'))
+    VideoFolder = "%s/info/" % (__Segment_Folder__)
 
     # Determine number of system CPU cores
     CoreCount = multiprocessing.cpu_count()
@@ -134,12 +133,12 @@ def main(argv):
         if __Param_Full_Previews__:
 
             # Generate video
-            os.system('mencoder mf://@%s -vf scale=5120:3200 -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+            os.system('mencoder mf://@%s -vf scale=5120:3200 -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/segment.webm' % (list_File.name, CoreCount, VideoFolder))
 
         else:
 
             # Generate video
-            os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/25fps.webm' % (list_File.name, CoreCount, VideoFolder))
+            os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/segment.webm' % (list_File.name, CoreCount, VideoFolder))
 
     # Remove temp file
     os.unlink( list_File.name )

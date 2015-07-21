@@ -49,7 +49,7 @@ from datetime import datetime
 # Usage display function
 def _usage():
     print """
-    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <no debayer 0 | 1>
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Function to print debug messages
@@ -106,7 +106,6 @@ def main(argv):
     __Param_MAC__       = argv[ 1 ]
     __Param_Master__    = argv[ 2 ]
     __Param_Segment__   = argv[ 3 ]
-    __Param_NoDebayer__ = (int( argv[ 4 ] ) == 1)
 
     # Compute base path
     __BasePath__ = "%s/rawdata/%s/master/%s" % (__Param_Mount__, __Param_MAC__, __Param_Master__)
@@ -123,15 +122,11 @@ def main(argv):
     # Array to store results
     PathList = []
 
-    # Determine base folder
-    BaseFolder = 'no-debayer' if __Param_NoDebayer__ else 'debayer'
-
     # Compute preview folder
-    PreviewFolder = "%s/rawdata/%s/master/%s/segment/%s/preview/%s" % (__Param_Mount__,
+    PreviewFolder = "%s/rawdata/%s/master/%s/segment/%s/preview" % (__Param_Mount__,
     __Param_MAC__,
     __Param_Master__,
-    __Param_Segment__,
-    BaseFolder)
+    __Param_Segment__)
 
     # Variable to store check status
     State = 0

@@ -45,7 +45,7 @@ import sys
 import os
 
 # Function to update JSON file flags
-def updateJSON(JSONFile, __NoDebayer__):
+def updateJSON(JSONFile):
 
     # Open file
     SourceJSON = open(JSONFile, 'r')
@@ -56,15 +56,8 @@ def updateJSON(JSONFile, __NoDebayer__):
     # Close JSON file
     SourceJSON.close()
 
-    # Determine state
-    State = "no-debayer" if __NoDebayer__ else "debayer"
-
     # Set apropriate state
-    if json_data['preview']:
-        if 'no-debayer' in json_data['preview']:
-            json_data['preview'] = State
-    else:
-        json_data['preview'] = State
+    json_data['preview'] = True
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
@@ -73,7 +66,7 @@ def updateJSON(JSONFile, __NoDebayer__):
 # Usage display function
 def _usage():
     print """
-    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [No debayer ? *0|1]
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Program entry point function
@@ -90,10 +83,6 @@ def main(argv):
     __Param_MAC__       = argv[ 1 ]
     __Param_Master__    = argv[ 2 ]
     __Param_Segment__   = argv[ 3 ]
-    __Param_NoDebayer__ = "0"
-
-    if( len( argv ) > 4 ):
-        __Param_NoDebayer__ = argv[ 4 ]
 
     # Compute base path
     __BasePath__ = "%s/rawdata/%s/master/%s" % (__Param_Mount__, __Param_MAC__, __Param_Master__)
@@ -101,11 +90,8 @@ def main(argv):
     # Compute JSON file path
     __JSONFile__ = "%s/segment/%s/info/segment.json" % (__BasePath__, __Param_Segment__)
 
-    # Parse no debayer argument
-    __NoDebayer__ = (int( __Param_NoDebayer__ ) == 1)
-
     # Tag corrupted images in json
-    updateJSON( __JSONFile__, __NoDebayer__)
+    updateJSON( __JSONFile__)
 
 # Program entry point
 if __name__ == "__main__":

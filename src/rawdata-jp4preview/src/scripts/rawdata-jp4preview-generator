@@ -207,7 +207,7 @@ def GetImageSizes(FastCalKeyFilePath):
     return [ config.getint('calibration', 'pixelCorrectionWidth_00'), config.getint('calibration', 'pixelCorrectionHeight_00') ]
 
 # Function to convert a JP4 file into JPEG
-def JP4ToJPEG(List, _output, _temp, _grayscale=0, _half=0):
+def JP4ToJPEG(List, _output, _temp, _half=0):
 
     # Itertate over paths
     for path in List:
@@ -215,42 +215,26 @@ def JP4ToJPEG(List, _output, _temp, _grayscale=0, _half=0):
         # Extract filename
         FileName = os.path.splitext(os.path.basename(path))[0]
 
-        # Check presence of grayscale option
-        if _grayscale:
+        # Convert image to dng
+        execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 1> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
 
-            # Check if half tile requested
-            if _half:
+        # Check if half tile requested
+        if _half:
 
-                # Convert image
-                execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast -scale 1/2 > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
-
-            else:
-
-                # Convert image
-                execCommand("OMP_NUM_THREADS=1 movie2dng --jpeg --stdout %s 2> /dev/null | djpeg -fast > %s/jpeg/%s.jpeg" % (path, _temp, FileName))
+            # Debay dng file and convert it into jpeg
+            execCommand("OMP_NUM_THREADS=1 dcraw_half %s/jpeg/%s.dng 1> /dev/null" % (_temp, FileName))
 
         else:
 
-            # Convert image to dng
-            execCommand("OMP_NUM_THREADS=1 movie2dng --no-dng-rotation --dng --stdout %s 1> /dev/null > %s/jpeg/%s.dng" % (path, _temp, FileName))
+            # Debay dng file and convert it into jpeg
+            execCommand("OMP_NUM_THREADS=1 simple_dcraw %s/jpeg/%s.dng" % (_temp, FileName))
 
-            # Check if half tile requested
-            if _half:
+        # Comvert PPM to jpeg
+        execCommand("OMP_NUM_THREADS=1 convert %s/jpeg/%s.dng.ppm %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName) )
 
-                # Debay dng file and convert it into jpeg
-                execCommand("OMP_NUM_THREADS=1 dcraw_half %s/jpeg/%s.dng 1> /dev/null" % (_temp, FileName))
-
-            else:
-
-                # Debay dng file and convert it into jpeg
-                execCommand("OMP_NUM_THREADS=1 simple_dcraw %s/jpeg/%s.dng" % (_temp, FileName))
-
-            # Comvert PPM to jpeg
-            execCommand("OMP_NUM_THREADS=1 convert %s/jpeg/%s.dng.ppm %s/jpeg/%s.jpeg" % (_temp, FileName, _output, FileName) )
-
-            # Remove temporary dng file
-            os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
-            os.remove("%s/jpeg/%s.dng.ppm" % (_temp, FileName))
+        # Remove temporary dng file
+        os.remove("%s/jpeg/%s.dng" % (_temp, FileName))
+        os.remove("%s/jpeg/%s.dng.ppm" % (_temp, FileName))
 
 # Function to generate tiles form a crow
 def MakeTiles(_input, _output, image_sizes, TILES_SCALE_FACTOR):
@@ -530,7 +514,7 @@ def StitchPano(_tilesdir, _output, fastcal_file, OUTPUT_SCALE_FACTOR ):
 # Usage display function
 def _usage():
     print """
-    Usage: %s <_1 JP4 file path> <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [ no debayer 0 | 1] [ write tiles 0 | 1]
+    Usage: %s <_1 JP4 file path> <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> [ write tiles 0 | 1]
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Program entry point function
@@ -548,9 +532,8 @@ def main(argv):
     __PARAM_MAC__         = argv[ 2 ]
     __PARAM_MASTER__      = argv[ 3 ]
     __PARAM_SEGMENT__     = argv[ 4 ]
-    __NoDebayer__         = (int( argv[ 5 ] ) == 1)
-    __Write_Tiles__       = (int( argv[ 6 ] ) == 1)
-    __Full_Previews__     = (int( argv[ 7 ] ) == 1)
+    __Write_Tiles__       = (int( argv[ 5 ] ) == 1)
+    __Full_Previews__     = (int( argv[ 6 ] ) == 1)
 
     # Settings
     HALF_ENABLED = 1
@@ -647,11 +630,6 @@ def main(argv):
     # Create JP4 image element
     __JP4_Image__ = JP4Image(ts, 1, basefolder)
 
-    # Check output type
-    DebayFolder = "debayer"
-    if __NoDebayer__:
-        DebayFolder = "no-debayer"
-
     # Determine base segment folder
     BaseSegmentsFolder = "%s/rawdata/%s/master/%s/segment" % (__PARAM_MOUNT__, __PARAM_MAC__, __PARAM_MASTER__)
 
@@ -659,7 +637,7 @@ def main(argv):
     __Input__    = "%s/%s/raw" % (BaseSegmentsFolder, __PARAM_SEGMENT__)
 
     # Compute output folder
-    __Output_Base__   = "%s/%s/preview/%s/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder)
+    __Output_Base__   = "%s/%s/preview/img" % (BaseSegmentsFolder, __PARAM_SEGMENT__)
     __Output_Tiles__ = "%s/tiles" % __Temp__
     __Output_Tiles_Inverted__ = "%s/tiles_inverted" % __Temp__
 
@@ -667,7 +645,7 @@ def main(argv):
     if __Write_Tiles__:
 
         # Adjust output tiles folder
-        __Output_Tiles_Inverted__ = "%s/%s/preview/%s/tiles/%d" % (BaseSegmentsFolder, __PARAM_SEGMENT__, DebayFolder, __JP4_Image__.base_folder)
+        __Output_Tiles_Inverted__ = "%s/%s/preview/tiles/%d" % (BaseSegmentsFolder, __PARAM_SEGMENT__, __JP4_Image__.base_folder)
 
     # Compute output folders
     __Output__   = "%s/%d" % (__Output_Base__, __JP4_Image__.base_folder)
@@ -703,7 +681,7 @@ def main(argv):
             JP4ToJPEG_List.append("%s/%s_%d.jp4" % (__Input__, __JP4_Image__.path_nomod, i))
 
         # Convert JP4 images to JPEG
-        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, __NoDebayer__, HALF_ENABLED)
+        JP4ToJPEG(JP4ToJPEG_List, __Temp__, __Temp__, HALF_ENABLED)
 
         # Create tiles for previously converted images
         for i in range(1, ModuleCount):

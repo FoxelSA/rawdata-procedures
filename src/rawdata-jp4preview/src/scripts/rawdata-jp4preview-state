@@ -45,7 +45,7 @@ import sys
 import os
 
 # Function to check if a segment is already extracted
-def SegmentFinished(JSONFile, NoDebayer):
+def SegmentFinished(JSONFile):
 
     # Open file
     SourceJSON = open(JSONFile, 'r')
@@ -59,18 +59,17 @@ def SegmentFinished(JSONFile, NoDebayer):
     # Check if segment is already extracted
     if json_data['preview']:
 
-        # Check if debayer previews are not generated (prior)
-        if not NoDebayer and json_data['preview'] == "no-debayer":
-            return False
-
+        # Return
         return True
     else:
+
+        # Return
         return False
 
 # Usage display function
 def _usage():
     print """
-    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp> <No debayer ? *0|1>
+    Usage: %s <Mount point> <Camera MAC> <Master timestamp> <Segment timestamp>
     """ % os.path.basename( sys.argv[ 0 ] )
 
 # Program entry point function
@@ -78,7 +77,7 @@ def _usage():
 def main(argv):
 
     # Check arguments
-    if( len( argv ) < 5 ):
+    if( len( argv ) < 4 ):
         _usage()
         sys.exit( 0 )
 
@@ -87,17 +86,12 @@ def main(argv):
     __CameraMAC__        = argv[ 1 ]
     __MasterTimestamp__  = argv[ 2 ]
     __SegmentTimestamp__ = argv[ 3 ]
-    __Param_NoDebayer__ = "0"
-
-    if( len( argv ) > 4 ):
-        __Param_NoDebayer__ = argv[ 4 ]
 
     # Compute JSON file path
     __JSONFile__ = "%s/rawdata/%s/master/%s/segment/%s/info/segment.json" % (__MountPoint__, __CameraMAC__, __MasterTimestamp__, __SegmentTimestamp__)
-    __NoDebayer__ = (int( __Param_NoDebayer__ ) == 1)
 
     # Return status
-    State = SegmentFinished( __JSONFile__, __NoDebayer__)
+    State = SegmentFinished( __JSONFile__)
 
     if State:
         sys.exit( 1 )
