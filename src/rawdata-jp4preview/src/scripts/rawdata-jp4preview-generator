@@ -588,37 +588,6 @@ def main(argv):
         execCommand("mkdir -p %s/tiles/bot" % __Temp__)
         execCommand("mkdir -p %s/jpeg" % __Temp__)
 
-    # Check if all tools are present
-    Error = 0
-
-    # Check presence of ImageMagick
-    if not which("convert"):
-        ShowMessage("ImageMagick not installed, install it with 'sudo apt-get install imagemagick'", 2, 0)
-        Error = 1
-
-    # Check presence of dcraw
-    if not which("cjpeg"):
-        ShowMessage("cjpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
-        Error = 1
-
-    # Check presence of dcraw
-    if not which("djpeg"):
-        ShowMessage("djpeg not installed, install it with 'sudo apt-get install libjpeg-turbo-progs'", 2, 0)
-        Error = 1
-
-    # Check presence of dcraw
-    if not which("dcraw"):
-        ShowMessage("dcraw not installed, install it with 'sudo apt-get install dcraw'", 2, 0)
-        Error = 1
-
-    # Check presence of movie2dng
-    if not which("movie2dng"):
-        ShowMessage("movie2dng not installed, see http://wiki.elphel.com/index.php?title=Movie2dng", 2, 0)
-        Error = 1
-
-    # Exif if dependencies are not installed
-    if Error: return
-
     # Split segments of file
     parts = __Input_File__.split('/')
     timestamps = parts[-1].rstrip('.jp4').split('_')
