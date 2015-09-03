@@ -61,7 +61,7 @@ def updateJSON(JSONFile):
 
     # Write validated JSON file
     with open(JSONFile, 'w') as outfile:
-        json.dump(json_data, outfile, sort_keys = True, indent = 4)
+        json.dump(json_data, outfile, sort_keys = True, indent = 0)
 
 # Usage display function
 def _usage():

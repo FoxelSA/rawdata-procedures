@@ -365,7 +365,7 @@ def main(argv):
 
             # Write validated JSON file
             with open(i, 'w') as outfile:
-                json.dump(json_data, outfile, sort_keys = True, indent = 4)
+                json.dump(json_data, outfile, sort_keys = True, indent = 0)
 
     # Check if JSON files have been updated
     if JSON_UPDATED:
