@@ -42,8 +42,6 @@
 
 # Script execution switch #
 SWITCH_DOWNLOAD=""
-SWITCH_NOSPLIT=""
-SWITCH_NOPREVIEW=""
 
 # Script parameters #
 PARAM_MOUNT="/data/"
@@ -62,12 +60,6 @@ arguments() {
         case $args in
             --download)
                 SWITCH_DOWNLOAD="TRUE"
-            ;;
-            --no-split)
-                SWITCH_NOSPLIT="TRUE"
-            ;;
-            --no-preview)
-                SWITCH_NOPREVIEW="TRUE"
             ;;
             --mount-point)
                 PARAM_MOUNT="$1"
@@ -185,9 +177,6 @@ if [ $STATUS -ne 0 ]; then
 
 fi
 
-# Check execution switch #
-if [ "$SWITCH_NOSPLIT" == "TRUE" ]; then exit 0; fi
-
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : creating table of jp4 files ..."
 rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
@@ -203,9 +192,6 @@ rawdata-dbpusher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-ti
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : splitting mov files ..."
 rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
-
-# Check execution switch #
-if [ "$SWITCH_NOPREVIEW" == "TRUE" ]; then exit 0; fi
 
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : generating image previews ..."

@@ -60,7 +60,6 @@ _help() {
 
     [Optional arguments]
     --segment-timestamp   Segment timestamp
-    --no-split            Exit program
     --write-tiles         Write full resolution sensor tiles
     --full-previews       Write full resolution previews
     --force               Bypass preview flag in JSON
@@ -96,10 +95,6 @@ arguments() {
             ;;
             --force)
                 PARAM_FORCE="1"
-            ;;
-            --no-split)
-                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : --no-split given exiting..."
-                exit
             ;;
             --mount-point)
                 PARAM_MOUNT="$1"

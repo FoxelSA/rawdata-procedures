@@ -57,7 +57,6 @@ _help() {
 
     [Optional arguments]
     --segment-timestamp Segment timestamp
-    --no-split          Exit program
     --disk-threads      Process localy with specified number of threads
     --help              Show this message
     """
@@ -82,10 +81,6 @@ arguments() {
         args="$1"
         shift
         case $args in
-            --no-split)
-                >&2 echo "[$(date '+%F %R')] rawdata-movsplit : --no-split given exiting..."
-                exit
-            ;;
             --mount-point)
                 PARAM_MOUNT="$1"
                 shift
