@@ -37,6 +37,7 @@
 
 # Script switch #
 AS_DOWN="FALSE"
+AS_SNAP="FALSE"
 AS_KEEP="FALSE"
 AS_AUDI="FALSE"
 
@@ -60,6 +61,9 @@ arguments() {
         case $args in
             --download)
                 AS_DOWN="TRUE"
+            ;;
+            --snapshot)
+                AS_SNAP="TRUE"
             ;;
             --keep-intermediates)
                 AS_KEEP="TRUE"
@@ -94,6 +98,14 @@ echos() {
 
 # Auto-segmentation : process #
 process() {
+
+    # Setting decomposition parameter #
+    if [ "$AS_SNAP" == "TRUE" ]; then
+
+        # Modulate decomposition parameter - 8 hours are considered for snapshots #
+        AS_SEGS=28800
+
+    fi
 
     # Creates directories #
     echos "rawdata-autoseg : creating directories ..."
@@ -293,3 +305,4 @@ else
     exit 0
 
 fi
+
