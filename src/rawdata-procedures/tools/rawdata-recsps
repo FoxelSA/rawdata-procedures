@@ -49,9 +49,7 @@ rm -f $1/csps/streams/*.bin
 
 # CSPS-process #
 echo "rawdata-recsps : CSPS-processing ..."
-csps-process -p $1/csps \
-             -t $1/csps/topology \
-              > /dev/null
+csps-process -p $1/csps -t $1/csps/topology > /dev/null
 
 # JSON file #
 echo "rawdata-recsps : Backup JSON export file ..."

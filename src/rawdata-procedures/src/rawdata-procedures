@@ -42,6 +42,7 @@
 
 # Script execution switch #
 SWITCH_DOWNLOAD=""
+SWITCH_SNAPSHOT=""
 
 # Script parameters #
 PARAM_MOUNT="/data/"
@@ -60,6 +61,9 @@ arguments() {
         case $args in
             --download)
                 SWITCH_DOWNLOAD="TRUE"
+            ;;
+            --snapshot)
+                SWITCH_SNAPSHOT="TRUE"
             ;;
             --mount-point)
                 PARAM_MOUNT="$1"
@@ -86,23 +90,40 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
+# Check dependencies
+rawdata-dependencies $@
+
+# Exit if dependencies errors
+if [ $? -ne 0 ]; then
+    exit
+fi
+
 # Check execution consistency #
 if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/rawdata ] || [ ! -d $PARAM_MOUNT/system ]; then
 
     # Exit script #
-    echo "Error : unable to access standard directory with specified mount point"
+    echo "[$(date '+%F %R')] rawdata-procedure : unable to access standard directory with specified mount point"
     exit 1
 
 fi
 
 # Check execution consistency #
-if [ -n "$SWITCH_DOWNLOAD" ]; then
+if [ -n "SWITCH_DOWNLOAD" ] && [ -n "SWITCH_SNAPSHOT" ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : unable to understand --download with --snapshot switch"
+    exit 1
+
+fi
+
+# Check execution consistency #
+if [ -n "$SWITCH_DOWNLOAD" ] || [ -n "$SWITCH_SNAPSHOT" ]; then
 
     # Check execution consistency #
     if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ] || [ -n "$PARAM_SEGMENT" ]; then
 
         # Exit script #
-        echo "Error : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
+        echo "[$(date '+%F %R')] rawdata-procedure : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
         exit 1
 
     fi
@@ -116,7 +137,7 @@ if [ -n "$SWITCH_DOWNLOAD" ]; then
     if [ $STATUS -ne 0 ]; then
 
         # Exit script #
-        echo "Error : rawdata-downloader fail to proceed"
+        echo "[$(date '+%F %R')] rawdata-procedure : rawdata-downloader fail to proceed"
         exit 1
 
     fi
@@ -132,7 +153,7 @@ fi
 if [ -z "$PARAM_MAC" ] || [ -z "$PARAM_MASTER" ]; then
 
     # Exit script #
-    echo "Error : cannot continue execution without --mac-address/--master-timestamp parameters"
+    echo "[$(date '+%F %R')] rawdata-procedure : cannot continue execution without --mac-address/--master-timestamp parameters"
     exit 1
 
 fi
@@ -141,7 +162,7 @@ fi
 if [ ! -d "$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER" ]; then
 
     # Exit script #
-    echo "Error : cannot access master allocation"
+    echo "[$(date '+%F %R')] rawdata-procedure : cannot access master allocation"
     exit 1
 
 fi
@@ -150,29 +171,20 @@ fi
 if [ -n "$PARAM_SEGMENT" ] && [ ! -d "$PARAM_MOUNT/rawdata/$PARAM_MAC/master/$PARAM_MASTER/segment/$PARAM_SEGMENT" ]; then
 
     # Exit script #
-    echo "Error : cannot access segment allocation"
+    echo "[$(date '+%F %R')] rawdata-procedure : cannot access segment allocation"
     exit 1
 
-fi
-
-# Check dependencies
-rawdata-dependencies $@
-
-# Exit if dependencies errors
-if [ $? -ne 0 ]; then
-    exit
 fi
 
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : auto-segmentation ..."
 RETURN=$(rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@)
-STATUS=$?
 
-# Check procedure status #
-if [ $STATUS -ne 0 ]; then
+# Check procedure #
+if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "Error : rawdata-autoseg fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-autoseg fail to process"
     exit 1
 
 fi
