@@ -47,8 +47,8 @@ AS_MACAD=""
 AS_TIMES=""
 
 # Script configuration #
-AS_SEGS=2.0     # Decomposition minimum interval #
-AS_SIZE=9542400 # One minute of record @ 2Hz - 60*64*(2460+20+2) #
+AS_SEGS=1
+AS_SIZE=1
 
 # Arguments and parameters #
 arguments() {
@@ -102,8 +102,19 @@ process() {
     # Setting decomposition parameter #
     if [ "$AS_SNAP" == "TRUE" ]; then
 
-        # Modulate decomposition parameter - 8 hours are considered for snapshots #
-        AS_SEGS=28800
+        # Setting log-files split condition (8 hours) #
+        AS_SEGS=$(( 60 * 60 * 8 ))
+
+        # Setting log-files validation size (4 records at least) #
+        AS_SIZE=$(( 64 * 4 ))
+
+    else
+
+        # Setting log-files split condition (2 seconds) #
+        AS_SEGS=$(( 2 ))
+
+        # Setting log-files validation size (2482 records at least) #
+        AS_SIZE=$(( 64 * ( 2460 + 20 + 2 ) * 60 ))
 
     fi
 
@@ -119,47 +130,56 @@ process() {
     # Perform audit #
     if [ "$AS_AUDI" == "FALSE" ]; then
     echos "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/mov/1/ > $AS_RAW/csps/audit-raw.log
+    csps-elphel-audit -p $AS_RAW/mov/1/ \
+    > $AS_RAW/csps/audit-raw.log
     fi
 
     # Perform logs-files processing #
     echos "rawdata-autoseg : merging logs-files ..."
-    csps-elphel-merge -s $AS_RAW/mov/1/ -d $AS_RAW/csps/merged > $AS_RAW/csps/logs-merged.log
+    csps-elphel-merge -s $AS_RAW/mov/1/ -d $AS_RAW/csps/merged \
+    > $AS_RAW/csps/logs-merged.log
 
     # Perform audit #
     if [ "$AS_AUDI" == "FALSE" ]; then
     echos "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/merged > $AS_RAW/csps/audit-merged.log
+    csps-elphel-audit -p $AS_RAW/csps/merged \
+    > $AS_RAW/csps/audit-merged.log
     fi
 
     # Perform logs-files processing #
     echos "rawdata-autoseg : sorting logs-files ..."
-    csps-elphel-sort -s $AS_RAW/csps/merged -d $AS_RAW/csps/sorted > $AS_RAW/csps/logs-sorted.log
+    csps-elphel-sort -s $AS_RAW/csps/merged -d $AS_RAW/csps/sorted \
+    > $AS_RAW/csps/logs-sorted.log
 
     # Perform audit #
     if [ "$AS_AUDI" == "FALSE" ]; then
     echos "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/sorted > $AS_RAW/csps/audit-sorted.log
+    csps-elphel-audit -p $AS_RAW/csps/sorted \
+    > $AS_RAW/csps/audit-sorted.log
     fi
 
     # Perform logs-files processing #
     echos "rawdata-autoseg : repairing logs-files ..."
-    csps-elphel-repair -s $AS_RAW/csps/sorted -d $AS_RAW/csps/repaired > $AS_RAW/csps/logs-repaired.log
+    csps-elphel-repair -s $AS_RAW/csps/sorted -d $AS_RAW/csps/repaired \
+    > $AS_RAW/csps/logs-repaired.log
 
     # Perform audit #
     if [ "$AS_AUDI" == "FALSE" ]; then
     echos "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/repaired > $AS_RAW/csps/audit-repaired.log
+    csps-elphel-audit -p $AS_RAW/csps/repaired \
+    > $AS_RAW/csps/audit-repaired.log
     fi
 
     # Perform logs-files processing #
     echos "rawdata-autoseg : decomposing logs-files ..."
-    csps-elphel-decompose -s $AS_RAW/csps/repaired -d $AS_RAW/csps/validated -i $AS_SEGS > $AS_RAW/csps/logs-validated.log
+    csps-elphel-decompose -s $AS_RAW/csps/repaired -d $AS_RAW/csps/validated -i $AS_SEGS \
+    > $AS_RAW/csps/logs-validated.log
 
     # Perform audit #
     if [ "$AS_AUDI" == "FALSE" ]; then
     echos "rawdata-autoseg : auditing logs-files ..."
-    csps-elphel-audit -p $AS_RAW/csps/validated > $AS_RAW/csps/audit-validated.log
+    csps-elphel-audit -p $AS_RAW/csps/validated \
+    > $AS_RAW/csps/audit-validated.log
     fi
 
     # Intermediates management #
@@ -182,7 +202,8 @@ process() {
 broadcast() {
 
     # Broadcasting logs #
-    echo "Broadcasting : $AS_MACAD:$AS_TIMES" > $AS_RAW/csps/logs-broadcasting.log
+    echo "Broadcasting : $AS_MACAD:$AS_TIMES" \
+    > $AS_RAW/csps/logs-broadcasting.log
 
     # Perform auto-segments broadcasting #
     echos "rawdata-autoseg : broadcasting auto-segments ..."
@@ -198,7 +219,8 @@ broadcast() {
             echos "    $AS_ENUM discared    with $AS_ASTS"
 
             # Display broadcasting information #
-            echo "    $AS_ENUM discared    with $AS_ASTS" >> $AS_RAW/csps/logs-broadcasting.log
+            echo "    $AS_ENUM discared    with $AS_ASTS" \
+            >> $AS_RAW/csps/logs-broadcasting.log
 
         else
 
@@ -206,7 +228,8 @@ broadcast() {
             echos "    $AS_ENUM broadcasted with $AS_ASTS"
 
             # Display broadcasting information #
-            echo "    $AS_ENUM broadcasted with $AS_ASTS" >> $AS_RAW/csps/logs-broadcasting.log
+            echo "    $AS_ENUM broadcasted with $AS_ASTS" \
+            >> $AS_RAW/csps/logs-broadcasting.log
 
             # Creates directories #
             mkdir -p $AS_SEG/$AS_ASTS
@@ -265,7 +288,16 @@ AS_SEG=$AS_MOUNT/rawdata/$AS_MACAD/master/$AS_TIMES/segment
 if [ ! -d $AS_MOUNT/rawdata/$AS_MACAD/master ] || [ ! -d $AS_MOUNT/camera/$AS_MACAD/fastcal ] || [ ! -d $AS_MOUNT/camera/$AS_MACAD/csps ]; then
 
     # Exit point #
-    echos "rawdata-autoseg : unknown directory structure ..."
+    echos "rawdata-autoseg : unknown directory structure"
+    exit 1
+
+fi
+
+# Check mode consitency #
+if [ "$AS_DOWN" == "TRUE" ] && [ ]; then
+
+    # Exit point #
+    echos "rawdata-autoseg : download and snapshot mode both enable"
     exit 1
 
 fi
