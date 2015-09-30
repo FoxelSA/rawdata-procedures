@@ -56,8 +56,10 @@ arguments() {
     # Search in arguments #
     while [[ $# > 0 ]]; do
 
-        args="$1"
-        shift
+        # Read argument #
+        args="$1"; shift
+
+        # Switch on argument #
         case $args in
             --download)
                 AS_DOWN="TRUE"
@@ -72,16 +74,13 @@ arguments() {
                 AS_AUDI="TRUE"
             ;;
             --mount-point)
-                AS_MOUNT="$1"
-                shift
+                AS_MOUNT="$1"; shift
             ;;
             --mac-address)
-                AS_MACAD="$1"
-                shift
+                AS_MACAD="$1"; shift
             ;;
             --master-timestamp)
-                AS_TIMES="$1"
-                shift
+                AS_TIMES="$1"; shift
             ;;
         esac
 

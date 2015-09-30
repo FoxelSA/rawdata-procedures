@@ -56,8 +56,10 @@ arguments() {
     # Search in arguments #
     while [[ $# > 0 ]]; do
 
-        args="$1"
-        shift
+        # Read argument #
+        args="$1"; shift
+
+        # Switch on argument #
         case $args in
             --download)
                 SWITCH_DOWNLOAD="TRUE"
@@ -66,20 +68,16 @@ arguments() {
                 SWITCH_SNAPSHOT="TRUE"
             ;;
             --mount-point)
-                PARAM_MOUNT="$1"
-                shift
+                PARAM_MOUNT="$1"; shift
             ;;
             --mac-address)
-                PARAM_MAC="$1"
-                shift
+                PARAM_MAC="$1"; shift
             ;;
             --master-timestamp)
-                PARAM_MASTER="$1"
-                shift
+                PARAM_MASTER="$1"; shift
             ;;
             --segment-timestamp)
-                PARAM_SEGMENT="$1"
-                shift
+                PARAM_SEGMENT="$1"; shift
             ;;
         esac
 
@@ -90,12 +88,16 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
-# Check dependencies
+# Check dependencies #
 rawdata-dependencies $@
 
-# Exit if dependencies errors
+# Check procdure #
 if [ $? -ne 0 ]; then
-    exit
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : dependecies check failed"
+    exit 1
+
 fi
 
 # Check execution consistency #
@@ -123,7 +125,7 @@ if [ -n "$SWITCH_DOWNLOAD" ] || [ -n "$SWITCH_SNAPSHOT" ]; then
     if [ -n "$PARAM_MAC" ] || [ -n "$PARAM_MASTER" ] || [ -n "$PARAM_SEGMENT" ]; then
 
         # Exit script #
-        echo "[$(date '+%F %R')] rawdata-procedure : unable to understand --download switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
+        echo "[$(date '+%F %R')] rawdata-procedure : unable to understand --download/--snapshot switch with --mac-address/--master-timestamp/--segment-timestamp parameters"
         exit 1
 
     fi
@@ -131,10 +133,9 @@ if [ -n "$SWITCH_DOWNLOAD" ] || [ -n "$SWITCH_SNAPSHOT" ]; then
     # Run procedure #
     echo "[$(date '+%F %R')] rawdata-procedures : downloading raw data ..."
     RETURN=$(rawdata-downloader $@)
-    STATUS=$?
 
     # Check procedure status #
-    if [ $STATUS -ne 0 ]; then
+    if [ $? -ne 0 ]; then
 
         # Exit script #
         echo "[$(date '+%F %R')] rawdata-procedure : rawdata-downloader fail to proceed"
@@ -142,10 +143,8 @@ if [ -n "$SWITCH_DOWNLOAD" ] || [ -n "$SWITCH_SNAPSHOT" ]; then
 
     fi
 
-    # Extract returned value - MAC address and master timestamp #
-    ARRAY=($RETURN)
-    PARAM_MAC=${ARRAY[0]}
-    PARAM_MASTER=${ARRAY[1]}
+    # Extract MAC address and master timestamp #
+    ARRAY=($RETURN); PARAM_MAC=${ARRAY[0]}; PARAM_MASTER=${ARRAY[1]}
 
 fi
 
@@ -184,7 +183,7 @@ RETURN=$(rawdata-autoseg --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --m
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-autoseg fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-autoseg failed"
     exit 1
 
 fi
@@ -197,7 +196,7 @@ rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-ti
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4table fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4table failed"
     exit 1
 
 fi
@@ -210,7 +209,7 @@ rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4trasher fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4trasher failed"
     exit 1
 
 fi
@@ -223,7 +222,7 @@ rawdata-dbpusher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-ti
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-dbpusher fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-dbpusher failed"
     exit 1
 
 fi
@@ -236,7 +235,7 @@ rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-ti
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-movsplit fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-movsplit failed"
     exit 1
 
 fi
@@ -249,7 +248,7 @@ rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-
 if [ $? -ne 0 ]; then
 
     # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4preview fail to process"
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4preview failed"
     exit 1
 
 fi
