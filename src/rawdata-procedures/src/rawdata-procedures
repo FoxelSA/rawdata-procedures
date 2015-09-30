@@ -89,7 +89,7 @@ arguments() {
 arguments $@
 
 # Check execution consistency #
-if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/rawdata ] || [ ! -d $PARAM_MOUNT/system ]; then
+if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/rawdata ]; then
 
     # Exit script #
     echo "[$(date '+%F %R')] rawdata-procedure : unable to access standard directory with specified mount point"
@@ -218,19 +218,6 @@ if [ $? -ne 0 ]; then
 
     # Exit script #
     echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4trasher failed"
-    exit 1
-
-fi
-
-# Run procedure #
-echo "[$(date '+%F %R')] rawdata-procedures : pushing data into database ..."
-rawdata-dbpusher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
-
-# Check procedure #
-if [ $? -ne 0 ]; then
-
-    # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-dbpusher failed"
     exit 1
 
 fi
