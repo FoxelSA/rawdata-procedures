@@ -88,18 +88,6 @@ arguments() {
 # Argument and parameters #
 arguments $@
 
-# Check dependencies #
-rawdata-dependencies $@
-
-# Check procdure #
-if [ $? -ne 0 ]; then
-
-    # Exit script #
-    echo "[$(date '+%F %R')] rawdata-procedure : dependecies check failed"
-    exit 1
-
-fi
-
 # Check execution consistency #
 if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/rawdata ] || [ ! -d $PARAM_MOUNT/system ]; then
 
