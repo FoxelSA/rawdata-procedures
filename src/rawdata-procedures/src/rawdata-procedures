@@ -118,16 +118,36 @@ if [ -n "$SWITCH_DOWNLOAD" ] || [ -n "$SWITCH_SNAPSHOT" ]; then
 
     fi
 
-    # Run procedure #
-    echo "[$(date '+%F %R')] rawdata-procedures : downloading raw data ..."
-    RETURN=$(rawdata-downloader $@)
+    # Check download mode #
+    if [ -n "$SWITCH_DOWNLOAD" ]; then
 
-    # Check procedure status #
-    if [ $? -ne 0 ]; then
+        # Run procedure #
+        echo "[$(date '+%F %R')] rawdata-procedures : downloading raw sequence data ..."
+        RETURN=$(rawdata-downloader-eyesis $@)
 
-        # Exit script #
-        echo "[$(date '+%F %R')] rawdata-procedure : rawdata-downloader fail to proceed"
-        exit 1
+        # Check procedure status #
+        if [ $? -ne 0 ]; then
+
+            # Exit script #
+            echo "[$(date '+%F %R')] rawdata-procedure : rawdata-downloader-eyesis fail to proceed"
+            exit 1
+
+        fi
+
+    else
+
+        # Run procedure #
+        echo "[$(date '+%F %R')] rawdata-procedures : downloading raw snapshot data ..."
+        RETURN=$(rawdata-downloader-snapshot $@)
+
+        # Check procedure status #
+        if [ $? -ne 0 ]; then
+
+            # Exit script #
+            echo "[$(date '+%F %R')] rawdata-procedure : rawdata-downloader-snapshot fail to proceed"
+            exit 1
+
+        fi
 
     fi
 
