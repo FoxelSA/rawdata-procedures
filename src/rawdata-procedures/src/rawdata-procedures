@@ -193,18 +193,67 @@ fi
 echo "[$(date '+%F %R')] rawdata-procedures : creating table of jp4 files ..."
 rawdata-jp4table --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
+# Check procedure #
+if [ $? -ne 0 ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4table fail to process"
+    exit 1
+
+fi
+
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : creating table of trashed jp4 files ..."
 rawdata-jp4trasher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
+
+# Check procedure #
+if [ $? -ne 0 ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4trasher fail to process"
+    exit 1
+
+fi
 
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : pushing data into database ..."
 rawdata-dbpusher --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
+# Check procedure #
+if [ $? -ne 0 ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-dbpusher fail to process"
+    exit 1
+
+fi
+
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : splitting mov files ..."
 rawdata-movsplit --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
 
+# Check procedure #
+if [ $? -ne 0 ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-movsplit fail to process"
+    exit 1
+
+fi
+
 # Run procedure #
 echo "[$(date '+%F %R')] rawdata-procedures : generating image previews ..."
 rawdata-jp4preview --mount-point $PARAM_MOUNT --mac-address $PARAM_MAC --master-timestamp $PARAM_MASTER $@ $RETURN
+
+# Check procedure #
+if [ $? -ne 0 ]; then
+
+    # Exit script #
+    echo "[$(date '+%F %R')] rawdata-procedure : rawdata-jp4preview fail to process"
+    exit 1
+
+fi
+
+# Exit script #
+exit 0
+
