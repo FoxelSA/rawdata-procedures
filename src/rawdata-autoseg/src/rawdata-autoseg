@@ -112,7 +112,7 @@ process() {
         # Setting log-files split condition (2 seconds) #
         AS_SEGS=$(( 2 ))
 
-        # Setting log-files validation size (2482 records at least) #
+        # Setting log-files validation size (60 * 2482 records at least) #
         AS_SIZE=$(( 64 * ( 2460 + 20 + 2 ) * 60 ))
 
     fi
@@ -293,10 +293,10 @@ if [ ! -d $AS_MOUNT/rawdata/$AS_MACAD/master ] || [ ! -d $AS_MOUNT/camera/$AS_MA
 fi
 
 # Check mode consitency #
-if [ "$AS_DOWN" == "TRUE" ] && [ ]; then
+if [ "$AS_DOWN" == "TRUE" ] && [ "$AS_SNAP" == "TRUE" ]; then
 
     # Exit point #
-    echos "rawdata-autoseg : download and snapshot mode both enable"
+    echos "rawdata-autoseg : unable to understand --download with --snapshot switch"
     exit 1
 
 fi
