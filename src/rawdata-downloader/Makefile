@@ -4,7 +4,8 @@
 #
 
     all:directories
-	cp src/rawdata-downloader bin/rawdata-downloader
+	cp src/rawdata-downloader-eyesis bin/rawdata-downloader-eyesis
+	cp src/rawdata-downloader-snapshot bin/rawdata-downloader-snapshot
 
 #
 #   make - directories
