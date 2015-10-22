@@ -1,0 +1,723 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+  rawdata-procedures - Camera raw data procedures
+
+  Copyright (c) 2013-2015 FOXEL SA - http://foxel.ch
+  Please read <http://foxel.ch/license> for more information.
+
+
+  Author(s):
+
+       Kevin Velickovic <k.velickovic@foxel.ch>
+
+
+  This file is part of the FOXEL project <http://foxel.ch>.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Additional Terms:
+
+       You are required to preserve legal notices and author attributions in
+       that material or in the Appropriate Legal Notices displayed by works
+       containing it.
+
+       You are required to attribute the work as explained in the "Usage and
+       Attribution" section of <http://foxel.ch/license>.
+"""
+
+import calendar
+import fnmatch
+import os
+import re
+import struct
+import subprocess
+import sys
+from datetime import datetime
+from operator import attrgetter
+import exifread
+import pyelphelnmea
+
+# Function to print debug messages
+def ShowMessage(Message, Type=0, Halt=0):
+
+    NO_COLORS = 0
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Get current date
+    DateNow = datetime.now().strftime("%H:%M:%S")
+
+    # Get script name
+    scriptName = "%s :" % os.path.basename(__file__)
+
+    # Display proper message
+    if Type == 0:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [INFO] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[32m[INFO]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 1:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [WARNING] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[33m[WARNING]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 2:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [ERROR] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[31m[ERROR]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+    elif Type == 3:
+        if NO_COLORS:
+            sys.stderr.write("[%s] [DEBUG] %s %s\n" % (DateNow, scriptName, Message))
+        else:
+            sys.stderr.write("[%s] \033[34m[DEBUG]\033[39m %s %s\n" % (DateNow, scriptName, Message))
+
+    # Flush stdout
+    sys.stdout.flush()
+
+    # Halt program if requested
+    if Halt:
+        sys.exit()
+
+# Function to execute a system command
+def execCommand(command):
+
+    # Execute command
+    return subprocess.call(command, shell=True)
+
+# Function to execute a command and return its output
+def runProcess(exe, out_retcode):
+
+    # Open command
+    p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+
+    # Loop
+    while(True):
+
+        # Initiate poll
+        retcode =  p.poll() #returns None while subprocess is running
+
+        # Read one line from stdout
+        line = p.stdout.readline()
+
+        # Yeld line
+        yield line
+
+        # If process closes exit loop
+        if(retcode is not None):
+            out_retcode.append( retcode )
+            break
+
+# Function to verify downloaded data
+def verify_data( source_folder, destination_folder ):
+
+    # Error flag container
+    errored = False
+    rsync_retcode = []
+
+    # Verify files with rsync
+    for line in runProcess( "rsync --exclude 'lost+found' --archive --dry-run --checksum --itemize-changes -L %s/ %s/ 1>&2" % (source_folder, destination_folder ), rsync_retcode ):
+
+        # Extract rsync output
+        exp_data = re.match( r'(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)\s(.*)', line )
+
+        # Check if regex matched
+        if exp_data:
+
+            # Check if rsync output is invalid
+            if not '.' in exp_data.group( 1 ):
+
+                # Mark as invalid
+                errored = True
+
+    # Return result
+    return (1 if errored else 0)
+
+# Function to recursively find files
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
+
+# Function to validate EXIF data contents
+def ValidateEXIFData(EXIFData):
+
+    # Check if EXIF data is present
+    if not EXIFData:
+        return False
+
+    # Verify micro timestamp entry presence
+    if 'EXIF SubSecTimeOriginal' in EXIFData:
+
+        # Verify micro timestamp
+        if not str( EXIFData["EXIF SubSecTimeOriginal"] ).isdigit():
+            return False
+    else:
+        return False
+
+    # Verify image date entry presence
+    if 'Image DateTime' in EXIFData:
+
+        # Midnight fix
+        _DateTime = str(EXIFData["Image DateTime"]).replace('24:00:00', '00:00:00')
+
+        # Verify image date
+        _Exp = re.compile(r"^([0-9]+\:[0-9]+\:[0-9]+\s[0-9]+\:[0-9]+\:[0-9]+)$")
+        if not _Exp.match( _DateTime ):
+            return False
+
+    else:
+
+        # Return result
+        return False
+
+    # Return True if all tests passed
+    return True
+
+# Function to convert camera channel to module
+def getModuleFromChannel( data ):
+
+    if "CHN101" in data:
+        return 1
+    elif "CHN102" in data:
+        return 2
+    elif "CHN103" in data:
+        return 3
+    elif "CHN104" in data:
+        return 4
+    elif "CHN105" in data:
+        return 5
+    elif "CHN106" in data:
+        return 6
+    elif "CHN107" in data:
+        return 7
+    elif "CHN108" in data:
+        return 8
+    elif "CHN109" in data:
+        return 9
+
+# Function to decode EXIF GPS data
+def decodeGPS( GPSTag ):
+
+    # Split values
+    splitted_tags = GPSTag.split( ',' )
+
+    # Clean tags
+    for i in range( 0, len( splitted_tags ) ):
+
+        # Clean values
+        splitted_tags[ i ] = splitted_tags[ i ].replace( ' ', '' )
+        splitted_tags[ i ] = splitted_tags[ i ].replace( '[', '' )
+        splitted_tags[ i ] = splitted_tags[ i ].replace( ']', '' )
+
+    # Values container
+    values = [ 0.0, 0.0, 0.0 ]
+
+    # Enumerate over values
+    for i, v in enumerate( splitted_tags ):
+
+        # Check if value is a fraction
+        if( '/' in v ):
+
+            # Split values
+            splitted = v.split( '/' )
+
+            # Compute value
+            values[ i ] = ( float( splitted[ 0 ] ) / float( splitted[ 1 ] ) )
+
+        else:
+
+            # Compute value
+            values[ i ] = float( v )
+
+    # Return data
+    return values
+
+def encodeNMEA( gps_info, index_n, RMC=False ):
+
+    # Check type
+    if RMC:
+
+        # Init
+        nmea_sentence = "$GPRMC,"
+
+        # Hour
+        nmea_sentence += "%02d%02d%02d.%03d,A," % ( gps_info[ 'time' ][ 0 ], gps_info[ 'time' ][ 1 ], gps_info[ 'time' ][ 2 ], index_n )
+
+        # Latitude
+        latitude = gps_info[ 'latitude' ][ 'val' ]
+        nmea_sentence += "%02d" % latitude[ 0 ]
+        nmea_sentence += "%06.3f" % ( latitude[ 1 ] + ( latitude[ 2 ] / 60 ) )
+        nmea_sentence += ",%s," % gps_info[ 'latitude' ][ 'ref' ]
+
+        # Longitude
+        longitude = gps_info[ 'longitude' ][ 'val' ]
+        nmea_sentence += "%03d" % longitude[ 0 ]
+        nmea_sentence += "%06.3f" % ( longitude[ 1 ] + ( longitude[ 2 ] / 60 ) )
+        nmea_sentence += ",%s," % gps_info[ 'longitude' ][ 'ref' ]
+
+        # Other stuff
+        nmea_sentence += "000.0,000.0,000000,000.0,,,"
+
+        return nmea_sentence
+
+    else:
+
+        # Init
+        nmea_sentence = "$GPGGA,"
+
+        # Hour
+        nmea_sentence += "%02d%02d%02d.%03d," % ( gps_info[ 'time' ][ 0 ], gps_info[ 'time' ][ 1 ], gps_info[ 'time' ][ 2 ], index_n )
+
+        # Latitude
+        latitude = gps_info[ 'latitude' ][ 'val' ]
+        nmea_sentence += "%02d" % latitude[ 0 ]
+        nmea_sentence += "%06.3f" % ( latitude[ 1 ] + ( latitude[ 2 ] / 60 ) )
+        nmea_sentence += ",%s," % gps_info[ 'latitude' ][ 'ref' ]
+
+        # Longitude
+        longitude = gps_info[ 'longitude' ][ 'val' ]
+        nmea_sentence += "%03d" % longitude[ 0 ]
+        nmea_sentence += "%06.3f" % ( longitude[ 1 ] + ( longitude[ 2 ] / 60 ) )
+        nmea_sentence += ",%s," % gps_info[ 'longitude' ][ 'ref' ]
+
+        # Other stuff
+        nmea_sentence += "%d,08,1.0," % gps_info[ 'fix' ]
+
+        # Altitude
+        nmea_sentence += "%.1f,M," % gps_info[ 'altitude' ][ 0 ]
+
+        # Other stuff
+        nmea_sentence += "0.0,M,,,"
+
+        # Return data
+        return nmea_sentence
+
+# JP4 image class
+class JP4_Image:
+
+    # Class initializer
+    def __init__( self, path ):
+
+        # Class variables
+        EXIF_Tags = None
+        self.path = path
+        self.valid = True
+        self.GPS = {
+            'latitude': {
+                'val': [ 0, 0, 0 ],
+                'ref': 'N'
+            },
+            'longitude': {
+                'val': [ 0, 0, 0 ],
+                'ref': 'E'
+            },
+            'altitude': [ 0, 0, 0 ],
+            'time': [ 0, 0, 0 ],
+            'fix': 0
+        }
+
+        # Open JP4 image
+        with open( path, 'r' ) as jp4_file:
+
+            # Read EXIF tags
+            EXIF_Tags = exifread.process_file( jp4_file )
+
+        # Verify EXIF data integrity
+        if not ValidateEXIFData( EXIF_Tags ):
+
+            # Debug output
+            ShowMessage("Image with corrputed EXIF data %s" % path, 1)
+
+            # Tag as invalid
+            self.valid = False
+
+        else:
+
+            # Extract MAC addresss
+            self.MAC = ("%s" % EXIF_Tags['Image HostComputer']).replace(':', '-').lower()
+
+            # Extract module
+            self.module = getModuleFromChannel( "%s" % EXIF_Tags['Image Model'] )
+
+            # Extract timestamp
+            _datetime            = str( EXIF_Tags["Image DateTime"] ).replace( '24:00:00', '00:00:00' )
+            _date_object         = datetime.strptime( _datetime, '%Y:%m:%d %H:%M:%S' )
+            self.timestamp       = calendar.timegm( _date_object.utctimetuple() )
+            self.timestamp_micro = int( str( EXIF_Tags["EXIF SubSecTimeOriginal"] ) )
+            self.timestamp_full  = ( "%10d_%06d" % ( self.timestamp, self.timestamp_micro ) )
+
+            # Check if first module and contains valid GPS data
+            if self.module == 1 and 'GPS GPSLatitude' in EXIF_Tags and 'GPS GPSLongitude' in EXIF_Tags:
+
+                # Extract GPS data
+                latitude  = decodeGPS( str( EXIF_Tags["GPS GPSLatitude"] ) )
+                longitude = decodeGPS( str( EXIF_Tags["GPS GPSLongitude"] ) )
+                altitude  = decodeGPS( str( EXIF_Tags["GPS GPSAltitude"] ) )
+                gps_time  = decodeGPS( str( EXIF_Tags["GPS GPSTimeStamp"] ) )
+
+                # Check if coords are valid
+                if( sum( latitude ) > 0.0 and sum( longitude ) > 0.0 ):
+
+                    # Assign values
+                    self.GPS = {
+                        'latitude': {
+                            'val': latitude,
+                            'ref': str( EXIF_Tags["GPS GPSLatitudeRef"] )
+                        },
+                        'longitude': {
+                            'val': longitude,
+                            'ref': str( EXIF_Tags["GPS GPSLongitudeRef"] )
+                        },
+                        'altitude': altitude,
+                        'time': gps_time,
+                        'fix': 1
+                    }
+
+def packTimestamp( timestamp, micro, type_e ):
+
+    ts_t = struct.pack( '<I', timestamp )
+    ts_m = struct.pack( '<I', micro )
+    ts   = ( ts_m + ts_t )
+
+    return( ts[:3] + type_e + ts[4:] )
+
+def createLogEntry( gps_data, master_ts, master_ts_micro ):
+
+    # Variables
+    timestamp_sentence = ""
+    log_data = ""
+
+    # Determine unsigned int size
+    uint_size = len( struct.pack( '<I', 0000000000 ) ) # 4
+
+    # Insert first IMU record
+    log_data += ( packTimestamp( ( master_ts - 10 ), master_ts_micro, b'\x00' ) + ( "\x00" * ( 64 - ( uint_size * 2 ) ) ) )
+
+    # Append sync TS
+    timestamp_sentence+= packTimestamp( master_ts, master_ts_micro, b'\x02' )
+
+    # Append master TS
+    timestamp_sentence+= packTimestamp( master_ts, master_ts_micro, b'\x02' )
+
+    # Append data
+    log_data += timestamp_sentence
+    log_data += ( "\x00" * ( 64 - ( uint_size * 4 ) ) )
+
+    # Append data
+    for _idx in range( 0, 5 ):
+
+        # Encode NMEA sentences
+        nmea_sentence_GPGGA = pyelphelnmea.nmea_encode( encodeNMEA( gps_data, ( _idx * 200 ) ) )
+        nmea_sentence_GPGSA = pyelphelnmea.nmea_encode( "$GPGSA,A,,,,,,,,,,,,,,,,," )
+        nmea_sentence_GPRMC = pyelphelnmea.nmea_encode( encodeNMEA( gps_data, ( _idx * 200 ), True ) )
+        nmea_sentence_GPVTG = pyelphelnmea.nmea_encode( "$GPVTG,,,,,,,," )
+
+        # Insert master and proper type to NMEA sentences
+        nmea_sentence_GPRMC = nmea_sentence_GPRMC[:0] + packTimestamp( master_ts, master_ts_micro, b'\x01' ) + nmea_sentence_GPRMC[8:]
+        nmea_sentence_GPGGA = nmea_sentence_GPGGA[:0] + packTimestamp( master_ts, master_ts_micro, b'\x01' ) + nmea_sentence_GPGGA[8:]
+        nmea_sentence_GPGSA = nmea_sentence_GPGSA[:0] + packTimestamp( master_ts, master_ts_micro, b'\x01' ) + nmea_sentence_GPGSA[8:]
+        nmea_sentence_GPVTG = nmea_sentence_GPVTG[:0] + packTimestamp( master_ts, master_ts_micro, b'\x01' ) + nmea_sentence_GPVTG[8:]
+
+        log_data += ( nmea_sentence_GPGGA )
+        log_data += ( nmea_sentence_GPGSA )
+        log_data += ( nmea_sentence_GPRMC )
+        log_data += ( nmea_sentence_GPVTG )
+
+    # Compute IMU sentence
+    imu_sentence = ( packTimestamp( ( master_ts + 10 ), master_ts_micro, b'\x00' ) + ( "\x00" * ( 64 - ( uint_size * 2 ) ) ) )
+
+    # Append data
+    log_data += imu_sentence
+
+    # Return log entry
+    return log_data
+
+def downloadData( __MountPoint__, __Host__, __Temp_Dir__ ):
+
+    # Compute paths
+    __Remote_Snapshots_URL__ = "%s:/data/download" % ( __Host__ )
+
+    # Check temp folder presence
+    if not os.path.isdir( __Temp_Dir__ ):
+
+        # Create folder
+        os.makedirs( __Temp_Dir__ )
+
+    # Copy files
+    if execCommand( "rsync --progress -a -r -L %s/* %s 1>&2" % (__Remote_Snapshots_URL__, __Temp_Dir__) ) != 0:
+
+        # Debug output
+        ShowMessage("Failed to download images", 2)
+
+        # Return failure
+        return False
+
+    # Debug output
+    ShowMessage("Starting files verification")
+
+    # Verify data after download
+    if( verify_data( __Remote_Snapshots_URL__, __Temp_Dir__ ) != 0 ):
+
+        # Debug output
+        ShowMessage("Verification failed", 2)
+
+        # Exit failure
+        return False
+
+    else:
+
+        # Debug output
+        ShowMessage("Verification passed")
+
+    # List JP4 files
+    __Jp4_Paths__ = sorted( find_files( __Temp_Dir__, '*.jp4' ) )
+
+    # Contaiers
+    __Poses__   = {}
+    __Cameras__ = {}
+
+    # Debug output
+    ShowMessage("Indexing images...")
+
+    # Iterate over jp4 paths
+    for path in __Jp4_Paths__:
+
+        # Create JP4 class entry
+        JP4_Item = JP4_Image( path )
+
+        # Check image validity
+        if JP4_Item.valid:
+
+            # Check if pose is already initialized
+            if not JP4_Item.timestamp_full in __Poses__:
+
+                # Initialize pose
+                __Poses__[ JP4_Item.timestamp_full ] = []
+
+            # Insert image in pose
+            __Poses__[ JP4_Item.timestamp_full ].append( JP4_Item )
+
+    # Iterate over poses
+    for timestamp, poses in __Poses__.iteritems():
+
+        # Sort poses
+        __Poses__[ timestamp ] = sorted( poses, key = attrgetter( "module" ) )
+
+        # Retrieve first module
+        first_module = __Poses__[ timestamp ][ 0 ]
+
+        # Check if first module is 1
+        if( first_module.module != 1 ):
+
+            # Debug output
+            ShowMessage("Module 1 missing in pose %s" % first_module.timestamp_full, 2)
+
+        else:
+
+            # Check if camera is already initialized
+            if not first_module.MAC in __Cameras__:
+
+                # Initialize pose
+                __Cameras__[ first_module.MAC ] = []
+
+            # Iterate over poses
+            for p in poses:
+
+                # Append pose
+                __Cameras__[ first_module.MAC ].append( p )
+
+    # Iterate over cameras
+    for mac, poses in __Cameras__.iteritems():
+
+        # Timestamp container
+        master_ts = [ 0, 0 ]
+
+        # Iterate over camera poses
+        for pose in poses:
+
+            # Update master if greather
+            if pose.timestamp > master_ts[ 0 ]:
+
+                master_ts[ 0 ] = pose.timestamp
+                master_ts[ 1 ] = pose.timestamp_micro
+
+        # Initialize container
+        poses_by_module = {}
+
+        # Iterate over camera poses
+        for pose in poses:
+
+            # Check if camera is already initialized
+            if not pose.module in poses_by_module:
+
+                # Initialize pose
+                poses_by_module[ pose.module ] = []
+
+            # Append pose
+            poses_by_module[ pose.module ].append( pose )
+
+        # Iterate over poses by module
+        for module, pose in poses_by_module.iteritems():
+
+            # Sort poses
+            poses_by_module[ module ] = sorted( pose, key = attrgetter( "timestamp_full" ) )
+
+        # Compute output folder
+        output_dir = "%s/rawdata/%s/master/%10d" % ( __MountPoint__, mac, master_ts[ 0 ] )
+
+        # Check output folder presence
+        if os.path.isdir( output_dir ):
+
+            # Debug output
+            ShowMessage("Master %s already exists" % output_dir, 2)
+
+            # Exit failure
+            return False
+
+        # Debug output
+        ShowMessage("Generating MOV files...")
+
+        # Iterate over camera poses
+        for module, poses in poses_by_module.iteritems():
+
+            # Compute full output dir
+            output_dir_full = "%s/mov/%d" % ( output_dir, module )
+
+            # Check if output dir exists
+            if not os.path.isdir( output_dir_full ):
+
+                # Create output dir
+                os.makedirs( output_dir_full )
+
+            # Open output MOV file
+            with open( "%s/%10d_%06d.mov" % ( output_dir_full, master_ts[ 0 ], master_ts[ 1 ] ), "w+" ) as dest_mov:
+
+                # Iterate over poses
+                for pose in poses:
+
+                    # Open pose JP4 image
+                    with open( pose.path, "r" ) as source_jp4:
+
+                        # Write JP4 image into MOV file
+                        dest_mov.write( source_jp4.read() )
+
+        # Debug output
+        ShowMessage("Generating log file...")
+
+        # Open output log file
+        with open( "%s/mov/1/%10d.log-000" % ( output_dir, master_ts[ 0 ] ), "w+" ) as dest_log:
+
+            # Inserted entries container
+            inserted_stamps = []
+
+            # Iterate over camera poses
+            for module, poses in poses_by_module.iteritems():
+
+                # Iterate over poses
+                for pose in poses:
+
+                    # Check if timestamp is already inserted in log
+                    if not [ pose.timestamp, pose.timestamp_micro ] in inserted_stamps:
+
+                        # Write log entry
+                        dest_log.write( createLogEntry( pose.GPS, pose.timestamp, pose.timestamp_micro ) )
+
+                        # Save inserted timestamp
+                        inserted_stamps.append( [ pose.timestamp, pose.timestamp_micro ] )
+    # Success
+    return [ mac, master_ts[ 0 ] ]
+
+# Usage display function
+def _usage():
+    print """
+    Usage: %s [OPTIONS]
+
+    [Required arguments]
+    --mount-point            Base mount directory
+    --snapshot-host          SSH host to download snapshots from, ex user@127.0.0.1
+
+    [Optional arguments]
+    --help                   Show this message
+
+    """ % os.path.basename( sys.argv[0] )
+
+# Program entry point function
+def main(argv):
+
+    # Parse arguments
+    Arguments = {}
+    Argv_Concat = ' '.join(argv)
+    Argv_Flags = Argv_Concat.split('--')
+
+    # Iterate over source args
+    for i in Argv_Flags:
+
+        # Check length
+        if len(i) > 0:
+
+            # Split by first space
+            splited = i.split(' ', 1)
+
+            # Check if argument contains value
+            if len(splited) > 1:
+                Arguments[splited[0]] = (None if not splited[1] else splited[1].strip())
+            else:
+                Arguments[splited[0]] =  None
+
+    # Arguments variables
+    __MountPoint__            = (None if not 'mount-point' in Arguments else Arguments['mount-point'].rstrip('/'))
+    __Host__                  = (None if not 'snapshot-host' in Arguments else Arguments['snapshot-host'].rstrip('/'))
+    __Help__                  = (1 if 'help' in Arguments else 0)
+
+    # Local variables
+    __Temp_Dir__      = "/run/shm/rawdata-downloader-snapshot/%d" % os.getpid()
+
+    # Arguments check
+    if (not __MountPoint__ or not __Host__) or __Help__:
+        _usage()
+        sys.exit(0)
+
+    # Start download
+    result = downloadData( __MountPoint__, __Host__, __Temp_Dir__ )
+
+    # Check if download succeeded
+    if result:
+
+        # Debug output
+        ShowMessage("Done")
+
+        # Return MAC & master timestamp
+        print( "%s %s" % ( result[ 0 ], result[ 1 ] ) )
+
+    else:
+
+        # Exit failure
+        sys.exit( 1 )
+
+    # Check temp dir
+    if( "/run/shm/rawdata-downloader-snapshot/" in __Temp_Dir__ ):
+
+        # Clen temp files
+        os.system( "rm %s -rf" % __Temp_Dir__ )
+
+# Program entry point
+if __name__ == "__main__":
+    main(sys.argv[1:])

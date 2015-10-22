@@ -98,7 +98,7 @@ if [ ! -d $PARAM_MOUNT/camera ] || [ ! -d $PARAM_MOUNT/rawdata ]; then
 fi
 
 # Check execution consistency #
-if [ -n "SWITCH_DOWNLOAD" ] && [ -n "SWITCH_SNAPSHOT" ]; then
+if [ -n "$SWITCH_DOWNLOAD" ] && [ -n "$SWITCH_SNAPSHOT" ]; then
 
     # Exit script #
     echo "[$(date '+%F %R')] rawdata-procedure : unable to understand --download with --snapshot switch"
@@ -250,4 +250,3 @@ fi
 
 # Exit script #
 exit 0
-
