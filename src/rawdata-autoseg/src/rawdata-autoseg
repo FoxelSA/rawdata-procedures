@@ -104,8 +104,8 @@ process() {
         # Setting log-files split condition (8 hours) #
         AS_SEGS=$(( 60 * 60 * 8 ))
 
-        # Setting log-files validation size (4 records at least) #
-        AS_SIZE=$(( 64 * 4 ))
+        # Setting log-files validation size (1 record at least) #
+        AS_SIZE=$(( 64 ))
 
     else
 
@@ -248,7 +248,7 @@ broadcast() {
             csps-process -p $AS_SEG/$AS_ASTS/csps -t $AS_SEG/$AS_ASTS/csps/topology > /dev/null
             csps-export  -p $AS_SEG/$AS_ASTS/csps -e $AS_SEG/$AS_ASTS/info/segment.json \
                          -c eyesis4pi -m mod-DSIDE -g ls20031   -n mod-SGNQF \
-                         -i adis16375 -s mod-IFETI -t adis16375 -k mod-ISRAD > /dev/null  
+                         -i adis16375 -s mod-IFETI -t adis16375 -k mod-ISRAD > /dev/null
 
         fi
 
@@ -336,4 +336,3 @@ else
     exit 0
 
 fi
-
