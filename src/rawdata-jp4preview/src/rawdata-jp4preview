@@ -277,17 +277,6 @@ if [ -z "$PARAM_SEGMENT" ]; then
                         $PARAM_MASTER \
                         $SEGMENT_TIMESTAMP
 
-                        # Loop break checker
-                        if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                        # Update preview flag in database
-                        >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
-                        rawdata-dbpusher --mount-point $PARAM_MOUNT \
-                        --mac-address $PARAM_MAC \
-                        --master-timestamp $PARAM_MASTER \
-                        --segment-timestamp $SEGMENT_TIMESTAMP \
-                        --update-preview-flag
-
                     else
 
                         # Display warning segment
@@ -401,17 +390,6 @@ else
                 $PARAM_MAC \
                 $PARAM_MASTER \
                 $PARAM_SEGMENT
-
-                # Loop break checker
-                if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                # Update preview flag in database
-                >&2 echo "[$(date '+%F %R')] rawdata-jp4preview : Updating segment preview flag in database..."
-                rawdata-dbpusher --mount-point $PARAM_MOUNT \
-                --mac-address $PARAM_MAC \
-                --master-timestamp $PARAM_MASTER \
-                --segment-timestamp $PARAM_SEGMENT \
-                --update-preview-flag
 
             else
 

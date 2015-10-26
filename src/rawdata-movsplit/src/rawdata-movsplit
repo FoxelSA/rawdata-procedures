@@ -222,17 +222,6 @@ if [ -z "$PARAM_SEGMENT" ]; then
                     $PARAM_MASTER \
                     $SEGMENT_TIMESTAMP
 
-                    # Loop break checker
-                    if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-                    # Update split flag in database
-                    >&2 >&2 echo "[$(date '+%F %R')] rawdata-movsplit : Updating segment split flag in database..."
-                    rawdata-dbpusher --mount-point $PARAM_MOUNT \
-                    --mac-address $PARAM_MAC \
-                    --master-timestamp $PARAM_MASTER \
-                    --segment-timestamp $SEGMENT_TIMESTAMP \
-                    --update-split-flag
-
                 else
 
                     # Display warning
@@ -300,17 +289,6 @@ else
             $PARAM_MAC \
             $PARAM_MASTER \
             $PARAM_SEGMENT
-
-            # Loop break checker
-            if [ $LOOP_BREAK -ne 0 ]; then break; fi
-
-            # Update split flag in database
-            >&2 echo "[$(date '+%F %R')] rawdata-movsplit : Updating segment split flag in database..."
-            rawdata-dbpusher --mount-point $PARAM_MOUNT \
-            --mac-address $PARAM_MAC \
-            --master-timestamp $PARAM_MASTER \
-            --segment-timestamp $PARAM_SEGMENT \
-            --update-split-flag
 
         else
 
