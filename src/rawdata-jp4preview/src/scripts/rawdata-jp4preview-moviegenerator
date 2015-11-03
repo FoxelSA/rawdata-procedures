@@ -84,7 +84,7 @@ def main(argv):
     CoreCount = multiprocessing.cpu_count()
 
     # Clamp cores to 8 (maximum allowed for mencoder)
-    CoreCount = ( 8 if CoreCount > 8 else CoreCount )
+    CoreCount = ( 64 if CoreCount > 64 else CoreCount )
 
     # Create output folder if not present
     if not os.path.isdir(VideoFolder):
@@ -121,7 +121,7 @@ def main(argv):
     for e in PathList:
 
         # Write path to temp file
-        list_File.write("%s\n" % e)
+        list_File.write("file '%s'\n" % e)
 
     # Close temp file
     list_File.close()
@@ -138,7 +138,7 @@ def main(argv):
         else:
 
             # Generate video
-            os.system('mencoder mf://@%s -mf fps=25:type=jpeg -ovc lavc -of lavf -lavfopts format=webm -lavcopts vcodec=libvpx:mbd=2:trell:threads=%d -ffourcc VP80 -oac copy -o %s/segment.webm' % (list_File.name, CoreCount, VideoFolder))
+            os.system('ffmpeg -f concat -i %s -codec:v libvpx -quality good -cpu-used 0 -b:v 500k -qmin 10 -qmax 42 -maxrate 500k -bufsize 1000k -threads %d -vf "fps=25" -an %s/segment.webm' % (list_File.name, CoreCount, VideoFolder))
 
     # Remove temp file
     os.unlink( list_File.name )
